@@ -259,6 +259,7 @@ tsconfig.json:
 ```json
 {
   "compilerOptions": {
+    "jsx": "react-jsx",
     "jsxImportSource": "kiaao"
   }
 }
