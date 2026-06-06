@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.5
+# kiaao 框架规范 v1.6
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -67,7 +67,7 @@ setUser((prev) => ({ ...prev, age: prev.age + 1 }));
 
 ### `derive<T>(computeFn: () => T): () => T`
 
-创建派生状态。带缓存和脏标记。上游变化时仅标记脏，下游读取时才计算。计算结果相同时拦截下游更新。
+创建派生状态。带缓存和脏标记。**上游变化时立即重新计算**，若新结果与缓存不同则通知下游；若相同则拦截下游更新，避免无效传播。
 
 ```javascript
 const double = derive(() => count() * 2);
@@ -77,9 +77,9 @@ const activeUsers = derive(() => users().filter((u) => u.active));
 **内部机制**：
 
 - `derive` 内部使用 `effect` 监听其所依赖的上游信号。
-- 上游变化时，内部 `effect` 回调执行，标记 `isDirty = true`，并通知下游订阅者。
-- 当派生函数被调用时，若脏则重新计算并缓存，然后清除脏标记；若干净则直接返回缓存值。
-- 多个上游同时变化时，仅标记一次脏，避免重复通知。
+- 上游变化时，内部 `effect` 回调立即执行 `computeFn` 获取新值。
+- 若新值与缓存不同（`!==`），更新缓存，并通知下游订阅者。
+- 若新值与缓存相同，则不通知下游，实现拦截。
 - `derive` 返回的函数同样带有 `IS_REACTIVE` 标记，能被 `h()` 识别。
 - 派生函数上挂载 `STOP_KEY` 用于清理内部 `effect`。
 
@@ -116,7 +116,7 @@ stop();
 
 创建真实 DOM 元素。与 Vite 默认 JSX 转换对接。对 `children` 进行**递归扁平化**（自动展开嵌套数组）。对每个子节点：
 
-- 若为响应式函数（携带 `IS_REACTIVE` 标记）：创建文本占位，并通过 `effect` 绑定动态更新。
+- 若为响应式函数（携带 `IS_REACTIVE` 标记）：创建文本占位，并通过 `effect` 绑定动态更新。该 effect 的停止函数**挂载到该文本节点**上，而非父组件实例，确保节点移除时精准清理。
 - 若为 DOM 节点：直接附加。
 - 若为其他值：转为字符串后创建静态文本节点。
 
@@ -185,7 +185,7 @@ JSX 写法（编译后自动转为对应的 `h` 调用）：
 
 ### `<Show when={...} fallback={...}>`
 
-条件渲染。`when` 可以是响应式函数（`IS_REACTIVE`）或普通函数。`fallback`、`children` 均接收函数（惰性求值），以支持分支完全重建。
+条件渲染。`when` 可以是响应式函数（`IS_REACTIVE`）或普通函数。`fallback`、`children` 均接收函数（惰性求值），以支持分支完全重建。分支切换时，旧分支的所有节点会被递归清理（包括动态绑定 effect），新分支插入后触发挂载生命周期。
 
 ```jsx
 <Show when={visible} fallback={() => <p>无数据</p>}>
@@ -217,6 +217,8 @@ function Show(props: {
 ### `<List each={...} key={...}>`
 
 列表渲染。`each` 接收返回数组的 getter/derive 函数。`key` 为函数 `(item, index) => any`。`children` 为函数 `(item, index) => any`。
+
+每次列表更新时，先递归清理全部旧节点（释放动态 effect），然后重新渲染新列表并挂载。`key` 用于标识项目以便将来优化 DOM 复用（当前版本为全量重建）。
 
 ```jsx
 <List each={() => items()} key={(item) => item.id}>
@@ -271,7 +273,7 @@ function Timer() {
 
 #### `unmount(root: HTMLElement): void`
 
-从 DOM 中移除 `root`，并递归执行所有 `onUnmount` 回调，清理所有关联的 effect。通常在销毁组件时调用。
+从 DOM 中移除 `root`，并递归清理所有关联资源（包括节点级动态 effect、组件级 effect、生命周期回调）。通常在销毁组件时调用。
 
 ```javascript
 const root = Timer();
@@ -280,8 +282,6 @@ mount(root, document.body);
 // 后续卸载
 unmount(root);
 ```
-
-这两个函数不是响应式核心，但是确保生命周期正确触发的必要工具。不影响框架 API 的核心概念数。
 
 ---
 
@@ -436,7 +436,7 @@ mount(root, document.body);
 2. 执行组件外壳一次。
 3. 遇到 `define()` 创建信号。
 4. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
-5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集）。
+5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集），并将 effect 停止函数挂载到文本节点上。
 6. 返回真实 DOM 树，组件实例出栈。
 7. 用户调用 `mount(root, container)` 将 DOM 挂载到页面，并触发 `onMount` 回调。
 
@@ -465,34 +465,43 @@ mount(root, document.body);
 
 ### 依赖图谱结构
 
-每个信号内部维护：`deps = Set<{ selectorFn, effect }>`。
+每个信号内部维护：`deps = Map<selectorFn, Set<{ run }>>`。
 
 - `selectorFn` 是用户传入的选择器函数。
 - **键使用 `selectorFn` 的函数引用**，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
+- 每个 entry 包含 `run`（effect 的运行函数），作为 effect 身份标识。
+
+### Effect 所有权追踪
+
+每个 `effect` 内部维护 `ownedDeps: Map<signal, Set<selectorFn>>`，记录该 effect 订阅了哪些信号的哪些选择器。当 effect 停止或重新运行时，先清理所有已注册的依赖条目，再从信号中注销。
 
 ### 对账机制
 
-更新时对每个依赖用旧值和新值分别执行 `selectorFn`，使用 `!==` 浅对比。只有结果不同才触发 `effect`。
+更新时对每个依赖用旧值和新值分别执行 `selectorFn`，使用 `!==` 浅对比。只有结果不同才触发 `effect`。同一通知周期内，每个 `effect` 只执行一次（去重）。
 
 ---
 
 ## 七、Effect 清理与组件卸载
 
-### Effect 清理
+### 节点级 Effect 清理
 
-- 每次 `effect(fn)` 调用返回一个停止函数 `stop()`。
-- `effect` 内部维护 `ownDeps: Set<{ signal, selectorFn }>`，记录该 effect 订阅了哪些信号的哪些选择器。
-- 调用 `stop()` 遍历 `ownDeps`，从每个信号中移除对应的依赖条目，然后清空 `ownDeps` 并标记为已停止。
-- 组件实例上维护一个 `effectStops: Set<() => void>`，收集该组件内所有通过 `h()` 动态绑定和显式 `effect()` 创建的 effect 返回的 `stop` 函数。
+由 `h()` 为响应式子节点创建的 `effect`，其 `stop` 函数存储在对应文本节点的 `LOCAL_EFFECTS` 集合中。当 `disposeNode` 递归清理节点时，会执行该节点上的所有本地 effect 停止函数，确保动态绑定随 DOM 移除而释放。
 
-### 组件卸载
+### 组件级 Effect 清理
 
-- 每个组件返回的根 DOM 节点上挂载 `Symbol('dispose')` 方法。
-- 当用户调用 `unmount(root)` 时：
-  1. 执行所有 `onUnmount` 回调。
-  2. 遍历 `effectStops`，调用每个 `stop()` 清理 effect。
-  3. 递归处理子组件。
-  4. 从 DOM 中移除节点。
+显式调用的 `effect()` 或组件模式创建的 effect，其 `stop` 函数注册在组件实例的 `effectStops` 集合中。组件卸载时统一执行。
+
+### 组件卸载流程
+
+`unmount(root)` 或 `Show`/`List` 切换分支时调用 `disposeNode`：
+
+1. 递归处理子节点（深度优先）。
+2. 对当前节点执行 `LOCAL_EFFECTS` 中的所有 `stop`，清空本地 effect。
+3. 对当前节点执行 `DISPOSE_KEY` 回调（若存在）：
+   - 执行所有 `onUnmount` 回调。
+   - 遍历 `effectStops`，执行所有 `stop`。
+   - 标记组件实例为已销毁。
+4. 从 DOM 中移除节点。
 
 ---
 
@@ -503,9 +512,9 @@ mount(root, document.body);
 | Symbol            | 挂载位置                               | 用途                                 |
 | ----------------- | -------------------------------------- | ------------------------------------ |
 | `IS_REACTIVE`     | Getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别        |
-| `DISPOSE_KEY`     | DOM 节点                               | 存储组件销毁函数                     |
+| `LOCAL_EFFECTS`   | 动态文本节点                           | 存储该节点上的 effect stop 函数集合  |
+| `DISPOSE_KEY`     | DOM 节点（组件根节点）                 | 存储组件销毁回调                     |
 | `INSTANCE_KEY`    | DOM 节点                               | 存储组件实例引用                     |
-| `EFFECTS_KEY`     | 组件实例                               | 存储 effect 的 `stop` 函数集合       |
 | `INITIALIZED_KEY` | 组件实例                               | 标记已初始化                         |
 | `DISPOSED_KEY`    | 组件实例                               | 标记已销毁                           |
 | `STOP_KEY`        | derive 返回的函数                      | 存储停止内部 effect 的函数，用于清理 |
@@ -588,55 +597,56 @@ function unmount(root: HTMLElement): void;
 
 ## 十一、API 总览
 
-| API         | 分类     | 用途                                             |
-| ----------- | -------- | ------------------------------------------------ |
-| `define`    | 核心     | 创建响应式状态（唯一原语）                       |
-| `derive`    | 核心     | 派生状态（缓存 + 拦截）                          |
-| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数         |
-| `h`         | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children |
-| `<Show>`    | 控制流   | 条件渲染（when 支持响应式函数）                  |
-| `<List>`    | 控制流   | 列表渲染                                         |
-| `onMount`   | 生命周期 | 挂载后回调（需配合 mount 触发）                  |
-| `onUnmount` | 生命周期 | 销毁前清理（需配合 unmount 触发）                |
-| `mount`     | 挂载     | 将组件树挂载到容器并触发 onMount                 |
-| `unmount`   | 挂载     | 卸载组件树并触发 onUnmount，清理所有 effect      |
+| API         | 分类     | 用途                                                             |
+| ----------- | -------- | ---------------------------------------------------------------- |
+| `define`    | 核心     | 创建响应式状态（唯一原语）                                       |
+| `derive`    | 核心     | 派生状态（缓存 + 拦截），上游变化时重新计算                      |
+| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数                         |
+| `h`         | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children，节点级动态绑定 |
+| `<Show>`    | 控制流   | 条件渲染（when 支持响应式函数）                                  |
+| `<List>`    | 控制流   | 列表渲染，全量重建并清理旧节点                                   |
+| `onMount`   | 生命周期 | 挂载后回调（需配合 mount 触发）                                  |
+| `onUnmount` | 生命周期 | 销毁前清理（需配合 unmount 触发）                                |
+| `mount`     | 挂载     | 将组件树挂载到容器并触发 onMount                                 |
+| `unmount`   | 挂载     | 卸载组件树，递归清理所有资源                                     |
 
-**核心概念仍为 4 个（define、derive、effect、h），挂载辅助函数是显式化生命周期的必要工具，不计入核心响应式概念。**
+**核心概念仍为 4 个（define、derive、effect、h），挂载辅助函数与控制流组件是围绕核心的实用扩展。**
 
 ---
 
 ## 十二、与主流框架差异
 
-| 维度              | React                     | Vue               | Solid          | **kiaao**                |
-| ----------------- | ------------------------- | ----------------- | -------------- | ------------------------ |
-| 数据纯净度        | 纯净                      | 不纯净            | 纯净（两套）   | **纯净（一套）**         |
-| 组件运行次数      | 每次重跑                  | 外壳一次          | 外壳一次       | **外壳一次**             |
-| 虚拟 DOM          | 有                        | 有                | 无             | **无**                   |
-| 编译器依赖        | 无                        | 可选              | 强依赖         | **无**                   |
-| 响应式原理        | 无                        | Proxy             | 编译期         | **显式选择器**           |
-| 核心概念数        | 10+                       | 8+                | 6+             | **4**                    |
-| 更新粒度          | 组件级                    | 组件/块级         | DOM 节点级     | **选择器结果级**         |
-| Context/Provide   | 有                        | 有                | 有             | **无（信号即通道）**     |
-| Ref 转发/暴露方法 | forwardRef / defineExpose | defineExpose      | 指令/回调      | **原生函数返回值或回调** |
-| 挂载方式          | 自动（createRoot）        | 自动（createApp） | 自动（render） | **显式 mount/unmount**   |
+| 维度              | React                     | Vue               | Solid          | **kiaao**                       |
+| ----------------- | ------------------------- | ----------------- | -------------- | ------------------------------- |
+| 数据纯净度        | 纯净                      | 不纯净            | 纯净（两套）   | **纯净（一套）**                |
+| 组件运行次数      | 每次重跑                  | 外壳一次          | 外壳一次       | **外壳一次**                    |
+| 虚拟 DOM          | 有                        | 有                | 无             | **无**                          |
+| 编译器依赖        | 无                        | 可选              | 强依赖         | **无**                          |
+| 响应式原理        | 无                        | Proxy             | 编译期         | **显式选择器**                  |
+| 核心概念数        | 10+                       | 8+                | 6+             | **4**                           |
+| 更新粒度          | 组件级                    | 组件/块级         | DOM 节点级     | **选择器结果级**                |
+| Context/Provide   | 有                        | 有                | 有             | **无（信号即通道）**            |
+| Ref 转发/暴露方法 | forwardRef / defineExpose | defineExpose      | 指令/回调      | **原生函数返回值或回调**        |
+| 挂载方式          | 自动（createRoot）        | 自动（createApp） | 自动（render） | **显式 mount/unmount**          |
+| 内存管理          | GC + 手动清理             | GC + effectScope  | GC + 自动清理  | **节点级 + 组件级 effect 清理** |
 
 ---
 
 ## 十三、代码量估算
 
-| 模块                               | 预计行数          |
-| ---------------------------------- | ----------------- |
-| `define`                           | 40-50             |
-| `derive`                           | 25                |
-| `effect`                           | 20                |
-| `h` (含组件模式与 children 扁平化) | 45-55             |
-| 全局上下文与调度                   | 30                |
-| `<Show>`                           | 25                |
-| `<List>`                           | 35                |
-| 生命周期钩子                       | 15                |
-| 组件实例与清理（含 mount/unmount） | 30                |
-| TypeScript 类型定义                | 35                |
-| **总计**                           | **约 300-350 行** |
+| 模块                                              | 预计行数          |
+| ------------------------------------------------- | ----------------- |
+| `define`                                          | 40-50             |
+| `derive`                                          | 25                |
+| `effect`                                          | 20                |
+| `h` (含组件模式与 children 扁平化)                | 45-55             |
+| 全局上下文与调度                                  | 30                |
+| `<Show>`                                          | 25                |
+| `<List>`                                          | 35                |
+| 生命周期钩子                                      | 15                |
+| 组件实例与清理（含 mount/unmount、节点级 effect） | 35                |
+| TypeScript 类型定义                               | 35                |
+| **总计**                                          | **约 305-355 行** |
 
 ---
 
@@ -646,6 +656,8 @@ function unmount(root: HTMLElement): void;
 - `<Suspense>` 完整实现
 - SSR 支持
 - DevTools：依赖图谱可视化
+- Transition / TransitionGroup 动画支持
+- 批量更新调度优化（当前同步更新已满足大多数场景）
 
 ---
 

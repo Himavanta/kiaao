@@ -23,6 +23,9 @@ export const DISPOSED_KEY = Symbol("disposed");
 /** 挂载在 derive 返回的函数上，存储内部 effect 的 stop 函数 */
 export const STOP_KEY = Symbol("stop");
 
+/** 挂载在 DOM 节点上，存储动态绑定的 effect stop 函数集合 */
+export const LOCAL_EFFECTS = Symbol("local_effects");
+
 // ── Public API Types ───────────────────────────────────
 
 export interface Getter<T> {

@@ -6,6 +6,7 @@ import {
   INSTANCE_KEY,
   INITIALIZED_KEY,
   DISPOSED_KEY,
+  LOCAL_EFFECTS,
   type ReactiveFunction,
 } from "./types.ts";
 
@@ -82,13 +83,13 @@ function setProp(el: HTMLElement, key: string, value: any): void {
  * Process child nodes, flattening nested arrays and creating
  * dynamic bindings for reactive functions.
  */
-function processChildren(children: any[], effectStops: Set<() => void>): Node[] {
+function processChildren(children: any[]): Node[] {
   const result: Node[] = [];
 
   for (const child of children) {
     // Flatten nested arrays
     if (Array.isArray(child)) {
-      result.push(...processChildren(child, effectStops));
+      result.push(...processChildren(child));
       continue;
     }
 
@@ -101,7 +102,14 @@ function processChildren(children: any[], effectStops: Set<() => void>): Node[] 
       const stop = effect(() => {
         textNode.textContent = String(child());
       });
-      effectStops.add(stop);
+      // Store stop directly on the textNode, not on the parent component.
+      // This ensures disposeNode can clean it up when the node is removed.
+      let stops = (textNode as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+      if (!stops) {
+        stops = new Set();
+        (textNode as any)[LOCAL_EFFECTS] = stops;
+      }
+      stops.add(stop);
       result.push(textNode);
       continue;
     }
@@ -177,10 +185,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(
     }
   }
 
-  // Process children
-  const instance = currentComponent();
-  const effectStops = instance?.effectStops ?? new Set<() => void>();
-  const childNodes = processChildren(children, effectStops);
+  // Process children — dynamic bindings are tracked via LOCAL_EFFECTS on each textNode
+  const childNodes = processChildren(children);
 
   for (const node of childNodes) {
     el.appendChild(node);
@@ -212,7 +218,17 @@ function disposeNode(node: Node): void {
     disposeNode(child);
   }
 
-  // Dispose this node
+  // Stop local effects (dynamic bindings attached to this node)
+  const localStops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+  if (localStops) {
+    for (const stop of localStops) {
+      stop();
+    }
+    localStops.clear();
+    delete (node as any)[LOCAL_EFFECTS];
+  }
+
+  // Dispose component instance attached to this node
   const dispose = (node as any)[DISPOSE_KEY] as (() => void) | undefined;
   if (dispose) {
     dispose();
