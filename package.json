@@ -37,8 +37,7 @@
     "bumpp": "^11.1.0",
     "happy-dom": "^20.10.1",
     "typescript": "^6.0.3",
-    "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@11.5.2"
 }
