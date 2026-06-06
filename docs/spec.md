@@ -1,8 +1,4 @@
-以下是 **kiaao** 框架完整规范文档（最终版）。
-
----
-
-# kiaao 框架规范
+# kiaao 框架规范 v1.1
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -45,6 +41,8 @@ setUser((prev) => ({ ...prev, age: prev.age + 1 }));
 
 **数据纯净度**：内部存储的是纯普通对象/基本类型。任何时候拿到的都是普通值，无 Proxy，无 getter/setter 劫持。更新采用不可变替换，但框架不依赖引用对比触发更新，而是依赖选择器函数的结果对比。
 
+**内部标记**：Getter 和 `derive` 返回的函数均挂载 `Symbol('is_reactive')` 属性，供 `h()` 识别。
+
 ---
 
 ### `derive<T>(computeFn: () => T): () => T`
@@ -57,6 +55,8 @@ const activeUsers = derive(() => users().filter((u) => u.active));
 ```
 
 **与 Getter 的区别**：Getter 是纯转发，每次调用都执行选择器。`derive` 带缓存和拦截，用于重度计算或多处复用。
+
+**内部订阅**：`derive` 使用 `effect` 监听上游，多个上游同时变化时只标记一次脏，避免重复通知。
 
 ---
 
@@ -75,11 +75,13 @@ effect(() => {
 
 **与 `derive` 的区别**：`derive` 是纯计算（有返回值，有缓存），`effect` 是无返回值的副作用。
 
+**执行上下文**：`currentEffect` 为栈结构，支持嵌套 effect。
+
 ---
 
 ### `h(tag, props?, ...children): HTMLElement`
 
-纯运行时创建真实 DOM。与 Vite 默认 JSX 转换对接。若子节点是 Getter 或 DeriveSignal 函数，自动创建文本占位并建立动态绑定。
+纯运行时创建真实 DOM。与 Vite 默认 JSX 转换对接。若子节点是 Getter 或 DeriveSignal 函数（通过 `IS_REACTIVE` 标记识别），自动创建文本占位并启动 `effect` 绑定。
 
 ```javascript
 h(
@@ -114,7 +116,7 @@ JSX 写法（编译后自动转为 `h` 调用）：
 
 ### `<Show when={...} fallback={...}>`
 
-条件渲染。`when` 和 `fallback` 的子树用函数包裹以延迟求值。
+条件渲染。`when`、`fallback`、`children` 均接收函数（惰性求值），以支持分支完全重建。
 
 ```jsx
 <Show when={() => visible()} fallback={() => <p>无数据</p>}>
@@ -122,14 +124,30 @@ JSX 写法（编译后自动转为 `h` 调用）：
 </Show>
 ```
 
+函数签名：
+
+```ts
+function Show(props: { when: () => any; fallback?: () => any; children?: () => any }): Node;
+```
+
 ### `<List each={...} key={...}>`
 
-列表渲染。`each` 接收一个返回数组的 Getter。`key` 用于 DOM 复用。
+列表渲染。`each` 接收返回数组的 getter/derive 函数。`key` 为函数 `(item, index) => any`。`children` 为函数 `(item, index) => any`。
 
 ```jsx
 <List each={() => items()} key={(item) => item.id}>
   {(item) => <li>{item.text}</li>}
 </List>
+```
+
+函数签名：
+
+```ts
+function List<T>(props: {
+  each: () => T[];
+  key: (item: T, index: number) => any;
+  children: (item: T, index: number) => any;
+}): Node;
 ```
 
 ---
@@ -138,11 +156,11 @@ JSX 写法（编译后自动转为 `h` 调用）：
 
 ### `onMount(fn: () => void): void`
 
-组件首次挂载到 DOM 后执行一次。
+组件首次挂载到 DOM 后执行一次。必须在组件外壳同步执行期间调用，通过当前组件实例栈注册。
 
 ### `onUnmount(fn: () => void): void`
 
-组件销毁前执行，用于清理定时器、取消订阅等。
+组件销毁前执行，用于清理定时器、取消订阅等。必须在组件外壳同步执行期间调用。
 
 ```javascript
 function Timer() {
@@ -152,6 +170,8 @@ function Timer() {
   return <div>{time((v) => v.toLocaleTimeString())}</div>;
 }
 ```
+
+**内部机制**：`currentComponent` 为组件实例栈。组件函数执行前压栈，执行后出栈。`onMount`/`onUnmount` 将回调注册到栈顶实例的队列中。
 
 ---
 
@@ -185,15 +205,15 @@ function UserProfile() {
 1. 执行组件外壳一次。
 2. 遇到 `define()` 创建信号。
 3. 遇到 `user(v => v.name)` 时立即求值并作为参数传给 `h()`。
-4. `h()` 检测到子节点是函数（Getter），创建文本节点占位，启动 `effect` 绑定。
+4. `h()` 检测到子节点是响应式函数（`IS_REACTIVE`），创建文本节点占位，启动 `effect` 绑定。
 5. 返回真实 DOM 树，挂载到页面。
 
 ### 更新流程
 
 1. `setUser(prev => ({ ...prev, age: 19 }))` 被调用。
-2. 内部存储的旧值被替换为新值。
+2. **先保存旧值引用**，再写入新值。
 3. 遍历该信号的所有选择器依赖。
-4. 对每个依赖：用旧值执行选择器 → 用新值执行选择器 → 对比结果。
+4. 对每个依赖：用旧值执行选择器 → 用新值执行选择器 → 使用 `!==` 浅对比。
 5. 结果不同 → 触发对应的 effect（DOM 更新或 `effect` 回调）。
 6. DOM 更新是单点文本节点替换，无虚拟 DOM Diff，无组件重跑。
 
@@ -208,15 +228,14 @@ function UserProfile() {
 
 ### 全局上下文
 
-```javascript
-let currentEffect = null;
-```
-
-`effect` 和 `h` 内部的动态绑定，将其副作用函数挂载到 `currentEffect`。Getter 在执行选择器时，若 `currentEffect` 存在，则将当前 effect 注册到依赖图谱。
+- `currentEffect`：**栈结构**，支持 effect 嵌套。
+- `currentComponent`：**栈结构**，支持组件嵌套。
+- `effect` 执行时压栈 `currentEffect`，执行后弹出。
+- 组件函数执行前将组件实例压入 `currentComponent`，执行后弹出。
 
 ### 依赖图谱结构
 
-每个信号内部维护：`deps = Set<{ selectorFn, effect }>`。键是 `selectorFn` 的引用，不使用 `toString()`。
+每个信号内部维护：`deps = Set<{ selectorFn, effect }>`。**键使用 `selectorFn` 函数引用**，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
 
 ### 对账机制
 
@@ -226,15 +245,16 @@ let currentEffect = null;
 
 ## 七、内部标记（Symbol 键）
 
-框架在所有外部对象（DOM 节点、组件实例）上使用 `Symbol` 键存储内部数据，避免命名冲突和调试干扰：
+框架在所有外部对象上使用 `Symbol` 键存储内部数据：
 
-| Symbol            | 挂载位置 | 用途                 |
-| ----------------- | -------- | -------------------- |
-| `DISPOSE_KEY`     | DOM 节点 | 存储组件销毁函数     |
-| `INSTANCE_KEY`    | DOM 节点 | 存储组件实例引用     |
-| `EFFECTS_KEY`     | 组件实例 | 存储 effect 清理队列 |
-| `INITIALIZED_KEY` | 组件实例 | 标记已初始化         |
-| `DISPOSED_KEY`    | 组件实例 | 标记已销毁           |
+| Symbol            | 挂载位置                   | 用途                          |
+| ----------------- | -------------------------- | ----------------------------- |
+| `IS_REACTIVE`     | Getter / DeriveSignal 函数 | 标识响应式函数，供 `h()` 识别 |
+| `DISPOSE_KEY`     | DOM 节点                   | 存储组件销毁函数              |
+| `INSTANCE_KEY`    | DOM 节点                   | 存储组件实例引用              |
+| `EFFECTS_KEY`     | 组件实例                   | 存储 effect 清理队列          |
+| `INITIALIZED_KEY` | 组件实例                   | 标记已初始化                  |
+| `DISPOSED_KEY`    | 组件实例                   | 标记已销毁                    |
 
 ---
 
@@ -282,7 +302,7 @@ function h<K extends keyof HTMLElementTagNameMap>(
 | `onMount`   | 生命周期 | 挂载后回调                 |
 | `onUnmount` | 生命周期 | 销毁前清理                 |
 
-**总计 8 个 API，用户可见的核心概念仅 4 个。**
+**总计 8 个 API，用户可见的核心概念仅 4 个（define、derive、effect、h）。**
 
 ---
 
