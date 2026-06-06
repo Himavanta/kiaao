@@ -12,6 +12,8 @@ import {
   onUnmount,
   Show,
   List,
+  Teleport,
+  lazy,
 } from "../src/index.ts";
 
 describe("h — DOM mode", () => {
@@ -231,6 +233,79 @@ describe("lifecycle", () => {
     // The text shouldn't have changed (though we can't easily test this
     // without checking if the effect was actually stopped)
     // At minimum, no crash should occur
+  });
+});
+
+describe("Teleport", () => {
+  test("renders content into target container", () => {
+    const target = document.createElement("div");
+    target.id = "teleport-target";
+    document.body.appendChild(target);
+
+    const node = h(Teleport, {
+      to: "#teleport-target",
+      children: () => h("p", null, "teleported content"),
+    });
+
+    // Teleport itself only emits a comment node
+    expect(node.nodeType).toBe(Node.COMMENT_NODE);
+    // Content should be in the target
+    expect(target.textContent).toBe("teleported content");
+
+    document.body.removeChild(target);
+  });
+
+  test("cleans up content on unmount", () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    let unmounted = false;
+
+    function Child() {
+      onUnmount(() => {
+        unmounted = true;
+      });
+      return h("span", null, "bye");
+    }
+
+    function App() {
+      return h(
+        "div",
+        null,
+        h(Teleport, {
+          to: target,
+          children: () => h(Child, null),
+        }),
+      );
+    }
+
+    const root = h(App, null) as HTMLElement;
+    mount(root, document.body);
+
+    expect(unmounted).toBe(false);
+    expect(target.children.length).toBe(1);
+
+    unmount(root);
+    expect(unmounted).toBe(true);
+    expect(target.children.length).toBe(0);
+
+    document.body.removeChild(target);
+  });
+});
+
+describe("lazy", () => {
+  test("resolves and renders async component", async () => {
+    function Greeting(props: { name: string }) {
+      return h("p", null, `Hello, ${props.name}!`);
+    }
+
+    const AsyncGreeting = lazy(() => Promise.resolve({ default: Greeting }));
+
+    // Wait for the microtask queue to process the resolved promise
+    await new Promise((r) => setTimeout(r, 0));
+
+    const el = h("div", null, h(AsyncGreeting, { name: "kiaao" }));
+    expect(el.textContent).toBe("Hello, kiaao!");
   });
 });
 

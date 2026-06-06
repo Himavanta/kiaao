@@ -12,6 +12,7 @@ import {
 
 import {
   effect,
+  define,
   currentComponent,
   pushComponent,
   popComponent,
@@ -372,4 +373,76 @@ export function unmount(root: HTMLElement): void {
   if (root.parentNode) {
     root.parentNode.removeChild(root);
   }
+}
+
+// ── Teleport ───────────────────────────────────────────────
+
+/**
+ * Renders children into a different DOM container (by CSS selector or
+ * element reference). The content is logically still part of the current
+ * component tree — lifecycle hooks fire normally, and cleanup happens
+ * automatically when the Teleport's parent is unmounted.
+ */
+export function Teleport(props: { to: string | HTMLElement; children: () => any }): Node {
+  const target =
+    typeof props.to === "string" ? document.querySelector<HTMLElement>(props.to) : props.to;
+  if (!target) return document.createComment("teleport-missing-target");
+
+  const content = props.children();
+  if (content instanceof Node) {
+    target.appendChild(content);
+    triggerMount(content);
+  }
+
+  onUnmount(() => {
+    if (content instanceof Node) {
+      disposeNode(content);
+      if (content.parentNode) {
+        content.parentNode.removeChild(content);
+      }
+    }
+  });
+
+  return document.createComment("teleport");
+}
+
+// ── lazy (async component) ───────────────────────────────────
+
+/**
+ * Wraps a dynamic import so it can be used as a regular component.
+ * Shows nothing (comment placeholder) while loading, then seamlessly
+ * replaces it with the real component once loaded.
+ *
+ * ```ts
+ * const AsyncProfile = lazy(() => import("./HeavyProfile.ts"));
+ * // use like any other component:
+ * h(AsyncProfile, { userId: 42 });
+ * ```
+ */
+export function lazy<T extends (...args: any[]) => any>(
+  loader: () => Promise<{ default: T } | T>,
+): T {
+  const [Component, setComponent] = define<T | null>(null);
+
+  loader()
+    .then((mod) => {
+      const comp = (mod as any).default || mod;
+      setComponent(() => comp);
+    })
+    .catch((err) => {
+      // Throw on next tick so it can be caught by an error boundary
+      setTimeout(() => {
+        throw err;
+      }, 0);
+    });
+
+  const LazyComponent = ((props: any) => {
+    return h(Show, {
+      when: () => Component() !== null,
+      fallback: () => document.createComment("lazy-loading"),
+      children: () => h(Component()!, props),
+    });
+  }) as any;
+
+  return LazyComponent as T;
 }

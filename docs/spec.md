@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.6
+# kiaao 框架规范 v1.7
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -181,7 +181,7 @@ JSX 写法（编译后自动转为对应的 `h` 调用）：
 
 ---
 
-## 二、控制流组件（2 个）
+## 二、控制流组件（3 个）
 
 ### `<Show when={...} fallback={...}>`
 
@@ -236,9 +236,59 @@ function List<T>(props: {
 }): Node;
 ```
 
+### `<Teleport to={...}>`
+
+将子组件的内容渲染到指定的 DOM 容器中，逻辑上仍属于当前组件树（生命周期、依赖追踪不受影响）。
+
+- `to` 可以是 CSS 选择器字符串或直接的 DOM 元素。
+- 子内容在挂载时被移动到目标容器，并在当前组件卸载时自动从目标容器中清除。
+
+```jsx
+<Teleport to="#modal-root">{() => h("div", { class: "modal" }, "弹窗内容")}</Teleport>
+```
+
+```javascript
+// 纯 h 调用
+h(Teleport, { to: "#modal-root", children: () => h("div", { class: "modal" }, "弹窗内容") });
+```
+
+函数签名：
+
+```ts
+function Teleport(props: { to: string | HTMLElement; children: () => any }): Node;
+```
+
 ---
 
-## 三、生命周期与挂载辅助
+## 三、异步组件（`lazy`）
+
+### `lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default: T } | T>): T`
+
+包装异步加载的组件，与构建工具的代码拆分（`import()`）配合使用。返回一个代理组件函数，初始渲染时显示占位注释节点，待模块加载完成后自动替换为真实组件。
+
+- `loader`：返回 Promise 的函数，通常为 `() => import('./Component.tsx')` 形式。
+- 代理组件内部使用响应式信号管理加载状态，无需手动触发更新。
+- 加载失败时抛出错误，可被上层 `ErrorBoundary` 类组件捕获（未来提供或用户自行实现）。
+- 若需要加载中占位 UI，用户可用 `Show` 或自定义包装组件扩展。
+
+```javascript
+import { lazy } from "kiaao";
+
+const AsyncComponent = lazy(() => import("./HeavyComponent.ts"));
+
+// 在 JSX 或 h 中像普通组件一样使用
+h(AsyncComponent, { someProp: value });
+```
+
+类型签名：
+
+```typescript
+function lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default: T } | T>): T;
+```
+
+---
+
+## 四、生命周期与挂载辅助
 
 ### `onMount(fn: () => void): void`
 
@@ -285,7 +335,7 @@ unmount(root);
 
 ---
 
-## 四、组件模型
+## 五、组件模型
 
 ### 组件函数只执行一次
 
@@ -366,28 +416,22 @@ function Child() {
 
 function Parent() {
   const childDom = Child(); // 直接拿到 DOM 引用
-  // 可在此处操作 childDom
   return h("div", null, childDom);
 }
 ```
 
 #### 暴露内部 DOM 或方法
 
-如果需要暴露组件内部的某个 DOM 或方法，可通过 props 回调或工厂函数实现，完全基于 JavaScript 能力：
+如果需要暴露组件内部的某个 DOM 或方法，可通过 props 回调或工厂函数实现：
 
 **方式一：props 回调暴露内部 DOM**
 
 ```javascript
 function Child({ inputRef }) {
   const input = h("input", { type: "text" });
-  if (inputRef) inputRef(input); // 回调暴露
+  if (inputRef) inputRef(input);
   return h("div", null, input);
 }
-
-// 父组件
-let myInput;
-const child = h(Child, { inputRef: (el) => (myInput = el) });
-// myInput 是子组件的 input 元素
 ```
 
 **方式二：工厂函数暴露方法**
@@ -395,7 +439,6 @@ const child = h(Child, { inputRef: (el) => (myInput = el) });
 ```javascript
 function createCounter() {
   const [count, setCount] = define(0);
-
   function Counter() {
     return h(
       "div",
@@ -408,27 +451,19 @@ function createCounter() {
       h("button", { onClick: () => setCount((c) => c + 1) }, "+"),
     );
   }
-
   return {
     Component: Counter,
     reset: () => setCount(0),
     getCount: () => count(),
   };
 }
-
-const { Component, reset, getCount } = createCounter();
-const root = h(Component);
-mount(root, document.body);
-// 通过 reset() 和 getCount() 与组件实例交互
 ```
 
 **重要约定**：当使用 `h(Component)` 的组件模式时，组件必须返回 `HTMLElement` 或 `Node`，以便正确挂载。如果组件需要对外暴露额外的方法或数据，应使用工厂函数直接调用，而不是通过 `h()` 包装。
 
-这些模式完全基于语言原生能力，不需要框架引入 `ref`、`forwardRef`、`defineExpose` 等额外概念。
-
 ---
 
-## 五、渲染机制
+## 六、渲染机制
 
 ### 初始化流程
 
@@ -436,7 +471,7 @@ mount(root, document.body);
 2. 执行组件外壳一次。
 3. 遇到 `define()` 创建信号。
 4. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
-5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集），并将 effect 停止函数挂载到文本节点上。
+5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定，并将 effect 停止函数挂载到文本节点上。
 6. 返回真实 DOM 树，组件实例出栈。
 7. 用户调用 `mount(root, container)` 将 DOM 挂载到页面，并触发 `onMount` 回调。
 
@@ -456,7 +491,7 @@ mount(root, document.body);
 
 ---
 
-## 六、依赖收集与调度
+## 七、依赖收集与调度
 
 ### 全局上下文
 
@@ -468,7 +503,7 @@ mount(root, document.body);
 每个信号内部维护：`deps = Map<selectorFn, Set<{ run }>>`。
 
 - `selectorFn` 是用户传入的选择器函数。
-- **键使用 `selectorFn` 的函数引用**，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
+- 键使用 `selectorFn` 的函数引用，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
 - 每个 entry 包含 `run`（effect 的运行函数），作为 effect 身份标识。
 
 ### Effect 所有权追踪
@@ -481,7 +516,7 @@ mount(root, document.body);
 
 ---
 
-## 七、Effect 清理与组件卸载
+## 八、Effect 清理与组件卸载
 
 ### 节点级 Effect 清理
 
@@ -493,7 +528,7 @@ mount(root, document.body);
 
 ### 组件卸载流程
 
-`unmount(root)` 或 `Show`/`List` 切换分支时调用 `disposeNode`：
+`unmount(root)` 或 `Show`/`List`/`Teleport` 切换分支时调用 `disposeNode`：
 
 1. 递归处理子节点（深度优先）。
 2. 对当前节点执行 `LOCAL_EFFECTS` 中的所有 `stop`，清空本地 effect。
@@ -505,51 +540,27 @@ mount(root, document.body);
 
 ---
 
-## 八、内部标记（Symbol 键）
+## 九、内部标记（Symbol 键）
 
-框架在所有外部对象上使用 `Symbol` 键存储内部数据，避免命名冲突和调试干扰：
+框架在所有外部对象上使用 `Symbol` 键存储内部数据：
 
-| Symbol            | 挂载位置                               | 用途                                 |
-| ----------------- | -------------------------------------- | ------------------------------------ |
-| `IS_REACTIVE`     | Getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别        |
-| `LOCAL_EFFECTS`   | 动态文本节点                           | 存储该节点上的 effect stop 函数集合  |
-| `DISPOSE_KEY`     | DOM 节点（组件根节点）                 | 存储组件销毁回调                     |
-| `INSTANCE_KEY`    | DOM 节点                               | 存储组件实例引用                     |
-| `INITIALIZED_KEY` | 组件实例                               | 标记已初始化                         |
-| `DISPOSED_KEY`    | 组件实例                               | 标记已销毁                           |
-| `STOP_KEY`        | derive 返回的函数                      | 存储停止内部 effect 的函数，用于清理 |
+| Symbol            | 挂载位置                               | 用途                                |
+| ----------------- | -------------------------------------- | ----------------------------------- |
+| `IS_REACTIVE`     | Getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别       |
+| `LOCAL_EFFECTS`   | 动态文本节点                           | 存储该节点上的 effect stop 函数集合 |
+| `DISPOSE_KEY`     | DOM 节点（组件根节点）                 | 存储组件销毁回调                    |
+| `INSTANCE_KEY`    | DOM 节点                               | 存储组件实例引用                    |
+| `INITIALIZED_KEY` | 组件实例                               | 标记已初始化                        |
+| `DISPOSED_KEY`    | 组件实例                               | 标记已销毁                          |
+| `STOP_KEY`        | derive 返回的函数                      | 存储停止内部 effect 的函数          |
 
 ---
 
-## 九、跨组件通信与 Store
+## 十、跨组件通信与 Store
 
 ### 模块级 Store（全局共享）
 
-`define` 创建的信号是独立的值容器，可直接放在模块顶层。任何组件通过 `import` 引入并按需订阅：
-
-```javascript
-// store.js
-export const [user, setUser] = define({ name: "tom" });
-export const [theme, setTheme] = define("dark");
-```
-
-组件中直接使用：
-
-```javascript
-import { user, theme } from "./store.js";
-
-function Header() {
-  return h(
-    "header",
-    { class: theme((v) => `header-${v}`) },
-    h(
-      "span",
-      null,
-      user((v) => v.name),
-    ),
-  );
-}
-```
+`define` 创建的信号是独立的值容器，可直接放在模块顶层。任何组件通过 `import` 引入并按需订阅。
 
 ### Props 传递 getter
 
@@ -557,11 +568,49 @@ function Header() {
 
 ### 无 Context / provide-inject
 
-kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号的独立性、闭包的原生能力、以及模块机制，已覆盖所有跨层级共享场景。框架不在此之上增加抽象。
+kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号的独立性、闭包的原生能力、以及模块机制，已覆盖所有跨层级共享场景。
 
 ---
 
-## 十、TypeScript 核心类型
+## 十一、路由（独立包）
+
+路由不作为核心框架的一部分，而是以独立包 `kiaao-router` 提供。其实现完全基于 kiaao 原语（`define`、`h`、`Show`），无额外新概念。
+
+核心 API：
+
+- `createRouter(routes)` 返回 `{ RouterView, navigate, currentPath }`。
+- `RouterView` 组件根据当前路径匹配路由表并渲染对应组件。
+- `navigate(path)` 进行编程式导航。
+- 支持动态路径参数、通配符、嵌套路由等（V2 扩展）。
+
+示例：
+
+```javascript
+import { createRouter } from "kiaao-router";
+
+const { RouterView, navigate } = createRouter([
+  { path: "/", component: Home },
+  { path: "/about", component: About },
+]);
+
+function App() {
+  return h(
+    "div",
+    null,
+    h(
+      "nav",
+      null,
+      h("a", { onClick: () => navigate("/") }, "Home"),
+      h("a", { onClick: () => navigate("/about") }, "About"),
+    ),
+    h(RouterView),
+  );
+}
+```
+
+---
+
+## 十二、TypeScript 核心类型
 
 ```typescript
 interface Getter<T> {
@@ -591,48 +640,51 @@ function h<K extends keyof HTMLElementTagNameMap>(
 
 function mount(root: HTMLElement, container: HTMLElement): void;
 function unmount(root: HTMLElement): void;
+function lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default: T } | T>): T;
 ```
 
 ---
 
-## 十一、API 总览
+## 十三、API 总览
 
-| API         | 分类     | 用途                                                             |
-| ----------- | -------- | ---------------------------------------------------------------- |
-| `define`    | 核心     | 创建响应式状态（唯一原语）                                       |
-| `derive`    | 核心     | 派生状态（缓存 + 拦截），上游变化时重新计算                      |
-| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数                         |
-| `h`         | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children，节点级动态绑定 |
-| `<Show>`    | 控制流   | 条件渲染（when 支持响应式函数）                                  |
-| `<List>`    | 控制流   | 列表渲染，全量重建并清理旧节点                                   |
-| `onMount`   | 生命周期 | 挂载后回调（需配合 mount 触发）                                  |
-| `onUnmount` | 生命周期 | 销毁前清理（需配合 unmount 触发）                                |
-| `mount`     | 挂载     | 将组件树挂载到容器并触发 onMount                                 |
-| `unmount`   | 挂载     | 卸载组件树，递归清理所有资源                                     |
+| API          | 分类     | 用途                                                             |
+| ------------ | -------- | ---------------------------------------------------------------- |
+| `define`     | 核心     | 创建响应式状态（唯一原语）                                       |
+| `derive`     | 核心     | 派生状态（缓存 + 拦截），上游变化时重新计算                      |
+| `effect`     | 核心     | 副作用执行（自动收集依赖），返回停止函数                         |
+| `h`          | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children，节点级动态绑定 |
+| `<Show>`     | 控制流   | 条件渲染（when 支持响应式函数）                                  |
+| `<List>`     | 控制流   | 列表渲染，全量重建并清理旧节点                                   |
+| `<Teleport>` | 控制流   | 将内容渲染到指定 DOM 容器，保持生命周期                          |
+| `lazy`       | 异步     | 包装动态导入的组件，自动处理加载状态                             |
+| `onMount`    | 生命周期 | 挂载后回调（需配合 mount 触发）                                  |
+| `onUnmount`  | 生命周期 | 销毁前清理（需配合 unmount 触发）                                |
+| `mount`      | 挂载     | 将组件树挂载到容器并触发 onMount                                 |
+| `unmount`    | 挂载     | 卸载组件树，递归清理所有资源                                     |
 
-**核心概念仍为 4 个（define、derive、effect、h），挂载辅助函数与控制流组件是围绕核心的实用扩展。**
-
----
-
-## 十二、与主流框架差异
-
-| 维度              | React                     | Vue               | Solid          | **kiaao**                       |
-| ----------------- | ------------------------- | ----------------- | -------------- | ------------------------------- |
-| 数据纯净度        | 纯净                      | 不纯净            | 纯净（两套）   | **纯净（一套）**                |
-| 组件运行次数      | 每次重跑                  | 外壳一次          | 外壳一次       | **外壳一次**                    |
-| 虚拟 DOM          | 有                        | 有                | 无             | **无**                          |
-| 编译器依赖        | 无                        | 可选              | 强依赖         | **无**                          |
-| 响应式原理        | 无                        | Proxy             | 编译期         | **显式选择器**                  |
-| 核心概念数        | 10+                       | 8+                | 6+             | **4**                           |
-| 更新粒度          | 组件级                    | 组件/块级         | DOM 节点级     | **选择器结果级**                |
-| Context/Provide   | 有                        | 有                | 有             | **无（信号即通道）**            |
-| Ref 转发/暴露方法 | forwardRef / defineExpose | defineExpose      | 指令/回调      | **原生函数返回值或回调**        |
-| 挂载方式          | 自动（createRoot）        | 自动（createApp） | 自动（render） | **显式 mount/unmount**          |
-| 内存管理          | GC + 手动清理             | GC + effectScope  | GC + 自动清理  | **节点级 + 组件级 effect 清理** |
+**核心概念仍为 4 个（define、derive、effect、h），其余为基于核心的扩展。**
 
 ---
 
-## 十三、代码量估算
+## 十四、与主流框架差异
+
+| 维度            | React               | Vue                    | Solid           | **kiaao**                 |
+| --------------- | ------------------- | ---------------------- | --------------- | ------------------------- |
+| 数据纯净度      | 纯净                | 不纯净                 | 纯净（两套）    | **纯净（一套）**          |
+| 组件运行次数    | 每次重跑            | 外壳一次               | 外壳一次        | **外壳一次**              |
+| 虚拟 DOM        | 有                  | 有                     | 无              | **无**                    |
+| 编译器依赖      | 无                  | 可选                   | 强依赖          | **无**                    |
+| 响应式原理      | 无                  | Proxy                  | 编译期          | **显式选择器**            |
+| 核心概念数      | 10+                 | 8+                     | 6+              | **4**                     |
+| 更新粒度        | 组件级              | 组件/块级              | DOM 节点级      | **选择器结果级**          |
+| Context/Provide | 有                  | 有                     | 有              | **无（信号即通道）**      |
+| 传送门          | 有 (`createPortal`) | 有 (`<Teleport>`)      | 有 (`<Portal>`) | **有 (`<Teleport>`)**     |
+| 异步组件        | `lazy`              | `defineAsyncComponent` | `lazy`          | **`lazy`**                |
+| 路由            | 独立库              | 独立库                 | 独立库          | **独立包 `kiaao-router`** |
+
+---
+
+## 十五、代码量估算
 
 | 模块                                              | 预计行数          |
 | ------------------------------------------------- | ----------------- |
@@ -643,16 +695,18 @@ function unmount(root: HTMLElement): void;
 | 全局上下文与调度                                  | 30                |
 | `<Show>`                                          | 25                |
 | `<List>`                                          | 35                |
+| `<Teleport>`                                      | 15                |
+| `lazy`                                            | 20                |
 | 生命周期钩子                                      | 15                |
 | 组件实例与清理（含 mount/unmount、节点级 effect） | 35                |
-| TypeScript 类型定义                               | 35                |
-| **总计**                                          | **约 305-355 行** |
+| TypeScript 类型定义                               | 40                |
+| **总计**                                          | **约 345-395 行** |
 
 ---
 
-## 十四、待实现（V2+）
+## 十六、待实现（V2+）
 
-- 异步支持：`asyncResource`、微任务批处理调度器
+- 异步数据原语（`resource`）、微任务批处理调度器
 - `<Suspense>` 完整实现
 - SSR 支持
 - DevTools：依赖图谱可视化
@@ -661,12 +715,12 @@ function unmount(root: HTMLElement): void;
 
 ---
 
-## 十五、禁止事项
+## 十七、禁止事项
 
 - 不使用 Proxy
 - 不引入虚拟 DOM
 - 不依赖编译插件（Vite 默认 JSX 转换已足够）
 - 不为不同类型的数据提供不同 API
 - 不强制要求用户使用编译器
-- 不提供 Context / provide-inject 机制（信号独立于组件树已消除其必要性）
-- 不提供 ref 转发 / defineExpose 等暴露机制（原生函数返回值和回调已足够）
+- 不提供 Context / provide-inject 机制
+- 不提供 ref 转发 / defineExpose 等暴露机制
