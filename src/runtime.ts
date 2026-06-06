@@ -222,10 +222,18 @@ export function effect(fn: () => void): () => void {
   // Initial run: collect initial dependencies
   run();
 
-  // Return stop function
-  return () => {
+  // Build the stop function
+  const stop = () => {
     cleanupOwnedDeps(ownedDeps, run);
   };
+
+  // Register stop on current component for automatic cleanup on unmount
+  const comp = currentComponent();
+  if (comp) {
+    comp.effectStops.add(stop);
+  }
+
+  return stop;
 }
 
 // ── derive ─────────────────────────────────────────────
