@@ -25,6 +25,9 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./astro": "./dist/astro/index.js",
+    "./astro/client": "./dist/astro/client.js",
+    "./astro/server": "./dist/astro/server.js",
     "./jsx-dev-runtime": "./dist/jsx-dev-runtime.js",
     "./jsx-runtime": "./dist/jsx-runtime.js",
     "./router": "./dist/router.js",
