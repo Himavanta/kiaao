@@ -149,12 +149,12 @@ function TodoItem(props: {
         onChange={() => props.onToggle(props.todo.id)}
       />
 
-      <Show when={() => editing()}>
+      <Show when={editing}>
         {() => (
           <>
             <input
               type="text"
-              value={editText()}
+              value={props.todo.text}
               onInput={(e: any) => setEditText(e.target.value)}
               onKeyDown={(e: any) => {
                 if (e.key === "Enter") saveEdit();
@@ -232,7 +232,7 @@ export function TodoApp() {
       </div>
 
       <ul class="todo-list">
-        <List each={() => todos()} key={(item: Todo) => item.id}>
+        <List each={todos} key={(item: Todo) => item.id}>
           {(item: Todo) => (
             <TodoItem todo={item} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editTodo} />
           )}

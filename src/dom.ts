@@ -235,33 +235,59 @@ export function Show(props: {
   const fragment = document.createDocumentFragment();
   fragment.appendChild(anchor);
 
-  let currentChild: Node | null = null;
+  // Track nodes owned by the current branch
+  let branchNodes: Node[] = [];
   let isFirstRun = true;
+
+  /** Remove all currently tracked branch nodes from DOM */
+  function removeBranch() {
+    for (const node of branchNodes) {
+      disposeNode(node);
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    }
+    branchNodes = [];
+  }
+
+  /** Collect nodes from a render result, unwrapping DocumentFragment */
+  function collectNodes(result: any): Node[] {
+    if (result instanceof DocumentFragment) {
+      return Array.from(result.childNodes);
+    }
+    if (result instanceof Node) {
+      return [result];
+    }
+    if (result != null) {
+      return [document.createTextNode(String(result))];
+    }
+    return [];
+  }
 
   effect(() => {
     const show = Boolean(props.when());
 
-    // Tear down old branch (skip on first run — nothing to tear down yet)
-    if (!isFirstRun && currentChild) {
-      disposeNode(currentChild);
-      if (currentChild.parentNode) {
-        currentChild.parentNode.removeChild(currentChild);
-      }
-      currentChild = null;
+    // Tear down old branch (skip on first run)
+    if (!isFirstRun) {
+      removeBranch();
     }
 
     // Render new branch
     const renderFn = show ? props.children : props.fallback;
     if (renderFn) {
-      currentChild = renderFn();
-      if (currentChild) {
-        // Use fragment as parent on first run (anchor not yet in real DOM)
-        const parent = anchor.parentNode ?? fragment;
-        parent.insertBefore(currentChild, anchor.nextSibling);
+      const result = renderFn();
+      const nodes = collectNodes(result);
+      const parent = anchor.parentNode ?? fragment;
 
-        // Trigger lifecycle for content dynamically inserted into live DOM
-        if (!isFirstRun && anchor.parentNode) {
-          triggerMount(currentChild);
+      for (const node of nodes) {
+        parent.insertBefore(node, anchor.nextSibling);
+      }
+      branchNodes = nodes;
+
+      // Trigger lifecycle for dynamically inserted content
+      if (!isFirstRun && anchor.parentNode) {
+        for (const node of nodes) {
+          triggerMount(node);
         }
       }
     }
