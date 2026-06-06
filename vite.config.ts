@@ -8,7 +8,9 @@ export default defineConfig({
     dts: {
       tsgo: true,
     },
+    platform: "neutral",
     exports: true,
+    // minify: true,
   },
   lint: {
     options: {
