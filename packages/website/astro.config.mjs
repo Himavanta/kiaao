@@ -5,4 +5,11 @@ import kiaao from "kiaao/astro";
 // https://astro.build/config
 export default defineConfig({
   integrations: [kiaao()],
+  vite: {
+    oxc: {
+      jsx: {
+        importSource: "kiaao",
+      },
+    },
+  },
 });
