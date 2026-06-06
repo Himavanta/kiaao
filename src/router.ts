@@ -13,7 +13,8 @@
 //   }
 
 import { define, derive } from "./runtime.ts";
-import { h, Show } from "./dom.ts";
+import { h } from "./dom.ts";
+import { Show } from "./components.ts";
 
 // ── Types ──────────────────────────────────────────────
 

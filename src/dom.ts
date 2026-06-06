@@ -1,44 +1,23 @@
-// kiaao — DOM rendering: h, mount, unmount, onMount, onUnmount
+// kiaao — h() function: creates real DOM or dispatches to hSSR in SSR mode
 
 import {
   IS_REACTIVE,
-  DISPOSE_KEY,
   INSTANCE_KEY,
-  INITIALIZED_KEY,
-  DISPOSED_KEY,
+  DISPOSE_KEY,
   LOCAL_EFFECTS,
-  SSR_COMPONENT,
   type ReactiveFunction,
 } from "./types.ts";
 
 import {
   effect,
-  define,
-  currentComponent,
   pushComponent,
   popComponent,
   createComponentInstance,
   getRenderMode,
-  setRenderMode,
 } from "./runtime.ts";
-import type { ComponentInstance } from "./types.ts";
-import { escapeHtml, escapeAttr } from "./escape.ts";
 
-// ── onMount / onUnmount ────────────────────────────────
-
-export function onMount(fn: () => void): void {
-  const comp = currentComponent();
-  if (comp) {
-    comp.mountCallbacks.push(fn);
-  }
-}
-
-export function onUnmount(fn: () => void): void {
-  const comp = currentComponent();
-  if (comp) {
-    comp.unmountCallbacks.push(fn);
-  }
-}
+import { createDisposeFn } from "./lifecycle.ts";
+import { hSSR } from "./ssr-helpers.ts";
 
 // ── Prop Processing ─────────────────────────────────────
 
@@ -47,7 +26,6 @@ const EVENT_RE = /^on([A-Z])/;
 function setProp(el: HTMLElement, key: string, value: any): void {
   if (value == null) return;
 
-  // Event listeners: onClick → click
   const eventMatch = key.match(EVENT_RE);
   if (eventMatch) {
     const eventName = eventMatch[1]!.toLowerCase() + key.slice(2 + eventMatch[1]!.length);
@@ -68,7 +46,6 @@ function setProp(el: HTMLElement, key: string, value: any): void {
       }
       break;
     default:
-      // Boolean attributes
       if (typeof value === "boolean") {
         if (value) {
           el.setAttribute(key, "");
@@ -84,31 +61,22 @@ function setProp(el: HTMLElement, key: string, value: any): void {
 
 // ── Child Processing ────────────────────────────────────
 
-/**
- * Process child nodes, flattening nested arrays and creating
- * dynamic bindings for reactive functions.
- */
 function processChildren(children: any[]): Node[] {
   const result: Node[] = [];
 
   for (const child of children) {
-    // Flatten nested arrays
     if (Array.isArray(child)) {
       result.push(...processChildren(child));
       continue;
     }
 
-    // Skip null / undefined / boolean
     if (child == null || typeof child === "boolean") continue;
 
-    // Reactive function → dynamic text node
     if ((child as ReactiveFunction)[IS_REACTIVE]) {
       const textNode = document.createTextNode("");
       const stop = effect(() => {
         textNode.textContent = String(child());
       });
-      // Store stop directly on the textNode, not on the parent component.
-      // This ensures disposeNode can clean it up when the node is removed.
       let stops = (textNode as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
       if (!stops) {
         stops = new Set();
@@ -119,36 +87,15 @@ function processChildren(children: any[]): Node[] {
       continue;
     }
 
-    // DOM node → direct append
     if (child instanceof Node) {
       result.push(child);
       continue;
     }
 
-    // Primitive → static text node
     result.push(document.createTextNode(String(child)));
   }
 
   return result;
-}
-
-// ── Component Dispose ───────────────────────────────────
-
-function createDisposeFn(instance: ComponentInstance): () => void {
-  return () => {
-    if ((instance as any)[DISPOSED_KEY]) return;
-    (instance as any)[DISPOSED_KEY] = true;
-
-    // 1. Run unmount callbacks
-    for (const cb of instance.unmountCallbacks) {
-      cb();
-    }
-
-    // 2. Stop all effects
-    for (const stop of instance.effectStops) {
-      stop();
-    }
-  };
 }
 
 // ── h ───────────────────────────────────────────────────
@@ -163,12 +110,11 @@ export function h<K extends keyof HTMLElementTagNameMap>(
     return hSSR(tag, props, children) as any;
   }
 
-  // ── Component mode ──
+  // Component mode
   if (typeof tag === "function") {
     const instance = createComponentInstance();
     pushComponent(instance);
 
-    // Merge rest children into props.children
     let compProps = props ?? {};
     if (children.length > 0) {
       compProps = { ...compProps, children: children.length === 1 ? children[0] : children };
@@ -185,17 +131,15 @@ export function h<K extends keyof HTMLElementTagNameMap>(
     return result as HTMLElement;
   }
 
-  // ── DOM mode ──
+  // DOM mode
   const el = document.createElement(tag);
 
-  // Apply props
   if (props && typeof props === "object" && !(props as any)[IS_REACTIVE]) {
     for (const key of Object.keys(props)) {
       setProp(el, key, (props as any)[key]);
     }
   }
 
-  // Process children — dynamic bindings are tracked via LOCAL_EFFECTS on each textNode
   const childNodes = processChildren(children);
 
   for (const node of childNodes) {
@@ -203,405 +147,4 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   }
 
   return el;
-}
-
-// ── mount / unmount ─────────────────────────────────────
-
-function triggerMount(node: Node): void {
-  const instance = (node as any)[INSTANCE_KEY] as ComponentInstance | undefined;
-  if (instance && !(instance as any)[INITIALIZED_KEY]) {
-    (instance as any)[INITIALIZED_KEY] = true;
-    for (const cb of instance.mountCallbacks) {
-      cb();
-    }
-  }
-
-  // Recurse into child nodes
-  for (const child of node.childNodes) {
-    triggerMount(child);
-  }
-}
-
-function disposeNode(node: Node): void {
-  // Dispose children first (depth-first)
-  for (const child of node.childNodes) {
-    disposeNode(child);
-  }
-
-  // Stop local effects (dynamic bindings attached to this node)
-  const localStops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
-  if (localStops) {
-    for (const stop of localStops) {
-      stop();
-    }
-    localStops.clear();
-    delete (node as any)[LOCAL_EFFECTS];
-  }
-
-  // Dispose component instance attached to this node
-  const dispose = (node as any)[DISPOSE_KEY] as (() => void) | undefined;
-  if (dispose) {
-    dispose();
-  }
-}
-
-// ── Show ──────────────────────────────────────────────────
-
-/**
- * Conditional rendering. `when` supports both reactive functions
- * (IS_REACTIVE) and plain functions. Branches are lazily evaluated
- * and fully torn down / rebuilt on toggle.
- */
-export function Show(props: {
-  when: (() => any) | ReactiveFunction;
-  fallback?: () => any;
-  children?: () => any;
-}): Node {
-  const anchor = document.createComment("show");
-  const fragment = document.createDocumentFragment();
-  fragment.appendChild(anchor);
-
-  // Track nodes owned by the current branch
-  let branchNodes: Node[] = [];
-  let isFirstRun = true;
-
-  /** Remove all currently tracked branch nodes from DOM */
-  function removeBranch() {
-    for (const node of branchNodes) {
-      disposeNode(node);
-      if (node.parentNode) {
-        node.parentNode.removeChild(node);
-      }
-    }
-    branchNodes = [];
-  }
-
-  /** Collect nodes from a render result, unwrapping DocumentFragment */
-  function collectNodes(result: any): Node[] {
-    if (result instanceof DocumentFragment) {
-      return Array.from(result.childNodes);
-    }
-    if (result instanceof Node) {
-      return [result];
-    }
-    if (result != null) {
-      return [document.createTextNode(String(result))];
-    }
-    return [];
-  }
-
-  effect(() => {
-    const show = Boolean(props.when());
-
-    // Tear down old branch (skip on first run)
-    if (!isFirstRun) {
-      removeBranch();
-    }
-
-    // Render new branch
-    const renderFn = show ? props.children : props.fallback;
-    if (renderFn) {
-      const result = renderFn();
-      const nodes = collectNodes(result);
-      const parent = anchor.parentNode ?? fragment;
-
-      for (const node of nodes) {
-        parent.insertBefore(node, anchor.nextSibling);
-      }
-      branchNodes = nodes;
-
-      // Trigger lifecycle for dynamically inserted content
-      if (!isFirstRun && anchor.parentNode) {
-        for (const node of nodes) {
-          triggerMount(node);
-        }
-      }
-    }
-
-    isFirstRun = false;
-  });
-
-  return fragment;
-}
-
-// ── List ──────────────────────────────────────────────────
-
-/**
- * List rendering with key-based reconciliation.
- * `each` receives a getter/derive function returning an array.
- * `key` identifies items for cleanup — all items are freshly rendered
- * on each update, but stale keys are properly disposed.
- */
-export function List<T>(props: {
-  each: () => T[];
-  key: (item: T, index: number) => any;
-  children?: (item: T, index: number) => any;
-}): Node {
-  const anchor = document.createComment("list");
-  const fragment = document.createDocumentFragment();
-  fragment.appendChild(anchor);
-
-  const children = props.children!;
-
-  effect(() => {
-    const list = props.each();
-    const parent = anchor.parentNode ?? fragment;
-
-    // Remove all previous children (inserted before anchor's next sibling)
-    while (anchor.nextSibling) {
-      const old = anchor.nextSibling;
-      disposeNode(old);
-      old.parentNode?.removeChild(old);
-    }
-
-    // Render fresh
-    let prevNode: Node = anchor;
-    for (let i = 0; i < list.length; i++) {
-      const node = children(list[i], i);
-      parent.insertBefore(node, prevNode.nextSibling);
-      if (parent !== fragment) {
-        triggerMount(node);
-      }
-      prevNode = node;
-    }
-  });
-
-  return fragment;
-}
-
-// ── mount / unmount ─────────────────────────────────────
-
-export function mount(root: HTMLElement, container: HTMLElement): void {
-  container.appendChild(root);
-  triggerMount(root);
-}
-
-export function unmount(root: HTMLElement): void {
-  disposeNode(root);
-
-  if (root.parentNode) {
-    root.parentNode.removeChild(root);
-  }
-}
-
-// ── Teleport ───────────────────────────────────────────────
-
-/**
- * Renders children into a different DOM container (by CSS selector or
- * element reference). The content is logically still part of the current
- * component tree — lifecycle hooks fire normally, and cleanup happens
- * automatically when the Teleport's parent is unmounted.
- */
-export function Teleport(props: { to: string | HTMLElement; children: () => any }): Node {
-  const target =
-    typeof props.to === "string" ? document.querySelector<HTMLElement>(props.to) : props.to;
-  if (!target) return document.createComment("teleport-missing-target");
-
-  const content = props.children();
-  if (content instanceof Node) {
-    target.appendChild(content);
-    triggerMount(content);
-  }
-
-  onUnmount(() => {
-    if (content instanceof Node) {
-      disposeNode(content);
-      if (content.parentNode) {
-        content.parentNode.removeChild(content);
-      }
-    }
-  });
-
-  return document.createComment("teleport");
-}
-
-// ── lazy (async component) ───────────────────────────────────
-
-/**
- * Wraps a dynamic import so it can be used as a regular component.
- * Shows nothing (comment placeholder) while loading, then seamlessly
- * replaces it with the real component once loaded.
- *
- * ```ts
- * const AsyncProfile = lazy(() => import("./HeavyProfile.ts"));
- * // use like any other component:
- * h(AsyncProfile, { userId: 42 });
- * ```
- */
-export function lazy<T extends (...args: any[]) => any>(
-  loader: () => Promise<{ default: T } | T>,
-  options?: { onError?: (err: Error) => void },
-): T {
-  const [Component, setComponent] = define<T | null>(null);
-  const [error, setError] = define<Error | null>(null);
-
-  loader()
-    .then((mod) => {
-      setComponent(() => (mod as any).default || mod);
-    })
-    .catch((err) => {
-      setError(() => err);
-      options?.onError?.(err);
-    });
-
-  const LazyComponent = ((props: any) => {
-    const err = error();
-    if (err) throw err;
-
-    return h(Show, {
-      when: () => Component() !== null,
-      fallback: () => document.createComment("lazy-loading"),
-      children: () => h(Component()!, props),
-    });
-  }) as any;
-
-  (LazyComponent as any)[SSR_COMPONENT] = () => ssr("<!-- lazy placeholder -->");
-
-  return LazyComponent as T;
-}
-
-// ── SSR ─────────────────────────────────────────────────────
-
-const VOID_ELEMENTS = new Set([
-  "area",
-  "base",
-  "br",
-  "col",
-  "embed",
-  "hr",
-  "img",
-  "input",
-  "link",
-  "meta",
-  "param",
-  "source",
-  "track",
-  "wbr",
-]);
-
-interface SSRSafe {
-  _ssr: true;
-  html: string;
-}
-
-function ssr(text: string): SSRSafe {
-  return { _ssr: true, html: text };
-}
-
-function isSSRSafe(v: any): v is SSRSafe {
-  return v && v._ssr === true && typeof v.html === "string";
-}
-
-function renderSSRChild(child: any): string {
-  if (child == null || typeof child === "boolean") return "";
-  if (isSSRSafe(child)) return child.html;
-  if (typeof child === "string" || typeof child === "number") return escapeHtml(String(child));
-  if ((child as any)[IS_REACTIVE]) return escapeHtml(String(child()));
-  if (typeof child === "function") return renderSSRChild(child());
-  if (child instanceof Node) return "";
-  return "";
-}
-
-function hSSR(tag: any, props: any, children: any[]): SSRSafe {
-  // ── Component mode ──
-  if (typeof tag === "function") {
-    const ssrVariant = (tag as any)[SSR_COMPONENT];
-    if (ssrVariant) {
-      const result = ssrVariant(props || {});
-      if (isSSRSafe(result)) return result;
-      if (typeof result === "string") return ssr(result);
-      return ssr("");
-    }
-    const result = tag(props || {});
-    if (isSSRSafe(result)) return result;
-    if (typeof result === "string") return ssr(result);
-    if (result && typeof result === "object" && "html" in result) return ssr(result.html);
-    return ssr("");
-  }
-
-  // ── Element mode ──
-  let html = `<${tag}`;
-
-  if (props && typeof props === "object") {
-    for (const key of Object.keys(props)) {
-      if (key === "class" || key === "className") {
-        html += ` class="${escapeAttr(props[key])}"`;
-      } else if (key === "style") {
-        const val = props[key];
-        if (typeof val === "string") {
-          html += ` style="${escapeAttr(val)}"`;
-        } else if (typeof val === "object" && val !== null) {
-          const cssText = Object.entries(val)
-            .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
-            .join("; ");
-          html += ` style="${escapeAttr(cssText)}"`;
-        }
-      } else if (key.startsWith("on")) {
-        continue;
-      } else if (key === "children") {
-        continue;
-      } else {
-        html += ` ${key}="${escapeAttr(String(props[key]))}"`;
-      }
-    }
-  }
-
-  if (VOID_ELEMENTS.has(tag)) return ssr(html + " />");
-  html += ">";
-
-  for (const child of children) {
-    if (Array.isArray(child)) {
-      for (const c of child) html += renderSSRChild(c);
-    } else {
-      html += renderSSRChild(child);
-    }
-  }
-
-  html += `</${tag}>`;
-  return ssr(html);
-}
-
-// ── Control flow SSR variants ──────────────────────────────
-
-(Show as any)[SSR_COMPONENT] = (props: any) => {
-  const show = Boolean(props.when());
-  const renderFn = show ? props.children : props.fallback;
-  if (renderFn) {
-    return hSSR("div", null, [renderFn()]);
-  }
-  return ssr("");
-};
-
-(List as any)[SSR_COMPONENT] = (props: any) => {
-  const items = props.each();
-  let html = "";
-  for (let i = 0; i < items.length; i++) {
-    const child = props.children(items[i], i);
-    html += isSSRSafe(child) ? child.html : renderSSRChild(child);
-  }
-  return ssr(html);
-};
-
-(Teleport as any)[SSR_COMPONENT] = () => ssr("<!-- teleport placeholder -->");
-
-// ── renderToString ─────────────────────────────────────────
-
-export function renderToString(
-  component: (props: any) => any,
-  props?: any,
-  options?: { slots?: Record<string, string> },
-): string {
-  const prevMode = getRenderMode();
-  setRenderMode("ssr");
-
-  let mergedProps = props ?? {};
-  if (options?.slots?.default) {
-    mergedProps = { ...mergedProps, children: options.slots.default };
-  }
-
-  const result = h(component, mergedProps);
-
-  setRenderMode(prevMode);
-
-  return isSSRSafe(result) ? result.html : typeof result === "string" ? result : "";
 }
