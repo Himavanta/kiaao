@@ -2,7 +2,7 @@
 
 # kiaao
 
-一个轻量级响应式前端框架。无虚拟 DOM，不依赖编译器，所有更新都是直接的 DOM 操作。
+一个轻量级响应式前端框架。无虚拟 DOM，不依赖编译器，不使用 Proxy，所有更新都是直接的 DOM 操作。
 
 ## 核心概念
 
@@ -394,12 +394,13 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## 设计原则
 
-- 不引入虚拟 DOM
-- 不依赖编译插件
-- 不使用 Proxy
-- 不提供 Context / provide-inject（信号本身就是共享通道）
-- 组件函数只执行一次
-- 更新粒度为选择器结果级
+- **无虚拟 DOM** — 更新是直接的 `textNode.textContent` 替换，不进行 Diff 比对
+- **无编译插件依赖** — 纯 `h()` 调用或标准 JSX 转换即可工作
+- **无 Proxy、无 setter、无 getter** — 状态是纯净的普通对象，没有拦截层
+- **显式选择器响应式** — 开发者通过 `getter(selector)` 声明依赖，而非通过 Proxy 陷阱推断
+- **无 Context / provide-inject** — 信号是值容器，可在任何位置直接 import
+- **组件函数只执行一次** — 不重复渲染，只有精确的 DOM 更新
+- **更新粒度为选择器结果级** — 信号变化仅触发所选值真正发生变化的 effect
 
 ## 许可证
 

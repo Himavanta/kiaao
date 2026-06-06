@@ -2,7 +2,7 @@
 
 # kiaao
 
-A minimal reactive frontend framework. No virtual DOM, no compiler dependency, direct DOM manipulation.
+A minimal reactive frontend framework. No virtual DOM, no compiler dependency, no Proxy, direct DOM manipulation.
 
 ## Core Concepts
 
@@ -400,12 +400,13 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## Design Principles
 
-- No virtual DOM
-- No compiler plugin required
-- No Proxy usage
-- No Context / provide-inject (signals themselves are the shared channel)
-- Component functions execute only once
-- Update granularity is at the selector result level
+- **No virtual DOM** — updates are direct `textNode.textContent` replacements, no diffing
+- **No compiler plugin required** — works with plain `h()` calls or standard JSX transform
+- **No Proxy, no setters, no getters** — state is pure plain objects, no interception layer
+- **Explicit selector-based reactivity** — dependency is declared by the developer through `getter(selector)`, not inferred through Proxy traps
+- **No Context / provide-inject** — signals are value containers that can be imported directly anywhere
+- **Component functions execute only once** — no re-rendering, only targeted DOM updates
+- **Update granularity is at the selector result level** — signal change triggers only effects whose selected value actually changed
 
 ## License
 
