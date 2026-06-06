@@ -288,7 +288,7 @@ kiaao 提供了一个轻量客户端路由，作为独立入口引入。完全�
 ```typescript
 import { createRouter } from "kiaao/router";
 
-const { RouterView, navigate, Link } = createRouter([
+const { RouterView, navigate, Link, currentParams } = createRouter([
   { path: "/", component: Home },
   { path: "/users/:id", component: UserProfile },
 ]);
@@ -303,12 +303,15 @@ function App() {
 }
 ```
 
-路由参数作为 props 传入匹配的组件：
+路由参数作为 props 传入匹配的组件，也可通过 `currentParams` 获取：
 
 ```typescript
 function UserProfile(props: { id: string }) {
   return h("div", null, `用户 ${props.id}`);
 }
+
+// 在组件外部
+console.log(currentParams()); // { id: "42" }
 ```
 
 可提供 fallback 组件处理无匹配情况：

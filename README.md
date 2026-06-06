@@ -277,6 +277,16 @@ const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
 h(HeavyProfile, { userId: 42 });
 ```
 
+Loading errors can be handled via an optional callback:
+
+```typescript
+const Profile = lazy(() => import("./Profile.ts"), {
+  onError: (err) => console.error("Failed to load profile", err),
+});
+```
+
+If no `onError` is provided, the error is stored internally and thrown during rendering, allowing it to be caught by an error boundary.
+
 ## Routing
 
 kiaao provides a simple client-side router as a separate entry point. It is built entirely on the core primitives (define, h, Show) with no extra concepts.
@@ -284,7 +294,7 @@ kiaao provides a simple client-side router as a separate entry point. It is buil
 ```typescript
 import { createRouter } from "kiaao/router";
 
-const { RouterView, navigate, Link } = createRouter([
+const { RouterView, navigate, Link, currentParams } = createRouter([
   { path: "/", component: Home },
   { path: "/users/:id", component: UserProfile },
 ]);
@@ -299,12 +309,15 @@ function App() {
 }
 ```
 
-Route params are passed as props to the matched component:
+Route params are passed as props to the matched component, and also available via `currentParams`:
 
 ```typescript
 function UserProfile(props: { id: string }) {
   return h("div", null, `User ${props.id}`);
 }
+
+// alternatively, outside the component
+console.log(currentParams()); // { id: "42" }
 ```
 
 A fallback component can be provided for unmatched routes:
