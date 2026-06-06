@@ -17,8 +17,10 @@ Other APIs are components and utilities built on top of these 4:
 
 - **Show** — conditional rendering
 - **List** — list rendering
+- **Teleport** — render content to a different DOM container
 - **onMount / onUnmount** — lifecycle hooks
 - **mount / unmount** — mount and unmount helpers
+- **lazy** — async component loading
 
 ## Getting Started
 
@@ -236,6 +238,81 @@ function App() {
 }
 ```
 
+### Teleport
+
+Render content to a different DOM container. The content stays logically part of the current component tree -- lifecycle hooks work normally, and cleanup is automatic.
+
+```typescript
+import { h, Teleport } from "kiaao";
+
+function Modal() {
+  return h("div", { class: "modal" }, "This is rendered in a different container");
+}
+
+// in a component
+h(Teleport, {
+  to: "#modal-root", // CSS selector
+  children: () => h(Modal, null),
+});
+
+// or pass a DOM element directly
+document.body.appendChild(
+  h(Teleport, {
+    to: document.querySelector("#portal")!,
+    children: () => h("span", null, "teleported"),
+  }),
+);
+```
+
+### Async components (lazy)
+
+Wrap a dynamic import for code splitting. Renders nothing (comment placeholder) while loading, then switches to the real component.
+
+```typescript
+import { lazy } from "kiaao";
+
+const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
+
+// use like any other component
+h(HeavyProfile, { userId: 42 });
+```
+
+## Routing
+
+kiaao provides a simple client-side router as a separate entry point. It is built entirely on the core primitives (define, h, Show) with no extra concepts.
+
+```typescript
+import { createRouter } from "kiaao/router";
+
+const { RouterView, navigate, Link } = createRouter([
+  { path: "/", component: Home },
+  { path: "/users/:id", component: UserProfile },
+]);
+
+function App() {
+  return h(
+    "div",
+    null,
+    h("nav", null, h(Link, { to: "/" }, "Home"), h(Link, { to: "/users/1" }, "User 1")),
+    h(RouterView),
+  );
+}
+```
+
+Route params are passed as props to the matched component:
+
+```typescript
+function UserProfile(props: { id: string }) {
+  return h("div", null, `User ${props.id}`);
+}
+```
+
+A fallback component can be provided for unmatched routes:
+
+```typescript
+const { RouterView } = createRouter(routes, { fallback: () => h("div", null, "Custom 404") });
+```
+
 ## Setup
 
 ### npm
@@ -292,18 +369,21 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## API Reference
 
-| API       | Description                                            |
-| --------- | ------------------------------------------------------ |
-| define    | create reactive state, returns [getter, setter]        |
-| derive    | create derived state with caching and dirty flag       |
-| effect    | run side effects with automatic dependency tracking    |
-| h         | create real DOM nodes or invoke component functions    |
-| Show      | conditional rendering, when accepts reactive functions |
-| List      | list rendering with key-based node management          |
-| onMount   | run once after the component is mounted                |
-| onUnmount | run before the component is destroyed                  |
-| mount     | attach the component tree to the DOM and trigger hooks |
-| unmount   | detach the component tree and clean up all effects     |
+| API          | Description                                            |
+| ------------ | ------------------------------------------------------ |
+| define       | create reactive state, returns [getter, setter]        |
+| derive       | create derived state with caching and dirty flag       |
+| effect       | run side effects with automatic dependency tracking    |
+| h            | create real DOM nodes or invoke component functions    |
+| Show         | conditional rendering, when accepts reactive functions |
+| List         | list rendering with key-based node management          |
+| Teleport     | render content to a different DOM container            |
+| lazy         | async component loading with dynamic import            |
+| onMount      | run once after the component is mounted                |
+| onUnmount    | run before the component is destroyed                  |
+| mount        | attach the component tree to the DOM and trigger hooks |
+| unmount      | detach the component tree and clean up all effects     |
+| createRouter | client-side router (from kiaao/router)                 |
 
 ## Design Principles
 

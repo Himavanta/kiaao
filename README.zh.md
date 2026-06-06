@@ -17,8 +17,10 @@ kiaao 只有 4 个核心 API：
 
 - **Show** — 条件渲染
 - **List** — 列表渲染
+- **Teleport** — 将内容渲染到指定 DOM 容器
 - **onMount / onUnmount** — 生命周期
 - **mount / unmount** — 挂载与卸载
+- **lazy** — 异步组件加载
 
 ## 快速开始
 
@@ -242,6 +244,79 @@ function App() {
 }
 ```
 
+### Teleport
+
+将内容渲染到指定的 DOM 容器，逻辑上仍属于当前组件树，生命周期正常触发，卸载时自动清理。
+
+```typescript
+import { h, Teleport } from "kiaao";
+
+function Modal() {
+  return h("div", { class: "modal" }, "渲染到其他容器的内容");
+}
+
+// CSS 选择器指定目标
+h(Teleport, {
+  to: "#modal-root",
+  children: () => h(Modal, null),
+});
+
+// 或直接传入 DOM 元素
+h(Teleport, {
+  to: document.querySelector("#portal")!,
+  children: () => h("span", null, "传送内容"),
+});
+```
+
+### 异步组件（lazy）
+
+配合动态导入实现代码拆分。加载过程中显示空占位，加载完成后自动替换为真实组件。
+
+```typescript
+import { lazy } from "kiaao";
+
+const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
+
+// 像普通组件一样使用
+h(HeavyProfile, { userId: 42 });
+```
+
+## 路由
+
+kiaao 提供了一个轻量客户端路由，作为独立入口引入。完全基于核心原语（define、h、Show）构建。
+
+```typescript
+import { createRouter } from "kiaao/router";
+
+const { RouterView, navigate, Link } = createRouter([
+  { path: "/", component: Home },
+  { path: "/users/:id", component: UserProfile },
+]);
+
+function App() {
+  return h(
+    "div",
+    null,
+    h("nav", null, h(Link, { to: "/" }, "首页"), h(Link, { to: "/users/1" }, "用户 1")),
+    h(RouterView),
+  );
+}
+```
+
+路由参数作为 props 传入匹配的组件：
+
+```typescript
+function UserProfile(props: { id: string }) {
+  return h("div", null, `用户 ${props.id}`);
+}
+```
+
+可提供 fallback 组件处理无匹配情况：
+
+```typescript
+const { RouterView } = createRouter(routes, { fallback: () => h("div", null, "页面不存在") });
+```
+
 ## 安装与配置
 
 ### npm
@@ -298,18 +373,21 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## API 参考
 
-| API       | 用途                                     |
-| --------- | ---------------------------------------- |
-| define    | 创建响应式状态，返回 [getter, setter]    |
-| derive    | 创建派生状态，带缓存和脏标记             |
-| effect    | 执行副作用，自动追踪依赖，返回 stop 函数 |
-| h         | 创建真实 DOM 节点或调用组件函数          |
-| Show      | 条件渲染，when 支持响应式函数            |
-| List      | 列表渲染，基于 key 的节点管理            |
-| onMount   | 组件挂载后执行一次                       |
-| onUnmount | 组件销毁前执行                           |
-| mount     | 将组件树挂载到容器并触发生命周期         |
-| unmount   | 卸载组件树并清理所有 effect              |
+| API          | 用途                                     |
+| ------------ | ---------------------------------------- |
+| define       | 创建响应式状态，返回 [getter, setter]    |
+| derive       | 创建派生状态，带缓存和脏标记             |
+| effect       | 执行副作用，自动追踪依赖，返回 stop 函数 |
+| h            | 创建真实 DOM 节点或调用组件函数          |
+| Show         | 条件渲染，when 支持响应式函数            |
+| List         | 列表渲染，基于 key 的节点管理            |
+| Teleport     | 将内容渲染到指定 DOM 容器                |
+| lazy         | 异步组件加载，配合动态导入使用           |
+| onMount      | 组件挂载后执行一次                       |
+| onUnmount    | 组件销毁前执行                           |
+| mount        | 将组件树挂载到容器并触发生命周期         |
+| unmount      | 卸载组件树并清理所有 effect              |
+| createRouter | 客户端路由（来自 kiaao/router）          |
 
 ## 设计原则
 
