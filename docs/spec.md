@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.4
+# kiaao 框架规范 v1.5
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -351,6 +351,81 @@ const MyForm2 = createForm();
 
 每次 `createForm()` 调用创建独立的闭包和信号，实例之间完全隔离。子组件通过闭包直接访问信号，无需 props 逐层转发。
 
+### 暴露方法与 DOM（替代 ref 转发 / defineExpose）
+
+kiaao 的组件是普通的 JavaScript 函数，返回的是真实 DOM 节点（或自定义结构），天然无需 `ref` 转发或 `defineExpose`。
+
+#### 获取子组件的根 DOM
+
+直接调用组件函数即可拿到真实 DOM：
+
+```javascript
+function Child() {
+  return h("div", null, "我是子组件");
+}
+
+function Parent() {
+  const childDom = Child(); // 直接拿到 DOM 引用
+  // 可在此处操作 childDom
+  return h("div", null, childDom);
+}
+```
+
+#### 暴露内部 DOM 或方法
+
+如果需要暴露组件内部的某个 DOM 或方法，可通过 props 回调或工厂函数实现，完全基于 JavaScript 能力：
+
+**方式一：props 回调暴露内部 DOM**
+
+```javascript
+function Child({ inputRef }) {
+  const input = h("input", { type: "text" });
+  if (inputRef) inputRef(input); // 回调暴露
+  return h("div", null, input);
+}
+
+// 父组件
+let myInput;
+const child = h(Child, { inputRef: (el) => (myInput = el) });
+// myInput 是子组件的 input 元素
+```
+
+**方式二：工厂函数暴露方法**
+
+```javascript
+function createCounter() {
+  const [count, setCount] = define(0);
+
+  function Counter() {
+    return h(
+      "div",
+      null,
+      h(
+        "span",
+        null,
+        count((v) => v),
+      ),
+      h("button", { onClick: () => setCount((c) => c + 1) }, "+"),
+    );
+  }
+
+  return {
+    Component: Counter,
+    reset: () => setCount(0),
+    getCount: () => count(),
+  };
+}
+
+const { Component, reset, getCount } = createCounter();
+const root = h(Component);
+mount(root, document.body);
+// 通过 reset() 和 getCount() 与组件实例交互
+```
+
+**重要约定**：当使用 `h(Component)` 的组件模式时，组件必须返回 `HTMLElement` 或 `Node`，以便正确挂载。如果组件需要对外暴露额外的方法或数据，应使用工厂函数直接调用，而不是通过 `h()` 包装。
+
+这些模式完全基于语言原生能力，不需要框架引入 `ref`、`forwardRef`、`defineExpose` 等额外概念。
+
 ---
 
 ## 五、渲染机制
@@ -406,7 +481,8 @@ const MyForm2 = createForm();
 ### Effect 清理
 
 - 每次 `effect(fn)` 调用返回一个停止函数 `stop()`。
-- 调用 `stop()` 会将该 effect 从所有它依赖的信号中移除，并标记为失效。
+- `effect` 内部维护 `ownDeps: Set<{ signal, selectorFn }>`，记录该 effect 订阅了哪些信号的哪些选择器。
+- 调用 `stop()` 遍历 `ownDeps`，从每个信号中移除对应的依赖条目，然后清空 `ownDeps` 并标记为已停止。
 - 组件实例上维护一个 `effectStops: Set<() => void>`，收集该组件内所有通过 `h()` 动态绑定和显式 `effect()` 创建的 effect 返回的 `stop` 函数。
 
 ### 组件卸载
@@ -417,7 +493,6 @@ const MyForm2 = createForm();
   2. 遍历 `effectStops`，调用每个 `stop()` 清理 effect。
   3. 递归处理子组件。
   4. 从 DOM 中移除节点。
-- `unmount` 函数正是基于此 `DISPOSE_KEY` 递归执行清理。
 
 ---
 
@@ -532,17 +607,18 @@ function unmount(root: HTMLElement): void;
 
 ## 十二、与主流框架差异
 
-| 维度            | React              | Vue               | Solid          | **kiaao**              |
-| --------------- | ------------------ | ----------------- | -------------- | ---------------------- |
-| 数据纯净度      | 纯净               | 不纯净            | 纯净（两套）   | **纯净（一套）**       |
-| 组件运行次数    | 每次重跑           | 外壳一次          | 外壳一次       | **外壳一次**           |
-| 虚拟 DOM        | 有                 | 有                | 无             | **无**                 |
-| 编译器依赖      | 无                 | 可选              | 强依赖         | **无**                 |
-| 响应式原理      | 无                 | Proxy             | 编译期         | **显式选择器**         |
-| 核心概念数      | 10+                | 8+                | 6+             | **4**                  |
-| 更新粒度        | 组件级             | 组件/块级         | DOM 节点级     | **选择器结果级**       |
-| Context/Provide | 有                 | 有                | 有             | **无（信号即通道）**   |
-| 挂载方式        | 自动（createRoot） | 自动（createApp） | 自动（render） | **显式 mount/unmount** |
+| 维度              | React                     | Vue               | Solid          | **kiaao**                |
+| ----------------- | ------------------------- | ----------------- | -------------- | ------------------------ |
+| 数据纯净度        | 纯净                      | 不纯净            | 纯净（两套）   | **纯净（一套）**         |
+| 组件运行次数      | 每次重跑                  | 外壳一次          | 外壳一次       | **外壳一次**             |
+| 虚拟 DOM          | 有                        | 有                | 无             | **无**                   |
+| 编译器依赖        | 无                        | 可选              | 强依赖         | **无**                   |
+| 响应式原理        | 无                        | Proxy             | 编译期         | **显式选择器**           |
+| 核心概念数        | 10+                       | 8+                | 6+             | **4**                    |
+| 更新粒度          | 组件级                    | 组件/块级         | DOM 节点级     | **选择器结果级**         |
+| Context/Provide   | 有                        | 有                | 有             | **无（信号即通道）**     |
+| Ref 转发/暴露方法 | forwardRef / defineExpose | defineExpose      | 指令/回调      | **原生函数返回值或回调** |
+| 挂载方式          | 自动（createRoot）        | 自动（createApp） | 自动（render） | **显式 mount/unmount**   |
 
 ---
 
@@ -581,3 +657,4 @@ function unmount(root: HTMLElement): void;
 - 不为不同类型的数据提供不同 API
 - 不强制要求用户使用编译器
 - 不提供 Context / provide-inject 机制（信号独立于组件树已消除其必要性）
+- 不提供 ref 转发 / defineExpose 等暴露机制（原生函数返回值和回调已足够）

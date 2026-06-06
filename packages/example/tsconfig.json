@@ -7,7 +7,6 @@
     "skipLibCheck": true,
 
     /* JSX */
-    "jsx": "react-native",
     "jsxImportSource": "kiaao",
 
     /* Bundler mode */
