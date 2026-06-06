@@ -1,34 +1,34 @@
-**English** | [中文](README.zh.md)
+[English](README.md) | **中文**
 
 # kiaao
 
-A minimal reactive frontend framework. No virtual DOM, no compiler dependency, direct DOM manipulation.
+一个轻量级响应式前端框架。无虚拟 DOM，不依赖编译器，所有更新都是直接的 DOM 操作。
 
-## Core Concepts
+## 核心概念
 
-kiaao has only 4 core APIs:
+kiaao 只有 4 个核心 API：
 
-- **define** — create reactive state
-- **derive** — create derived state with caching
-- **effect** — run side effects with automatic dependency tracking
-- **h** — create real DOM nodes
+- **define** — 创建响应式状态
+- **derive** — 创建派生状态，带缓存
+- **effect** — 执行副作用，自动追踪依赖
+- **h** — 创建真实 DOM 节点
 
-Other APIs are components and utilities built on top of these 4:
+其他 API 都是基于这 4 个核心的组件或工具：
 
-- **Show** — conditional rendering
-- **List** — list rendering
-- **onMount / onUnmount** — lifecycle hooks
-- **mount / unmount** — mount and unmount helpers
+- **Show** — 条件渲染
+- **List** — 列表渲染
+- **onMount / onUnmount** — 生命周期
+- **mount / unmount** — 挂载与卸载
 
-## Getting Started
+## 快速开始
 
-### Installation
+### 安装
 
 ```bash
 npm install kiaao
 ```
 
-### Create reactive state
+### 创建一个响应式状态
 
 ```typescript
 import { define } from "kiaao";
@@ -39,29 +39,29 @@ console.log(count()); // 0
 setCount(42);
 console.log(count()); // 42
 
-// functional update
+// 支持函数式更新
 setCount((prev) => prev + 1);
 ```
 
-### Selector subscription
+### 选择器订阅
 
-Getters accept a selector function for granular subscriptions:
+getter 支持传入选择器函数进行精准订阅：
 
 ```typescript
 const [user, setUser] = define({ name: "tom", age: 18 });
 
-// returns a reactive function that only subscribes to name
+// 返回一个响应式函数，只订阅 name 字段
 const name = user((v) => v.name);
 console.log(name()); // "tom"
 
 setUser((prev) => ({ ...prev, age: 19 }));
-console.log(name()); // "tom" — age change does not trigger name update
+console.log(name()); // "tom" — age 变化不会触发 name 更新
 
 setUser((prev) => ({ ...prev, name: "jerry" }));
 console.log(name()); // "jerry"
 ```
 
-### Side effects
+### 副作用
 
 ```typescript
 import { define, effect } from "kiaao";
@@ -71,18 +71,18 @@ const [count, setCount] = define(0);
 const stop = effect(() => {
   console.log("count is", count());
 });
-// logs: count is 0
+// 立即输出: count is 0
 
 setCount(1);
-// logs: count is 1
+// 输出: count is 1
 
-// cancel the effect
+// 取消副作用
 stop();
 setCount(2);
-// no output
+// 不输出
 ```
 
-### Derived state
+### 派生状态
 
 ```typescript
 import { define, derive } from "kiaao";
@@ -96,31 +96,37 @@ setCount(10);
 console.log(double()); // 20
 ```
 
-### Creating DOM
+### 创建 DOM
 
 ```typescript
 import { h } from "kiaao";
 
-// create an element
+// 创建元素
 const el = h("div", { class: "container" }, h("h1", null, "Hello"), h("p", null, "World"));
-// returns a real DOM node
+// 返回真实 DOM 节点
 
-// event handling
-const btn = h("button", { onClick: () => console.log("clicked") }, "Click me");
+// 事件绑定
+const btn = h(
+  "button",
+  {
+    onClick: () => console.log("clicked"),
+  },
+  "Click me",
+);
 
-// dynamic binding: pass a reactive function, text updates automatically
+// 动态绑定：传入响应式函数，自动更新文本
 const [count, setCount] = define(0);
 const display = h(
   "p",
   null,
   count((v) => `Count: ${v}`),
 );
-// textContent updates automatically when count changes
+// 当 count 变化时，p 元素的文本自动更新
 ```
 
-### Components
+### 组件
 
-A component in kiaao is a function that returns a DOM node. Component functions run only once:
+kiaao 的组件就是一个返回 DOM 节点的函数。组件函数只执行一次：
 
 ```typescript
 import { define, h } from "kiaao";
@@ -140,15 +146,15 @@ function Counter() {
   );
 }
 
-// use the component
+// 使用组件
 const el = h(Counter, null);
 ```
 
-When `h()` receives a function as its first argument, it enters component mode: creates a component instance, calls the function, and returns the generated DOM node.
+组件通过 `h()` 的组件模式调用。`h()` 接收一个函数作为第一个参数时，会创建组件实例、执行函数、返回生成的 DOM 节点。
 
 ### Props
 
-Components receive props via their argument:
+组件通过参数接收 props：
 
 ```typescript
 function Greet(props: { name: string }) {
@@ -158,7 +164,7 @@ function Greet(props: { name: string }) {
 const el = h(Greet, { name: "kiaao" });
 ```
 
-### Lifecycle
+### 生命周期
 
 ```typescript
 import { define, h, onMount, onUnmount } from "kiaao";
@@ -178,14 +184,14 @@ function Timer() {
 
 const root = h(Timer, null);
 
-// mount to the page, triggers onMount
+// 挂载到页面，触发 onMount
 mount(root, document.body);
 
-// unmount, triggers onUnmount and cleans up all effects
+// 卸载，触发 onUnmount 并清理所有 effect
 unmount(root);
 ```
 
-### Conditional rendering
+### 条件渲染
 
 ```typescript
 import { define, h, Show } from "kiaao";
@@ -206,17 +212,17 @@ function App() {
 }
 ```
 
-`when` accepts both reactive functions (getter directly) and plain functions:
+`when` 支持响应式函数（直接传入 getter）或普通函数：
 
 ```typescript
-// reactive function
+// 响应式函数
 h(Show, { when: visible, children: () => ... })
 
-// plain function
+// 普通函数
 h(Show, { when: () => count() > 0, children: () => ... })
 ```
 
-### List rendering
+### 列表渲染
 
 ```typescript
 import { define, h, List } from "kiaao";
@@ -236,7 +242,7 @@ function App() {
 }
 ```
 
-## Setup
+## 安装与配置
 
 ### npm
 
@@ -244,9 +250,9 @@ function App() {
 npm install kiaao
 ```
 
-### JSX / TSX support
+### JSX / TSX 支持
 
-kiaao provides a JSX runtime for the automatic transform.
+kiaao 提供了 JSX 运行时，支持自动转换模式。
 
 tsconfig.json:
 
@@ -270,7 +276,7 @@ export default defineConfig({
 });
 ```
 
-Writing components with JSX:
+使用 JSX 编写组件：
 
 ```tsx
 import { define, mount } from "kiaao";
@@ -289,30 +295,30 @@ function App() {
 mount((<App />) as HTMLElement, document.querySelector("#app")!);
 ```
 
-## API Reference
+## API 参考
 
-| API       | Description                                            |
-| --------- | ------------------------------------------------------ |
-| define    | create reactive state, returns [getter, setter]        |
-| derive    | create derived state with caching and dirty flag       |
-| effect    | run side effects with automatic dependency tracking    |
-| h         | create real DOM nodes or invoke component functions    |
-| Show      | conditional rendering, when accepts reactive functions |
-| List      | list rendering with key-based node management          |
-| onMount   | run once after the component is mounted                |
-| onUnmount | run before the component is destroyed                  |
-| mount     | attach the component tree to the DOM and trigger hooks |
-| unmount   | detach the component tree and clean up all effects     |
+| API       | 用途                                     |
+| --------- | ---------------------------------------- |
+| define    | 创建响应式状态，返回 [getter, setter]    |
+| derive    | 创建派生状态，带缓存和脏标记             |
+| effect    | 执行副作用，自动追踪依赖，返回 stop 函数 |
+| h         | 创建真实 DOM 节点或调用组件函数          |
+| Show      | 条件渲染，when 支持响应式函数            |
+| List      | 列表渲染，基于 key 的节点管理            |
+| onMount   | 组件挂载后执行一次                       |
+| onUnmount | 组件销毁前执行                           |
+| mount     | 将组件树挂载到容器并触发生命周期         |
+| unmount   | 卸载组件树并清理所有 effect              |
 
-## Design Principles
+## 设计原则
 
-- No virtual DOM
-- No compiler plugin required
-- No Proxy usage
-- No Context / provide-inject (signals themselves are the shared channel)
-- Component functions execute only once
-- Update granularity is at the selector result level
+- 不引入虚拟 DOM
+- 不依赖编译插件
+- 不使用 Proxy
+- 不提供 Context / provide-inject（信号本身就是共享通道）
+- 组件函数只执行一次
+- 更新粒度为选择器结果级
 
-## License
+## 许可证
 
 MIT
