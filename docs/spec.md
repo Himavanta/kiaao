@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.3
+# kiaao 框架规范 v1.4
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -110,9 +110,42 @@ stop();
 
 ### `h(tag, props?, ...children): HTMLElement`
 
-纯运行时创建真实 DOM。与 Vite 默认 JSX 转换对接。若子节点是响应式函数（通过 `IS_REACTIVE` 标记识别），自动创建文本占位并启动 `effect` 绑定；若子节点是普通值或 DOM 节点，直接附加。
+统一创建函数。根据第一个参数的类型，分两种模式：
+
+#### DOM 模式（`tag` 为字符串）
+
+创建真实 DOM 元素。与 Vite 默认 JSX 转换对接。对 `children` 进行**递归扁平化**（自动展开嵌套数组）。对每个子节点：
+
+- 若为响应式函数（携带 `IS_REACTIVE` 标记）：创建文本占位，并通过 `effect` 绑定动态更新。
+- 若为 DOM 节点：直接附加。
+- 若为其他值：转为字符串后创建静态文本节点。
+
+#### 组件模式（`tag` 为函数）
+
+将 `tag` 视为组件函数：
+
+1. 创建新的组件实例，压入 `currentComponent` 栈。
+2. 执行 `tag(props)`，传入的 `props` 即为第二个参数（若无则传空对象）。
+3. 函数返回真实 DOM 节点（或由控制流组件返回的占位/组合节点）。
+4. 组件实例出栈，恢复父组件上下文。
+5. 返回该 DOM 节点。
+
+这种设计使得 JSX 编译后的 `h(Component, props)` 与纯 `h()` 调用都能统一处理。
+
+**类型签名**：
+
+```typescript
+function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K | ((props: any) => any),
+  props?: any,
+  ...children: any[]
+): HTMLElement;
+```
+
+**使用示例**：
 
 ```javascript
+// DOM 模式
 h(
   "div",
   { class: "card" },
@@ -128,22 +161,23 @@ h(
     user((v) => v.age),
   ),
 );
+
+// 组件模式
+h(Show, { when: visible, children: () => h("div", null, "可见内容") });
 ```
 
-JSX 写法（编译后自动转为 `h` 调用）：
+JSX 写法（编译后自动转为对应的 `h` 调用）：
 
 ```jsx
 <div class="card">
-  <h1>{user((v) => v.name)}</h1>
-  <p>年龄：{user((v) => v.age)}</p>
+  <h1>{user(v => v.name)}</h1>
+  <p>年龄：{user(v => v.age)}</p>
 </div>
+
+<Show when={visible}>
+  {() => <div>可见内容</div>}
+</Show>
 ```
-
-**动态绑定细节**：当 `h()` 检测到子节点是响应式函数时，内部执行：
-
-1. 创建一个空的 `TextNode`。
-2. 调用 `effect(() => { textNode.textContent = String(child()); })`，在此过程中完成首次求值和依赖收集。
-3. 该 `effect` 返回的清理函数被注册到当前组件的清理队列。
 
 ---
 
@@ -151,18 +185,33 @@ JSX 写法（编译后自动转为 `h` 调用）：
 
 ### `<Show when={...} fallback={...}>`
 
-条件渲染。`when`、`fallback`、`children` 均接收函数（惰性求值），以支持分支完全重建。
+条件渲染。`when` 可以是响应式函数（`IS_REACTIVE`）或普通函数。`fallback`、`children` 均接收函数（惰性求值），以支持分支完全重建。
 
 ```jsx
-<Show when={() => visible()} fallback={() => <p>无数据</p>}>
+<Show when={visible} fallback={() => <p>无数据</p>}>
   {() => <Dashboard />}
 </Show>
+```
+
+```javascript
+// 纯 h 调用
+h(Show, { when: visible, children: () => h("div", null, "内容") });
+```
+
+`when` 为响应式函数时直接传入，`Show` 内部通过 `when()` 获取当前值并自动依赖追踪。若需要逻辑转换，可使用普通函数包裹：
+
+```javascript
+h(Show, { when: () => count() > 0, children: ... })
 ```
 
 函数签名：
 
 ```ts
-function Show(props: { when: () => any; fallback?: () => any; children?: () => any }): Node;
+function Show(props: {
+  when: (() => any) | ReactiveFunction;
+  fallback?: () => any;
+  children?: () => any;
+}): Node;
 ```
 
 ### `<List each={...} key={...}>`
@@ -187,7 +236,7 @@ function List<T>(props: {
 
 ---
 
-## 三、生命周期（2 个）
+## 三、生命周期与挂载辅助
 
 ### `onMount(fn: () => void): void`
 
@@ -202,11 +251,37 @@ function Timer() {
   const [time, setTime] = define(new Date());
   const timer = setInterval(() => setTime(new Date()), 1000);
   onUnmount(() => clearInterval(timer));
-  return <div>{time((v) => v.toLocaleTimeString())}</div>;
+  return h(
+    "div",
+    null,
+    time((v) => v.toLocaleTimeString()),
+  );
 }
 ```
 
-**内部机制**：`currentComponent` 为组件实例栈。组件函数执行前压栈，执行后出栈。`onMount`/`onUnmount` 将回调注册到栈顶实例的队列中。
+**内部机制**：`currentComponent` 为组件实例栈。组件函数执行前（通过 `h` 的组件模式）压栈，执行后出栈。`onMount`/`onUnmount` 将回调注册到栈顶实例的队列中。
+
+### 挂载辅助函数
+
+由于 kiaao 不自行入侵 DOM，需要显式挂载来触发生命周期。提供两个轻量工具：
+
+#### `mount(root: HTMLElement, container: HTMLElement): void`
+
+将 `root` 添加到 `container` 中，并递归触发所有待执行的 `onMount` 回调。应在创建组件树后调用。
+
+#### `unmount(root: HTMLElement): void`
+
+从 DOM 中移除 `root`，并递归执行所有 `onUnmount` 回调，清理所有关联的 effect。通常在销毁组件时调用。
+
+```javascript
+const root = Timer();
+mount(root, document.body);
+
+// 后续卸载
+unmount(root);
+```
+
+这两个函数不是响应式核心，但是确保生命周期正确触发的必要工具。不影响框架 API 的核心概念数。
 
 ---
 
@@ -218,12 +293,21 @@ function Timer() {
 function UserProfile() {
   const [user, setUser] = define({ name: "tom", age: 18 });
 
-  return (
-    <div>
-      <h1>{user((v) => v.name)}</h1>
-      <p>年龄：{user((v) => v.age)}</p>
-      <button onClick={() => setUser((prev) => ({ ...prev, age: prev.age + 1 }))}>长大一岁</button>
-    </div>
+  return h(
+    "div",
+    null,
+    h(
+      "h1",
+      null,
+      user((v) => v.name),
+    ),
+    h(
+      "p",
+      null,
+      "年龄：",
+      user((v) => v.age),
+    ),
+    h("button", { onClick: () => setUser((prev) => ({ ...prev, age: prev.age + 1 })) }, "长大一岁"),
   );
 }
 ```
@@ -273,17 +357,19 @@ const MyForm2 = createForm();
 
 ### 初始化流程
 
-1. 执行组件外壳一次。
-2. 遇到 `define()` 创建信号。
-3. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
-4. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集）。
-5. 返回真实 DOM 树，挂载到页面。
+1. 用户调用组件函数（或通过 `h(Component)`），创建组件实例并压栈。
+2. 执行组件外壳一次。
+3. 遇到 `define()` 创建信号。
+4. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
+5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集）。
+6. 返回真实 DOM 树，组件实例出栈。
+7. 用户调用 `mount(root, container)` 将 DOM 挂载到页面，并触发 `onMount` 回调。
 
 ### 更新流程
 
 1. `setUser(prev => ({ ...prev, age: 19 }))` 被调用。
 2. **先保存旧值引用**，再写入新值。
-3. 遍历该信号的所有选择器依赖（存储的 `selectorFn` 引用及对应的 `effect`）。
+3. 遍历该信号的所有选择器依赖。
 4. 对每个依赖：用旧值执行选择器 → 用新值执行选择器 → 使用 `!==` 浅对比。
 5. 结果不同 → 触发对应的 `effect` 重新执行（DOM 更新或 `effect` 回调）。
 6. DOM 更新是单点文本节点替换，无虚拟 DOM Diff，无组件重跑。
@@ -300,7 +386,7 @@ const MyForm2 = createForm();
 ### 全局上下文
 
 - `currentEffect`：**栈结构**，支持 `effect` 嵌套。`effect` 执行时压栈，执行后弹出。
-- `currentComponent`：**栈结构**，支持组件嵌套。组件函数执行前将组件实例压入，执行后弹出。
+- `currentComponent`：**栈结构**，支持组件嵌套。`h()` 处理函数组件时压栈，执行后弹出。
 
 ### 依赖图谱结构
 
@@ -326,11 +412,12 @@ const MyForm2 = createForm();
 ### 组件卸载
 
 - 每个组件返回的根 DOM 节点上挂载 `Symbol('dispose')` 方法。
-- 当组件被移除时，调用该方法：
+- 当用户调用 `unmount(root)` 时：
   1. 执行所有 `onUnmount` 回调。
   2. 遍历 `effectStops`，调用每个 `stop()` 清理 effect。
   3. 递归处理子组件。
-  4. 从父组件断开引用。
+  4. 从 DOM 中移除节点。
+- `unmount` 函数正是基于此 `DISPOSE_KEY` 递归执行清理。
 
 ---
 
@@ -403,65 +490,77 @@ interface Setter<T> {
   (updater: (prev: T) => T): T;
 }
 
+interface ReactiveFunction {
+  (): any;
+  [IS_REACTIVE]?: true;
+}
+
 function define<T>(initialValue: T): [Getter<T>, Setter<T>];
 function derive<T>(computeFn: () => T): () => T;
 function effect(fn: () => void): () => void;
+
 function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props?: Partial<HTMLElementTagNameMap[K]> | null,
+  tag: K | ((props: any) => any),
+  props?: any,
   ...children: any[]
-): HTMLElementTagNameMap[K];
+): HTMLElement;
+
+function mount(root: HTMLElement, container: HTMLElement): void;
+function unmount(root: HTMLElement): void;
 ```
 
 ---
 
 ## 十一、API 总览
 
-| API         | 分类     | 用途                                     |
-| ----------- | -------- | ---------------------------------------- |
-| `define`    | 核心     | 创建响应式状态（唯一原语）               |
-| `derive`    | 核心     | 派生状态（缓存 + 拦截）                  |
-| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数 |
-| `h`         | 渲染     | 纯运行时创建真实 DOM                     |
-| `<Show>`    | 控制流   | 条件渲染                                 |
-| `<List>`    | 控制流   | 列表渲染                                 |
-| `onMount`   | 生命周期 | 挂载后回调                               |
-| `onUnmount` | 生命周期 | 销毁前清理                               |
+| API         | 分类     | 用途                                             |
+| ----------- | -------- | ------------------------------------------------ |
+| `define`    | 核心     | 创建响应式状态（唯一原语）                       |
+| `derive`    | 核心     | 派生状态（缓存 + 拦截）                          |
+| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数         |
+| `h`         | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children |
+| `<Show>`    | 控制流   | 条件渲染（when 支持响应式函数）                  |
+| `<List>`    | 控制流   | 列表渲染                                         |
+| `onMount`   | 生命周期 | 挂载后回调（需配合 mount 触发）                  |
+| `onUnmount` | 生命周期 | 销毁前清理（需配合 unmount 触发）                |
+| `mount`     | 挂载     | 将组件树挂载到容器并触发 onMount                 |
+| `unmount`   | 挂载     | 卸载组件树并触发 onUnmount，清理所有 effect      |
 
-**总计 8 个公开 API，用户可见的核心概念仅 4 个（define、derive、effect、h）。**
+**核心概念仍为 4 个（define、derive、effect、h），挂载辅助函数是显式化生命周期的必要工具，不计入核心响应式概念。**
 
 ---
 
 ## 十二、与主流框架差异
 
-| 维度            | React    | Vue       | Solid        | **kiaao**            |
-| --------------- | -------- | --------- | ------------ | -------------------- |
-| 数据纯净度      | 纯净     | 不纯净    | 纯净（两套） | **纯净（一套）**     |
-| 组件运行次数    | 每次重跑 | 外壳一次  | 外壳一次     | **外壳一次**         |
-| 虚拟 DOM        | 有       | 有        | 无           | **无**               |
-| 编译器依赖      | 无       | 可选      | 强依赖       | **无**               |
-| 响应式原理      | 无       | Proxy     | 编译期       | **显式选择器**       |
-| 核心概念数      | 10+      | 8+        | 6+           | **4**                |
-| 更新粒度        | 组件级   | 组件/块级 | DOM 节点级   | **选择器结果级**     |
-| Context/Provide | 有       | 有        | 有           | **无（信号即通道）** |
+| 维度            | React              | Vue               | Solid          | **kiaao**              |
+| --------------- | ------------------ | ----------------- | -------------- | ---------------------- |
+| 数据纯净度      | 纯净               | 不纯净            | 纯净（两套）   | **纯净（一套）**       |
+| 组件运行次数    | 每次重跑           | 外壳一次          | 外壳一次       | **外壳一次**           |
+| 虚拟 DOM        | 有                 | 有                | 无             | **无**                 |
+| 编译器依赖      | 无                 | 可选              | 强依赖         | **无**                 |
+| 响应式原理      | 无                 | Proxy             | 编译期         | **显式选择器**         |
+| 核心概念数      | 10+                | 8+                | 6+             | **4**                  |
+| 更新粒度        | 组件级             | 组件/块级         | DOM 节点级     | **选择器结果级**       |
+| Context/Provide | 有                 | 有                | 有             | **无（信号即通道）**   |
+| 挂载方式        | 自动（createRoot） | 自动（createApp） | 自动（render） | **显式 mount/unmount** |
 
 ---
 
 ## 十三、代码量估算
 
-| 模块                | 预计行数          |
-| ------------------- | ----------------- |
-| `define`            | 40-50             |
-| `derive`            | 25                |
-| `effect`            | 20                |
-| `h`                 | 35-45             |
-| 全局上下文与调度    | 30                |
-| `<Show>`            | 25                |
-| `<List>`            | 35                |
-| 生命周期钩子        | 15                |
-| 组件实例与清理      | 25                |
-| TypeScript 类型定义 | 30                |
-| **总计**            | **约 280-320 行** |
+| 模块                               | 预计行数          |
+| ---------------------------------- | ----------------- |
+| `define`                           | 40-50             |
+| `derive`                           | 25                |
+| `effect`                           | 20                |
+| `h` (含组件模式与 children 扁平化) | 45-55             |
+| 全局上下文与调度                   | 30                |
+| `<Show>`                           | 25                |
+| `<List>`                           | 35                |
+| 生命周期钩子                       | 15                |
+| 组件实例与清理（含 mount/unmount） | 30                |
+| TypeScript 类型定义                | 35                |
+| **总计**                           | **约 300-350 行** |
 
 ---
 
