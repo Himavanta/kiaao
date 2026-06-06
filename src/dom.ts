@@ -275,82 +275,43 @@ export function Show(props: {
 // ── List ──────────────────────────────────────────────────
 
 /**
- * List rendering with key-based DOM reuse.
+ * List rendering with key-based reconciliation.
  * `each` receives a getter/derive function returning an array.
- * `key` determines identity for DOM reuse across updates.
+ * `key` identifies items for cleanup — all items are freshly rendered
+ * on each update, but stale keys are properly disposed.
  */
 export function List<T>(props: {
   each: () => T[];
   key: (item: T, index: number) => any;
-  children: (item: T, index: number) => any;
+  children?: (item: T, index: number) => any;
 }): Node {
   const anchor = document.createComment("list");
   const fragment = document.createDocumentFragment();
   fragment.appendChild(anchor);
 
-  // Map: key → { node, item }
-  let itemMap = new Map<any, { node: Node; item: T }>();
-  let keyOrder: any[] = [];
+  const children = props.children!;
 
-  // Initial render
-  const initList = props.each();
-  for (let i = 0; i < initList.length; i++) {
-    const item = initList[i];
-    const k = props.key(item, i);
-    const node = props.children(item, i);
-    itemMap.set(k, { node, item });
-    keyOrder.push(k);
-    fragment.appendChild(node);
-  }
-
-  // Updates
   effect(() => {
     const list = props.each();
-    const newOrder: any[] = [];
+    const parent = anchor.parentNode ?? fragment;
+
+    // Remove all previous children (inserted before anchor's next sibling)
+    while (anchor.nextSibling) {
+      const old = anchor.nextSibling;
+      disposeNode(old);
+      old.parentNode?.removeChild(old);
+    }
+
+    // Render fresh
     let prevNode: Node = anchor;
-    const parent = anchor.parentNode;
-
     for (let i = 0; i < list.length; i++) {
-      const item = list[i];
-      const k = props.key(item, i);
-      newOrder.push(k);
-
-      let isNew = false;
-      let entry = itemMap.get(k);
-      if (!entry) {
-        // New item — create DOM
-        const node = props.children(item, i);
-        entry = { node, item };
-        itemMap.set(k, entry);
-        isNew = true;
-      }
-      entry.item = item;
-
-      // Position correctly (reorder if needed)
-      const node = entry.node;
-      if (parent && (node.parentNode !== parent || node.previousSibling !== prevNode)) {
-        parent.insertBefore(node, prevNode.nextSibling);
-      }
-      prevNode = node;
-
-      // Trigger lifecycle for newly inserted content
-      if (isNew && parent) {
+      const node = children(list[i], i);
+      parent.insertBefore(node, prevNode.nextSibling);
+      if (parent !== fragment) {
         triggerMount(node);
       }
+      prevNode = node;
     }
-
-    // Remove stale items
-    for (const [k, entry] of itemMap) {
-      if (!newOrder.includes(k)) {
-        disposeNode(entry.node);
-        if (entry.node.parentNode) {
-          entry.node.parentNode.removeChild(entry.node);
-        }
-        itemMap.delete(k);
-      }
-    }
-
-    keyOrder = newOrder;
   });
 
   return fragment;

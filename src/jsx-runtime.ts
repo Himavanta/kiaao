@@ -68,6 +68,13 @@ export { createJsxElement as jsxDEV };
 // ── JSX Type Declarations ──────────────────────────────
 
 export namespace JSX {
+  export interface Element extends Node {}
+  export interface ElementClass {
+    (props: any): Node;
+  }
+  export interface ElementChildrenAttribute {
+    children: any;
+  }
   export interface IntrinsicElements {
     [elem: string]: any;
   }

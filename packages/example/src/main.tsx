@@ -3,6 +3,7 @@ import typescriptLogo from "./assets/typescript.svg";
 import viteLogo from "./assets/vite.svg";
 import heroImg from "./assets/hero.png";
 import { define, mount } from "kiaao";
+import { TodoApp } from "./todo.tsx";
 
 // ── SVG Icon Components ────────────────────────────────
 
@@ -55,6 +56,7 @@ function App() {
       </div>
 
       <Counter />
+      <TodoApp />
     </section>
   );
 }
