@@ -9,7 +9,8 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^6.4.4"
+    "astro": "^6.4.4",
+    "kiaao": "workspace:"
   },
   "engines": {
     "node": ">=22.12.0"

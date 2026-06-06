@@ -57,6 +57,9 @@ importers:
       astro:
         specifier: ^6.4.4
         version: 6.4.4(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
+      kiaao:
+        specifier: 'workspace:'
+        version: link:../..
 
 packages:
 
