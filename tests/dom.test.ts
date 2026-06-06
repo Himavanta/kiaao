@@ -1,7 +1,18 @@
 // @vitest-environment happy-dom
 
 import { expect, test, describe } from "vite-plus/test";
-import { define, effect, derive, h, mount, unmount, onMount, onUnmount } from "../src/index.ts";
+import {
+  define,
+  effect,
+  derive,
+  h,
+  mount,
+  unmount,
+  onMount,
+  onUnmount,
+  Show,
+  List,
+} from "../src/index.ts";
 
 describe("h — DOM mode", () => {
   test("creates element with tag name", () => {
@@ -230,5 +241,270 @@ describe("mount / unmount", () => {
     expect(document.body.contains(el)).toBe(true);
     unmount(el);
     expect(document.body.contains(el)).toBe(false);
+  });
+});
+
+describe("Show", () => {
+  test("renders children when when() is truthy", () => {
+    const [visible] = define(true);
+    const node = h(Show, { when: visible, children: () => h("p", null, "shown") });
+    const el = h("div", null, node);
+    expect(el.textContent).toBe("shown");
+  });
+
+  test("renders fallback when when() is falsy", () => {
+    const [visible] = define(false);
+    const node = h(Show, {
+      when: visible,
+      children: () => h("p", null, "shown"),
+      fallback: () => h("p", null, "fallback"),
+    });
+    const el = h("div", null, node);
+    expect(el.textContent).toBe("fallback");
+  });
+
+  test("toggles between branches when when() changes", () => {
+    const [visible, setVisible] = define(true);
+    const node = h(Show, {
+      when: visible,
+      children: () => h("p", null, "shown"),
+      fallback: () => h("p", null, "fallback"),
+    });
+    const el = h("div", null, node);
+    expect(el.textContent).toBe("shown");
+
+    setVisible(false);
+    expect(el.textContent).toBe("fallback");
+
+    setVisible(true);
+    expect(el.textContent).toBe("shown");
+  });
+
+  test("works with plain function wrapper", () => {
+    const [count, setCount] = define(0);
+    const node = h(Show, {
+      when: () => count() > 0,
+      children: () => h("p", null, "positive"),
+      fallback: () => h("p", null, "non-positive"),
+    });
+    const el = h("div", null, node);
+    expect(el.textContent).toBe("non-positive");
+
+    setCount(5);
+    expect(el.textContent).toBe("positive");
+  });
+
+  test("mounts dynamically created content", () => {
+    const [visible, setVisible] = define(false);
+    let mounted = false;
+
+    function Child() {
+      onMount(() => {
+        mounted = true;
+      });
+      return h("span", null, "hello");
+    }
+
+    const root = h(
+      "div",
+      null,
+      h(Show, {
+        when: visible,
+        children: () => h(Child, null),
+      }),
+    );
+
+    mount(root, document.body);
+    expect(mounted).toBe(false); // not visible yet
+
+    setVisible(true);
+    expect(mounted).toBe(true);
+
+    unmount(root);
+  });
+
+  test("cleans up content on unmount", () => {
+    const [visible] = define(true);
+    let unmounted = false;
+
+    function Child() {
+      onUnmount(() => {
+        unmounted = true;
+      });
+      return h("span", null, "bye");
+    }
+
+    const root = h(
+      "div",
+      null,
+      h(Show, {
+        when: visible,
+        children: () => h(Child, null),
+      }),
+    );
+
+    mount(root, document.body);
+    expect(unmounted).toBe(false);
+
+    unmount(root);
+    expect(unmounted).toBe(true);
+  });
+});
+
+describe("List", () => {
+  test("renders list items from array", () => {
+    const [items] = define(["a", "b", "c"]);
+    const node = h(List, {
+      each: () => items(),
+      key: (item: string) => item,
+      children: (item: string) => h("li", null, item),
+    });
+    const el = h("ul", null, node);
+    expect(el.children.length).toBe(3);
+    expect(el.children[0].textContent).toBe("a");
+    expect(el.children[1].textContent).toBe("b");
+    expect(el.children[2].textContent).toBe("c");
+  });
+
+  test("updates when array changes", () => {
+    const [items, setItems] = define(["a", "b"]);
+    const node = h(List, {
+      each: () => items(),
+      key: (item: string) => item,
+      children: (item: string) => h("li", null, item),
+    });
+    const el = h("ul", null, node);
+    expect(el.children.length).toBe(2);
+
+    setItems(["a", "b", "c"]);
+    expect(el.children.length).toBe(3);
+    expect(el.children[2].textContent).toBe("c");
+  });
+
+  test("reuses DOM nodes by key", () => {
+    const [items, setItems] = define([
+      { id: 1, text: "a" },
+      { id: 2, text: "b" },
+    ]);
+    const rendered = new Set<Node>();
+
+    const node = h(List, {
+      each: () => items(),
+      key: (item: { id: number; text: string }) => item.id,
+      children: (item: { id: number; text: string }) => {
+        const el = h("li", null, item.text);
+        rendered.add(el);
+        return el;
+      },
+    });
+
+    const el = h("ul", null, node);
+    const firstNode = el.children[0];
+
+    // Remove one item — the remaining node should be reused
+    setItems([{ id: 1, text: "a" }]);
+    expect(el.children.length).toBe(1);
+    // The reused node should be the same object reference
+    expect(el.children[0]).toBe(firstNode);
+  });
+
+  test("removes stale items and cleans up", () => {
+    const [items, setItems] = define(["a", "b", "c"]);
+    const node = h(List, {
+      each: () => items(),
+      key: (item: string) => item,
+      children: (item: string) => h("li", null, item),
+    });
+    const el = h("ul", null, node);
+    expect(el.children.length).toBe(3);
+
+    setItems(["a"]);
+    expect(el.children.length).toBe(1);
+    expect(el.children[0].textContent).toBe("a");
+  });
+
+  test("reorders items when order changes", () => {
+    const [items, setItems] = define([
+      { id: 1, text: "first" },
+      { id: 2, text: "second" },
+    ]);
+
+    const node = h(List, {
+      each: () => items(),
+      key: (item: { id: number; text: string }) => item.id,
+      children: (item: { id: number; text: string }) => h("li", null, item.text),
+    });
+
+    const el = h("ul", null, node);
+    expect(el.children[0].textContent).toBe("first");
+    expect(el.children[1].textContent).toBe("second");
+
+    // Reverse order
+    setItems([
+      { id: 2, text: "second" },
+      { id: 1, text: "first" },
+    ]);
+    expect(el.children[0].textContent).toBe("second");
+    expect(el.children[1].textContent).toBe("first");
+  });
+
+  test("mounts newly added items", () => {
+    const [items, setItems] = define(["a"]);
+    let mountedCount = 0;
+
+    function Item(props: { text: string }) {
+      onMount(() => {
+        mountedCount++;
+      });
+      return h("li", null, props.text);
+    }
+
+    const root = h(
+      "ul",
+      null,
+      h(List, {
+        each: () => items(),
+        key: (item: string) => item,
+        children: (item: string) => h(Item, { text: item }),
+      }),
+    );
+
+    mount(root, document.body);
+    expect(mountedCount).toBe(1);
+
+    setItems(["a", "b"]);
+    expect(mountedCount).toBe(2);
+
+    unmount(root);
+  });
+
+  test("cleans up removed items", () => {
+    const [items, setItems] = define(["a", "b"]);
+    const unmounted = new Set<string>();
+
+    function Item(props: { text: string }) {
+      onUnmount(() => {
+        unmounted.add(props.text);
+      });
+      return h("li", null, props.text);
+    }
+
+    const root = h(
+      "ul",
+      null,
+      h(List, {
+        each: () => items(),
+        key: (item: string) => item,
+        children: (item: string) => h(Item, { text: item }),
+      }),
+    );
+
+    mount(root, document.body);
+
+    setItems(["a"]);
+    expect(unmounted.has("b")).toBe(true);
+    expect(unmounted.has("a")).toBe(false);
+
+    unmount(root);
   });
 });

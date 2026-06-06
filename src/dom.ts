@@ -219,6 +219,145 @@ function disposeNode(node: Node): void {
   }
 }
 
+// ── Show ──────────────────────────────────────────────────
+
+/**
+ * Conditional rendering. `when` supports both reactive functions
+ * (IS_REACTIVE) and plain functions. Branches are lazily evaluated
+ * and fully torn down / rebuilt on toggle.
+ */
+export function Show(props: {
+  when: (() => any) | ReactiveFunction;
+  fallback?: () => any;
+  children?: () => any;
+}): Node {
+  const anchor = document.createComment("show");
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(anchor);
+
+  let currentChild: Node | null = null;
+  let isFirstRun = true;
+
+  effect(() => {
+    const show = Boolean(props.when());
+
+    // Tear down old branch (skip on first run — nothing to tear down yet)
+    if (!isFirstRun && currentChild) {
+      disposeNode(currentChild);
+      if (currentChild.parentNode) {
+        currentChild.parentNode.removeChild(currentChild);
+      }
+      currentChild = null;
+    }
+
+    // Render new branch
+    const renderFn = show ? props.children : props.fallback;
+    if (renderFn) {
+      currentChild = renderFn();
+      if (currentChild) {
+        // Use fragment as parent on first run (anchor not yet in real DOM)
+        const parent = anchor.parentNode ?? fragment;
+        parent.insertBefore(currentChild, anchor.nextSibling);
+
+        // Trigger lifecycle for content dynamically inserted into live DOM
+        if (!isFirstRun && anchor.parentNode) {
+          triggerMount(currentChild);
+        }
+      }
+    }
+
+    isFirstRun = false;
+  });
+
+  return fragment;
+}
+
+// ── List ──────────────────────────────────────────────────
+
+/**
+ * List rendering with key-based DOM reuse.
+ * `each` receives a getter/derive function returning an array.
+ * `key` determines identity for DOM reuse across updates.
+ */
+export function List<T>(props: {
+  each: () => T[];
+  key: (item: T, index: number) => any;
+  children: (item: T, index: number) => any;
+}): Node {
+  const anchor = document.createComment("list");
+  const fragment = document.createDocumentFragment();
+  fragment.appendChild(anchor);
+
+  // Map: key → { node, item }
+  let itemMap = new Map<any, { node: Node; item: T }>();
+  let keyOrder: any[] = [];
+
+  // Initial render
+  const initList = props.each();
+  for (let i = 0; i < initList.length; i++) {
+    const item = initList[i];
+    const k = props.key(item, i);
+    const node = props.children(item, i);
+    itemMap.set(k, { node, item });
+    keyOrder.push(k);
+    fragment.appendChild(node);
+  }
+
+  // Updates
+  effect(() => {
+    const list = props.each();
+    const newOrder: any[] = [];
+    let prevNode: Node = anchor;
+    const parent = anchor.parentNode;
+
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const k = props.key(item, i);
+      newOrder.push(k);
+
+      let isNew = false;
+      let entry = itemMap.get(k);
+      if (!entry) {
+        // New item — create DOM
+        const node = props.children(item, i);
+        entry = { node, item };
+        itemMap.set(k, entry);
+        isNew = true;
+      }
+      entry.item = item;
+
+      // Position correctly (reorder if needed)
+      const node = entry.node;
+      if (parent && (node.parentNode !== parent || node.previousSibling !== prevNode)) {
+        parent.insertBefore(node, prevNode.nextSibling);
+      }
+      prevNode = node;
+
+      // Trigger lifecycle for newly inserted content
+      if (isNew && parent) {
+        triggerMount(node);
+      }
+    }
+
+    // Remove stale items
+    for (const [k, entry] of itemMap) {
+      if (!newOrder.includes(k)) {
+        disposeNode(entry.node);
+        if (entry.node.parentNode) {
+          entry.node.parentNode.removeChild(entry.node);
+        }
+        itemMap.delete(k);
+      }
+    }
+
+    keyOrder = newOrder;
+  });
+
+  return fragment;
+}
+
+// ── mount / unmount ─────────────────────────────────────
+
 export function mount(root: HTMLElement, container: HTMLElement): void {
   container.appendChild(root);
   triggerMount(root);
