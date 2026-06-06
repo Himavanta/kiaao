@@ -26,6 +26,9 @@ export const STOP_KEY = Symbol("stop");
 /** 挂载在 DOM 节点上，存储动态绑定的 effect stop 函数集合 */
 export const LOCAL_EFFECTS = Symbol("local_effects");
 
+/** 挂载 SSR 变体的唯一键 */
+export const SSR_COMPONENT = Symbol("kiaao.ssr");
+
 // ── Public API Types ───────────────────────────────────
 
 export interface Getter<T> {

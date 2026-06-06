@@ -7,6 +7,7 @@ import {
   INITIALIZED_KEY,
   DISPOSED_KEY,
   LOCAL_EFFECTS,
+  SSR_COMPONENT,
   type ReactiveFunction,
 } from "./types.ts";
 
@@ -17,8 +18,11 @@ import {
   pushComponent,
   popComponent,
   createComponentInstance,
+  getRenderMode,
+  setRenderMode,
 } from "./runtime.ts";
 import type { ComponentInstance } from "./types.ts";
+import { escapeHtml, escapeAttr } from "./escape.ts";
 
 // ── onMount / onUnmount ────────────────────────────────
 
@@ -154,6 +158,11 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   props?: any,
   ...children: any[]
 ): HTMLElement {
+  // SSR mode: delegate to hSSR
+  if (getRenderMode() === "ssr") {
+    return hSSR(tag, props, children) as any;
+  }
+
   // ── Component mode ──
   if (typeof tag === "function") {
     const instance = createComponentInstance();
@@ -446,5 +455,153 @@ export function lazy<T extends (...args: any[]) => any>(
     });
   }) as any;
 
+  (LazyComponent as any)[SSR_COMPONENT] = () => ssr("<!-- lazy placeholder -->");
+
   return LazyComponent as T;
+}
+
+// ── SSR ─────────────────────────────────────────────────────
+
+const VOID_ELEMENTS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
+
+interface SSRSafe {
+  _ssr: true;
+  html: string;
+}
+
+function ssr(text: string): SSRSafe {
+  return { _ssr: true, html: text };
+}
+
+function isSSRSafe(v: any): v is SSRSafe {
+  return v && v._ssr === true && typeof v.html === "string";
+}
+
+function renderSSRChild(child: any): string {
+  if (child == null || typeof child === "boolean") return "";
+  if (isSSRSafe(child)) return child.html;
+  if (typeof child === "string" || typeof child === "number") return escapeHtml(String(child));
+  if ((child as any)[IS_REACTIVE]) return escapeHtml(String(child()));
+  if (typeof child === "function") return renderSSRChild(child());
+  if (child instanceof Node) return "";
+  return "";
+}
+
+function hSSR(tag: any, props: any, children: any[]): SSRSafe {
+  // ── Component mode ──
+  if (typeof tag === "function") {
+    const ssrVariant = (tag as any)[SSR_COMPONENT];
+    if (ssrVariant) {
+      const result = ssrVariant(props || {});
+      if (isSSRSafe(result)) return result;
+      if (typeof result === "string") return ssr(result);
+      return ssr("");
+    }
+    const result = tag(props || {});
+    if (isSSRSafe(result)) return result;
+    if (typeof result === "string") return ssr(result);
+    if (result && typeof result === "object" && "html" in result) return ssr(result.html);
+    return ssr("");
+  }
+
+  // ── Element mode ──
+  let html = `<${tag}`;
+
+  if (props && typeof props === "object") {
+    for (const key of Object.keys(props)) {
+      if (key === "class" || key === "className") {
+        html += ` class="${escapeAttr(props[key])}"`;
+      } else if (key === "style") {
+        const val = props[key];
+        if (typeof val === "string") {
+          html += ` style="${escapeAttr(val)}"`;
+        } else if (typeof val === "object" && val !== null) {
+          const cssText = Object.entries(val)
+            .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
+            .join("; ");
+          html += ` style="${escapeAttr(cssText)}"`;
+        }
+      } else if (key.startsWith("on")) {
+        continue;
+      } else if (key === "children") {
+        continue;
+      } else {
+        html += ` ${key}="${escapeAttr(String(props[key]))}"`;
+      }
+    }
+  }
+
+  if (VOID_ELEMENTS.has(tag)) return ssr(html + " />");
+  html += ">";
+
+  for (const child of children) {
+    if (Array.isArray(child)) {
+      for (const c of child) html += renderSSRChild(c);
+    } else {
+      html += renderSSRChild(child);
+    }
+  }
+
+  html += `</${tag}>`;
+  return ssr(html);
+}
+
+// ── Control flow SSR variants ──────────────────────────────
+
+(Show as any)[SSR_COMPONENT] = (props: any) => {
+  const show = Boolean(props.when());
+  const renderFn = show ? props.children : props.fallback;
+  if (renderFn) {
+    return hSSR("div", null, [renderFn()]);
+  }
+  return ssr("");
+};
+
+(List as any)[SSR_COMPONENT] = (props: any) => {
+  const items = props.each();
+  let html = "";
+  for (let i = 0; i < items.length; i++) {
+    const child = props.children(items[i], i);
+    html += isSSRSafe(child) ? child.html : renderSSRChild(child);
+  }
+  return ssr(html);
+};
+
+(Teleport as any)[SSR_COMPONENT] = () => ssr("<!-- teleport placeholder -->");
+
+// ── renderToString ─────────────────────────────────────────
+
+export function renderToString(
+  component: (props: any) => any,
+  props?: any,
+  options?: { slots?: Record<string, string> },
+): string {
+  const prevMode = getRenderMode();
+  setRenderMode("ssr");
+
+  let mergedProps = props ?? {};
+  if (options?.slots?.default) {
+    mergedProps = { ...mergedProps, children: options.slots.default };
+  }
+
+  const result = h(component, mergedProps);
+
+  setRenderMode(prevMode);
+
+  return isSSRSafe(result) ? result.html : typeof result === "string" ? result : "";
 }

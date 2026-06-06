@@ -28,6 +28,7 @@
     "./jsx-dev-runtime": "./dist/jsx-dev-runtime.js",
     "./jsx-runtime": "./dist/jsx-runtime.js",
     "./router": "./dist/router.js",
+    "./server": "./dist/server.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {

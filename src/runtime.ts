@@ -24,6 +24,18 @@ interface Signal<T> {
   deps: Map<SelectorFn<T>, Set<DepEntry>>;
 }
 
+// ── Render Mode ────────────────────────────────────────
+
+type RenderMode = "dom" | "ssr" | "hydrate";
+let currentRenderMode: RenderMode = "dom";
+
+export function setRenderMode(mode: RenderMode): void {
+  currentRenderMode = mode;
+}
+export function getRenderMode(): RenderMode {
+  return currentRenderMode;
+}
+
 // ── Global Context ─────────────────────────────────────
 
 const effectStack: (() => void)[] = [];
@@ -200,6 +212,10 @@ export function define<T>(initialValue: T): [Getter<T>, Setter<T>] {
 // ── effect ─────────────────────────────────────────────
 
 export function effect(fn: () => void): () => void {
+  // SSR mode: completely disabled, return noop stop
+  if (getRenderMode() === "ssr") {
+    return () => {};
+  }
   const ownedDeps = new Map<Signal<any>, Set<SelectorFn<any>>>();
 
   const run = () => {
@@ -239,6 +255,11 @@ export function effect(fn: () => void): () => void {
 // ── derive ─────────────────────────────────────────────
 
 export function derive<T>(computeFn: () => T): () => T {
+  // SSR mode: one-time computation, return fixed-value function
+  if (getRenderMode() === "ssr") {
+    const value = computeFn();
+    return () => value;
+  }
   const [getVer, setVer] = define(0);
   let cached: T = undefined as any;
   let computed = false;
