@@ -1,8 +1,24 @@
-# kiaao 框架规范 v1.1
+# kiaao 框架规范 v1.3
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
 **设计哲学**：把响应式的本质（谁依赖谁）从框架的隐性机制，变成开发者的显性承诺。以最少的 API 和最少的概念，在纯运行时直接兑现细粒度更新。
+
+---
+
+## 零、架构原则
+
+### 信号独立性原则
+
+`define` 创建的信号是完全独立于组件树的值容器。信号不绑定在任何组件实例上，可以在模块顶层、闭包内或任何 JavaScript 作用域中创建和持有。信号的依赖绑定直接发生在信号和消费方（DOM 节点、`effect`、`derive`）之间，不经过组件层级。
+
+### 依赖直接绑定原则
+
+当消费方通过 `getter(selector)` 创建订阅时，该订阅直接向信号注册。更新时，信号直接触发消费方的更新闭包，中间组件不参与、不重跑、不转发。组件树只决定 DOM 的挂载结构，不决定数据的流动路径。
+
+### 闭包即作用域原则
+
+组件实例隔离和局部作用域通过 JavaScript 原生闭包实现。工厂函数每次调用创建独立的闭包和信号，返回的组件函数共享这些信号。框架不提供额外的 `Context`、`provide/inject` 等作用域管理 API。原生语言能力已足够。
 
 ---
 
@@ -19,14 +35,18 @@ const [user, setUser] = define({ name: "tom", age: 18 });
 
 #### Getter：`value(selector?)`
 
-- **不传参**：返回当前全量快照。
-- **传选择器函数**：执行 `selector(currentValue)` 返回局部数据，同时自动收集依赖。
+- **不传参**：返回当前全量快照（立即求值）。
+- **传选择器函数**：返回一个**响应式派生函数**。该函数在被调用时才执行选择器并返回当前值，同时自动收集依赖。返回的函数携带 `IS_REACTIVE` 标记，供 `h()` 识别。
 
 ```javascript
-value(); // 全量快照
-value((v) => v.name); // 精准订阅 name
-value((v) => v.age >= 18); // 就地计算
+value(); // 全量快照（立即求值）
+value((v) => v.name); // 返回派生函数，延迟求值，精准订阅 name
+value((v) => v.age >= 18); // 返回派生函数，就地计算逻辑
 ```
+
+**重要行为**：`value(selector)` 不立即求值，而是返回一个函数。该函数在每次调用时执行选择器逻辑并返回结果，以此保持依赖追踪的活性。
+
+**Getter 引用稳定性**：Getter 函数引用在组件生命周期内保持稳定。子组件在初始化时通过 props 或闭包接收父组件的 getter，并通过 `getter(selector)` 创建针对该信号的局部订阅。该订阅直接向信号注册，与中间组件无关。更新时中间组件不重跑。
 
 #### Setter：`setValue(updater)`
 
@@ -41,7 +61,7 @@ setUser((prev) => ({ ...prev, age: prev.age + 1 }));
 
 **数据纯净度**：内部存储的是纯普通对象/基本类型。任何时候拿到的都是普通值，无 Proxy，无 getter/setter 劫持。更新采用不可变替换，但框架不依赖引用对比触发更新，而是依赖选择器函数的结果对比。
 
-**内部标记**：Getter 和 `derive` 返回的函数均挂载 `Symbol('is_reactive')` 属性，供 `h()` 识别。
+**内部标记**：Getter 的 `value(selector)` 返回的函数以及 `derive` 返回的函数，均挂载 `Symbol('is_reactive')` 属性（常量 `IS_REACTIVE`），供 `h()` 识别。
 
 ---
 
@@ -54,34 +74,43 @@ const double = derive(() => count() * 2);
 const activeUsers = derive(() => users().filter((u) => u.active));
 ```
 
-**与 Getter 的区别**：Getter 是纯转发，每次调用都执行选择器。`derive` 带缓存和拦截，用于重度计算或多处复用。
+**内部机制**：
 
-**内部订阅**：`derive` 使用 `effect` 监听上游，多个上游同时变化时只标记一次脏，避免重复通知。
+- `derive` 内部使用 `effect` 监听其所依赖的上游信号。
+- 上游变化时，内部 `effect` 回调执行，标记 `isDirty = true`，并通知下游订阅者。
+- 当派生函数被调用时，若脏则重新计算并缓存，然后清除脏标记；若干净则直接返回缓存值。
+- 多个上游同时变化时，仅标记一次脏，避免重复通知。
+- `derive` 返回的函数同样带有 `IS_REACTIVE` 标记，能被 `h()` 识别。
+- 派生函数上挂载 `STOP_KEY` 用于清理内部 `effect`。
+
+**与 Getter 的区别**：Getter 的选择器返回的是无缓存的派生函数，每次调用都执行选择器；`derive` 返回的函数带缓存和拦截，用于重度计算或多处复用。
 
 ---
 
-### `effect(fn: () => void): void`
+### `effect(fn: () => void): () => void`
 
-执行副作用，自动收集 `fn` 内部触发的所有依赖。依赖变化且对账通过后重新执行。
+执行副作用，自动收集 `fn` 内部触发的所有依赖。依赖变化且对账通过后重新执行。返回一个停止函数，调用后取消该 effect。
 
 ```javascript
-effect(() => {
+const stop = effect(() => {
   localStorage.setItem(
     "token",
     user((v) => v.token),
   );
 });
+// 需要清理时
+stop();
 ```
 
-**与 `derive` 的区别**：`derive` 是纯计算（有返回值，有缓存），`effect` 是无返回值的副作用。
+**执行上下文**：`currentEffect` 为栈结构，支持 `effect` 嵌套。每次 `effect` 执行时压栈，执行后弹出。
 
-**执行上下文**：`currentEffect` 为栈结构，支持嵌套 effect。
+**与 `derive` 的区别**：`derive` 是纯计算（有返回值，有缓存），`effect` 是无返回值的副作用。
 
 ---
 
 ### `h(tag, props?, ...children): HTMLElement`
 
-纯运行时创建真实 DOM。与 Vite 默认 JSX 转换对接。若子节点是 Getter 或 DeriveSignal 函数（通过 `IS_REACTIVE` 标记识别），自动创建文本占位并启动 `effect` 绑定。
+纯运行时创建真实 DOM。与 Vite 默认 JSX 转换对接。若子节点是响应式函数（通过 `IS_REACTIVE` 标记识别），自动创建文本占位并启动 `effect` 绑定；若子节点是普通值或 DOM 节点，直接附加。
 
 ```javascript
 h(
@@ -109,6 +138,12 @@ JSX 写法（编译后自动转为 `h` 调用）：
   <p>年龄：{user((v) => v.age)}</p>
 </div>
 ```
+
+**动态绑定细节**：当 `h()` 检测到子节点是响应式函数时，内部执行：
+
+1. 创建一个空的 `TextNode`。
+2. 调用 `effect(() => { textNode.textContent = String(child()); })`，在此过程中完成首次求值和依赖收集。
+3. 该 `effect` 返回的清理函数被注册到当前组件的清理队列。
 
 ---
 
@@ -194,7 +229,43 @@ function UserProfile() {
 ```
 
 - 没有返回渲染函数，直接返回由 `h()` 创建的真实 DOM 节点。
-- 状态变化时，组件函数不重新执行，只有被选择器绑定的具体 DOM 文本节点原地更新。
+- 状态变化时，组件函数不重新执行，只有被响应式函数绑定的具体 DOM 文本节点原地更新。
+
+### 多实例隔离（推荐模式）
+
+当同一组件需要多个独立实例，且每个实例需要私有信号时，使用工厂函数闭包：
+
+```javascript
+function createForm() {
+  const [formData, setFormData] = define({ name: "", email: "" });
+
+  function FormInput({ field, label }) {
+    return h(
+      "div",
+      null,
+      h("label", null, label),
+      h("input", {
+        value: formData((v) => v[field]),
+        onInput: (e) => setFormData((prev) => ({ ...prev, [field]: e.target.value })),
+      }),
+    );
+  }
+
+  return function Form() {
+    return h(
+      "form",
+      null,
+      FormInput({ field: "name", label: "姓名" }),
+      FormInput({ field: "email", label: "邮箱" }),
+    );
+  };
+}
+
+const MyForm1 = createForm();
+const MyForm2 = createForm();
+```
+
+每次 `createForm()` 调用创建独立的闭包和信号，实例之间完全隔离。子组件通过闭包直接访问信号，无需 props 逐层转发。
 
 ---
 
@@ -204,17 +275,17 @@ function UserProfile() {
 
 1. 执行组件外壳一次。
 2. 遇到 `define()` 创建信号。
-3. 遇到 `user(v => v.name)` 时立即求值并作为参数传给 `h()`。
-4. `h()` 检测到子节点是响应式函数（`IS_REACTIVE`），创建文本节点占位，启动 `effect` 绑定。
+3. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
+4. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定（完成首次求值和依赖收集）。
 5. 返回真实 DOM 树，挂载到页面。
 
 ### 更新流程
 
 1. `setUser(prev => ({ ...prev, age: 19 }))` 被调用。
 2. **先保存旧值引用**，再写入新值。
-3. 遍历该信号的所有选择器依赖。
+3. 遍历该信号的所有选择器依赖（存储的 `selectorFn` 引用及对应的 `effect`）。
 4. 对每个依赖：用旧值执行选择器 → 用新值执行选择器 → 使用 `!==` 浅对比。
-5. 结果不同 → 触发对应的 effect（DOM 更新或 `effect` 回调）。
+5. 结果不同 → 触发对应的 `effect` 重新执行（DOM 更新或 `effect` 回调）。
 6. DOM 更新是单点文本节点替换，无虚拟 DOM Diff，无组件重跑。
 
 ### 无虚拟 DOM
@@ -228,48 +299,103 @@ function UserProfile() {
 
 ### 全局上下文
 
-- `currentEffect`：**栈结构**，支持 effect 嵌套。
-- `currentComponent`：**栈结构**，支持组件嵌套。
-- `effect` 执行时压栈 `currentEffect`，执行后弹出。
-- 组件函数执行前将组件实例压入 `currentComponent`，执行后弹出。
+- `currentEffect`：**栈结构**，支持 `effect` 嵌套。`effect` 执行时压栈，执行后弹出。
+- `currentComponent`：**栈结构**，支持组件嵌套。组件函数执行前将组件实例压入，执行后弹出。
 
 ### 依赖图谱结构
 
-每个信号内部维护：`deps = Set<{ selectorFn, effect }>`。**键使用 `selectorFn` 函数引用**，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
+每个信号内部维护：`deps = Set<{ selectorFn, effect }>`。
+
+- `selectorFn` 是用户传入的选择器函数。
+- **键使用 `selectorFn` 的函数引用**，不使用 `toString()`。配合信号内部唯一 ID 避免跨信号冲突。
 
 ### 对账机制
 
-更新时对每个依赖用旧值和新值分别执行 `selectorFn`，使用 `!==` 浅对比。只有结果不同才触发 effect。
+更新时对每个依赖用旧值和新值分别执行 `selectorFn`，使用 `!==` 浅对比。只有结果不同才触发 `effect`。
 
 ---
 
-## 七、内部标记（Symbol 键）
+## 七、Effect 清理与组件卸载
 
-框架在所有外部对象上使用 `Symbol` 键存储内部数据：
+### Effect 清理
 
-| Symbol            | 挂载位置                   | 用途                          |
-| ----------------- | -------------------------- | ----------------------------- |
-| `IS_REACTIVE`     | Getter / DeriveSignal 函数 | 标识响应式函数，供 `h()` 识别 |
-| `DISPOSE_KEY`     | DOM 节点                   | 存储组件销毁函数              |
-| `INSTANCE_KEY`    | DOM 节点                   | 存储组件实例引用              |
-| `EFFECTS_KEY`     | 组件实例                   | 存储 effect 清理队列          |
-| `INITIALIZED_KEY` | 组件实例                   | 标记已初始化                  |
-| `DISPOSED_KEY`    | 组件实例                   | 标记已销毁                    |
+- 每次 `effect(fn)` 调用返回一个停止函数 `stop()`。
+- 调用 `stop()` 会将该 effect 从所有它依赖的信号中移除，并标记为失效。
+- 组件实例上维护一个 `effectStops: Set<() => void>`，收集该组件内所有通过 `h()` 动态绑定和显式 `effect()` 创建的 effect 返回的 `stop` 函数。
 
----
+### 组件卸载
 
-## 八、上下文与 Store（0 个额外 API）
-
-不提供 `provide`/`inject` 或 `createContext`。Store 就是放在模块顶层或通过闭包共享的 `define` 信号。跨组件通信通过 `props` 或直接引用模块级信号完成。
+- 每个组件返回的根 DOM 节点上挂载 `Symbol('dispose')` 方法。
+- 当组件被移除时，调用该方法：
+  1. 执行所有 `onUnmount` 回调。
+  2. 遍历 `effectStops`，调用每个 `stop()` 清理 effect。
+  3. 递归处理子组件。
+  4. 从父组件断开引用。
 
 ---
 
-## 九、TypeScript 核心类型
+## 八、内部标记（Symbol 键）
+
+框架在所有外部对象上使用 `Symbol` 键存储内部数据，避免命名冲突和调试干扰：
+
+| Symbol            | 挂载位置                               | 用途                                 |
+| ----------------- | -------------------------------------- | ------------------------------------ |
+| `IS_REACTIVE`     | Getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别        |
+| `DISPOSE_KEY`     | DOM 节点                               | 存储组件销毁函数                     |
+| `INSTANCE_KEY`    | DOM 节点                               | 存储组件实例引用                     |
+| `EFFECTS_KEY`     | 组件实例                               | 存储 effect 的 `stop` 函数集合       |
+| `INITIALIZED_KEY` | 组件实例                               | 标记已初始化                         |
+| `DISPOSED_KEY`    | 组件实例                               | 标记已销毁                           |
+| `STOP_KEY`        | derive 返回的函数                      | 存储停止内部 effect 的函数，用于清理 |
+
+---
+
+## 九、跨组件通信与 Store
+
+### 模块级 Store（全局共享）
+
+`define` 创建的信号是独立的值容器，可直接放在模块顶层。任何组件通过 `import` 引入并按需订阅：
+
+```javascript
+// store.js
+export const [user, setUser] = define({ name: "tom" });
+export const [theme, setTheme] = define("dark");
+```
+
+组件中直接使用：
+
+```javascript
+import { user, theme } from "./store.js";
+
+function Header() {
+  return h(
+    "header",
+    { class: theme((v) => `header-${v}`) },
+    h(
+      "span",
+      null,
+      user((v) => v.name),
+    ),
+  );
+}
+```
+
+### Props 传递 getter
+
+父组件可将 getter 函数引用通过 props 传给子组件。由于组件只执行一次，props 仅在初始化时传递一次。子组件调用 `getter(selector)` 创建直接向信号注册的局部订阅，中间组件不参与更新。
+
+### 无 Context / provide-inject
+
+kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号的独立性、闭包的原生能力、以及模块机制，已覆盖所有跨层级共享场景。框架不在此之上增加抽象。
+
+---
+
+## 十、TypeScript 核心类型
 
 ```typescript
 interface Getter<T> {
   (): T;
-  <R>(selector: (value: T) => R): R;
+  <R>(selector: (value: T) => R): () => R;
 }
 
 interface Setter<T> {
@@ -279,7 +405,7 @@ interface Setter<T> {
 
 function define<T>(initialValue: T): [Getter<T>, Setter<T>];
 function derive<T>(computeFn: () => T): () => T;
-function effect(fn: () => void): void;
+function effect(fn: () => void): () => void;
 function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: Partial<HTMLElementTagNameMap[K]> | null,
@@ -289,55 +415,57 @@ function h<K extends keyof HTMLElementTagNameMap>(
 
 ---
 
-## 十、API 总览
+## 十一、API 总览
 
-| API         | 分类     | 用途                       |
-| ----------- | -------- | -------------------------- |
-| `define`    | 核心     | 创建响应式状态（唯一原语） |
-| `derive`    | 核心     | 派生状态（缓存 + 拦截）    |
-| `effect`    | 核心     | 副作用执行（自动收集依赖） |
-| `h`         | 渲染     | 纯运行时创建真实 DOM       |
-| `<Show>`    | 控制流   | 条件渲染                   |
-| `<List>`    | 控制流   | 列表渲染                   |
-| `onMount`   | 生命周期 | 挂载后回调                 |
-| `onUnmount` | 生命周期 | 销毁前清理                 |
+| API         | 分类     | 用途                                     |
+| ----------- | -------- | ---------------------------------------- |
+| `define`    | 核心     | 创建响应式状态（唯一原语）               |
+| `derive`    | 核心     | 派生状态（缓存 + 拦截）                  |
+| `effect`    | 核心     | 副作用执行（自动收集依赖），返回停止函数 |
+| `h`         | 渲染     | 纯运行时创建真实 DOM                     |
+| `<Show>`    | 控制流   | 条件渲染                                 |
+| `<List>`    | 控制流   | 列表渲染                                 |
+| `onMount`   | 生命周期 | 挂载后回调                               |
+| `onUnmount` | 生命周期 | 销毁前清理                               |
 
-**总计 8 个 API，用户可见的核心概念仅 4 个（define、derive、effect、h）。**
-
----
-
-## 十一、与主流框架差异
-
-| 维度         | React    | Vue       | Solid        | **kiaao**        |
-| ------------ | -------- | --------- | ------------ | ---------------- |
-| 数据纯净度   | 纯净     | 不纯净    | 纯净（两套） | **纯净（一套）** |
-| 组件运行次数 | 每次重跑 | 外壳一次  | 外壳一次     | **外壳一次**     |
-| 虚拟 DOM     | 有       | 有        | 无           | **无**           |
-| 编译器依赖   | 无       | 可选      | 强依赖       | **无**           |
-| 响应式原理   | 无       | Proxy     | 编译期       | **显式选择器**   |
-| 核心概念数   | 10+      | 8+        | 6+           | **4**            |
-| 更新粒度     | 组件级   | 组件/块级 | DOM 节点级   | **选择器结果级** |
+**总计 8 个公开 API，用户可见的核心概念仅 4 个（define、derive、effect、h）。**
 
 ---
 
-## 十二、代码量估算
+## 十二、与主流框架差异
+
+| 维度            | React    | Vue       | Solid        | **kiaao**            |
+| --------------- | -------- | --------- | ------------ | -------------------- |
+| 数据纯净度      | 纯净     | 不纯净    | 纯净（两套） | **纯净（一套）**     |
+| 组件运行次数    | 每次重跑 | 外壳一次  | 外壳一次     | **外壳一次**         |
+| 虚拟 DOM        | 有       | 有        | 无           | **无**               |
+| 编译器依赖      | 无       | 可选      | 强依赖       | **无**               |
+| 响应式原理      | 无       | Proxy     | 编译期       | **显式选择器**       |
+| 核心概念数      | 10+      | 8+        | 6+           | **4**                |
+| 更新粒度        | 组件级   | 组件/块级 | DOM 节点级   | **选择器结果级**     |
+| Context/Provide | 有       | 有        | 有           | **无（信号即通道）** |
+
+---
+
+## 十三、代码量估算
 
 | 模块                | 预计行数          |
 | ------------------- | ----------------- |
 | `define`            | 40-50             |
-| `derive`            | 20                |
-| `effect`            | 15                |
-| `h`                 | 30-40             |
+| `derive`            | 25                |
+| `effect`            | 20                |
+| `h`                 | 35-45             |
 | 全局上下文与调度    | 30                |
 | `<Show>`            | 25                |
 | `<List>`            | 35                |
 | 生命周期钩子        | 15                |
+| 组件实例与清理      | 25                |
 | TypeScript 类型定义 | 30                |
-| **总计**            | **约 250-300 行** |
+| **总计**            | **约 280-320 行** |
 
 ---
 
-## 十三、待实现（V2+）
+## 十四、待实现（V2+）
 
 - 异步支持：`asyncResource`、微任务批处理调度器
 - `<Suspense>` 完整实现
@@ -346,10 +474,11 @@ function h<K extends keyof HTMLElementTagNameMap>(
 
 ---
 
-## 十四、禁止事项
+## 十五、禁止事项
 
 - 不使用 Proxy
 - 不引入虚拟 DOM
 - 不依赖编译插件（Vite 默认 JSX 转换已足够）
 - 不为不同类型的数据提供不同 API
 - 不强制要求用户使用编译器
+- 不提供 Context / provide-inject 机制（信号独立于组件树已消除其必要性）
