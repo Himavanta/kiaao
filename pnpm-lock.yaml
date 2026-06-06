@@ -36,6 +36,9 @@ importers:
 
   packages/example:
     devDependencies:
+      monojs:
+        specifier: 'workspace:'
+        version: link:../..
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
