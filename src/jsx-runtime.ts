@@ -18,7 +18,6 @@ function isFragment(type: any): boolean {
 function normalizeChildren(children: any): any[] | undefined {
   if (children == null) return undefined;
   if (Array.isArray(children)) {
-    // Flatten one level — JSX nested arrays shouldn't go deeper
     const flat: any[] = [];
     for (const c of children) {
       if (Array.isArray(c)) flat.push(...c);
@@ -65,3 +64,11 @@ function createJsxElement(type: any, props: Record<string, any> | null, _key?: a
 export { createJsxElement as jsx };
 export { createJsxElement as jsxs };
 export { createJsxElement as jsxDEV };
+
+// ── JSX Type Declarations ──────────────────────────────
+
+export namespace JSX {
+  export interface IntrinsicElements {
+    [elem: string]: any;
+  }
+}
