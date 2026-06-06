@@ -421,22 +421,24 @@ export function Teleport(props: { to: string | HTMLElement; children: () => any 
  */
 export function lazy<T extends (...args: any[]) => any>(
   loader: () => Promise<{ default: T } | T>,
+  options?: { onError?: (err: Error) => void },
 ): T {
   const [Component, setComponent] = define<T | null>(null);
+  const [error, setError] = define<Error | null>(null);
 
   loader()
     .then((mod) => {
-      const comp = (mod as any).default || mod;
-      setComponent(() => comp);
+      setComponent(() => (mod as any).default || mod);
     })
     .catch((err) => {
-      // Throw on next tick so it can be caught by an error boundary
-      setTimeout(() => {
-        throw err;
-      }, 0);
+      setError(() => err);
+      options?.onError?.(err);
     });
 
   const LazyComponent = ((props: any) => {
+    const err = error();
+    if (err) throw err;
+
     return h(Show, {
       when: () => Component() !== null,
       fallback: () => document.createComment("lazy-loading"),

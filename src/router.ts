@@ -12,7 +12,7 @@
 //     return h("div", null, h(RouterView));
 //   }
 
-import { define } from "./runtime.ts";
+import { define, derive } from "./runtime.ts";
 import { h, Show } from "./dom.ts";
 
 // ── Types ──────────────────────────────────────────────
@@ -31,6 +31,8 @@ export interface Router {
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
   currentPath: () => string;
+  /** Current route params derived from currentPath */
+  currentParams: () => Record<string, string>;
   /** Declarative navigation link component */
   Link: (props: { to: string; children?: any }) => Node;
 }
@@ -115,5 +117,10 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
     );
   }
 
-  return { RouterView, navigate, currentPath, Link };
+  const currentParams = derive(() => {
+    const match = matchRoutes(routes, currentPath());
+    return match ? match.params : {};
+  });
+
+  return { RouterView, navigate, currentPath, currentParams, Link };
 }
