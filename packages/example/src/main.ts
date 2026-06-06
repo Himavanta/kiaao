@@ -2,59 +2,116 @@ import "./style.css";
 import typescriptLogo from "./assets/typescript.svg";
 import viteLogo from "./assets/vite.svg";
 import heroImg from "./assets/hero.png";
-import { setupCounter } from "./counter.ts";
+import { define, h, mount } from "kiaao";
 
-document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+function App() {
+  const [count, setCount] = define(0);
 
-<div class="ticks"></div>
+  return h(
+    "section",
+    { id: "center" },
+    // Hero logos
+    h(
+      "div",
+      { class: "hero" },
+      h("img", { class: "base", src: heroImg, width: "170", height: "179", alt: "" }),
+      h("img", { class: "framework", src: typescriptLogo, alt: "TypeScript logo" }),
+      h("img", { class: "vite", src: viteLogo, alt: "Vite logo" }),
+    ),
+    // Title block
+    h(
+      "div",
+      null,
+      h("h1", null, "Get started"),
+      h(
+        "p",
+        null,
+        "Edit ",
+        h("code", null, "src/main.ts"),
+        " and save to test ",
+        h("code", null, "HMR"),
+      ),
+    ),
+    // Reactive counter
+    h(
+      "button",
+      {
+        id: "counter",
+        type: "button",
+        class: "counter",
+        onClick: () => setCount((prev) => prev + 1),
+      },
+      count((v) => `Count is ${v}`),
+    ),
+  );
+}
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+function NextSteps() {
+  return [
+    h("div", { class: "ticks" }),
+    h(
+      "section",
+      { id: "next-steps" },
+      h(
+        "div",
+        { id: "docs" },
+        h("h2", null, "Documentation"),
+        h("p", null, "Your questions, answered"),
+        h(
+          "ul",
+          null,
+          h(
+            "li",
+            null,
+            h(
+              "a",
+              { href: "https://vite.dev/", target: "_blank" },
+              h("img", { class: "logo", src: viteLogo, alt: "" }),
+              " Explore Vite",
+            ),
+          ),
+          h(
+            "li",
+            null,
+            h(
+              "a",
+              { href: "https://www.typescriptlang.org", target: "_blank" },
+              h("img", { class: "button-icon", src: typescriptLogo, alt: "" }),
+              " Learn more",
+            ),
+          ),
+        ),
+      ),
+      h(
+        "div",
+        { id: "social" },
+        h("h2", null, "Connect with us"),
+        h("p", null, "Join the Vite community"),
+        h(
+          "ul",
+          null,
+          h(
+            "li",
+            null,
+            h("a", { href: "https://github.com/vitejs/vite", target: "_blank" }, "GitHub"),
+          ),
+          h("li", null, h("a", { href: "https://chat.vite.dev/", target: "_blank" }, "Discord")),
+          h("li", null, h("a", { href: "https://x.com/vite_js", target: "_blank" }, "X.com")),
+          h(
+            "li",
+            null,
+            h("a", { href: "https://bsky.app/profile/vite.dev", target: "_blank" }, "Bluesky"),
+          ),
+        ),
+      ),
+    ),
+    h("div", { class: "ticks" }),
+    h("section", { id: "spacer" }),
+  ];
+}
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`;
+// Build the full page tree
+const root = h("div", null, App(), ...NextSteps());
 
-setupCounter(document.querySelector<HTMLButtonElement>("#counter")!);
+// Mount into #app
+mount(root, document.querySelector<HTMLDivElement>("#app")!);
