@@ -1,4 +1,3 @@
-import { List } from "kiaao";
 import { Link, currentPath } from "/src/router";
 
 const menus = [
@@ -29,13 +28,13 @@ export default function () {
     <nav class="h-10 w-full bg-amber-600 flex justify-center items-center">
       <aside></aside>
       <section class="flex items-center gap-2">
-        <List each={() => menus} key={(v) => v}>
-          {(item) => (
+        <section each={() => menus} key={(v: any) => v}>
+          {(item: any) => (
             <Link to={item.path} class={currentPath((v) => (v === item.path ? "aa" : ""))}>
               {item.title}
             </Link>
           )}
-        </List>
+        </section>
       </section>
     </nav>
   );

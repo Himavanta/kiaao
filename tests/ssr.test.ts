@@ -3,7 +3,7 @@
 import { expect, test, describe } from "vite-plus/test";
 import { define, derive, effect } from "../src/index.ts";
 import { h } from "../src/dom.ts";
-import { Show, List, Teleport, lazy } from "../src/components.ts";
+import { Teleport, lazy } from "../src/components.ts";
 import { renderToString } from "../src/server/index.ts";
 
 describe("renderToString — basic elements", () => {
@@ -163,45 +163,41 @@ describe("renderToString — components", () => {
   });
 });
 
-describe("renderToString — Show", () => {
+describe("renderToString — when directive", () => {
   test("renders children when when() is truthy", () => {
     const [visible] = define(true);
     function Comp() {
-      return h(Show, {
-        when: visible,
-        children: () => h("p", null, "shown"),
-      });
+      return h("div", { when: visible }, () => h("p", null, "shown"));
     }
     const html = renderToString(Comp);
     expect(html).toBe("<div><p>shown</p></div>");
   });
 
-  test("renders fallback when when() is falsy", () => {
+  test("renders empty element when when() is falsy", () => {
     const [visible] = define(false);
     function Comp() {
-      return h(Show, {
-        when: visible,
-        children: () => h("p", null, "shown"),
-        fallback: () => h("p", null, "fallback"),
-      });
+      return h("div", { when: visible }, () => h("p", null, "shown"));
     }
     const html = renderToString(Comp);
-    expect(html).toBe("<div><p>fallback</p></div>");
+    expect(html).toBe("<div></div>");
   });
 });
 
-describe("renderToString — List", () => {
+describe("renderToString — each directive", () => {
   test("renders list items", () => {
     const [items] = define(["a", "b", "c"]);
     function Comp() {
-      return h(List, {
-        each: items,
-        key: (item: string) => item,
-        children: (item: string) => h("li", null, item),
-      });
+      return h(
+        "ul",
+        {
+          each: () => items(),
+          key: (item: string) => item,
+        },
+        (item: string) => h("li", null, item),
+      );
     }
     const html = renderToString(Comp);
-    expect(html).toBe("<li>a</li><li>b</li><li>c</li>");
+    expect(html).toBe("<ul><li>a</li><li>b</li><li>c</li></ul>");
   });
 });
 
@@ -219,16 +215,16 @@ describe("renderToString — Teleport", () => {
 });
 
 describe("renderToString — lazy", () => {
-  test("renders placeholder before resolve", async () => {
+  test("renders empty placeholder before resolve", async () => {
     const Async = lazy(() => Promise.resolve({ default: () => h("p", null, "loaded") }));
 
     function Comp() {
       return h(Async, null);
     }
 
-    // Before promise resolves, lazy renders placeholder
+    // Before promise resolves, lazy renders an empty div (when is false)
     const html = renderToString(Comp);
-    expect(html).toBe("<!-- lazy placeholder -->");
+    expect(html).toBe('<div style="display: contents"></div>');
   });
 });
 

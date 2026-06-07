@@ -1,4 +1,4 @@
-// kiaao — Router: hash-free client-side routing built on define, h, Show.
+// kiaao — Router: hash-free client-side routing built on define, h, when.
 //
 // Usage:
 //   import { createRouter } from "kiaao/router";
@@ -14,7 +14,6 @@
 
 import { define, derive } from "../runtime.ts";
 import { h } from "../dom.ts";
-import { Show } from "../components.ts";
 import type { Getter } from "../types.ts";
 
 // ── Types ──────────────────────────────────────────────
@@ -92,17 +91,27 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
   const fallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
 
   function RouterView(): Node {
-    return h(Show, {
-      when: () => {
-        const match = matchRoutes(routes, currentPath());
-        return match !== null;
-      },
-      fallback,
-      children: () => {
-        const match = matchRoutes(routes, currentPath())!;
-        return h(match.component, match.params);
-      },
-    });
+    return h(
+      "div",
+      { style: { display: "contents" } },
+      h(
+        "div",
+        {
+          when: () => matchRoutes(routes, currentPath()) !== null,
+        },
+        () => {
+          const match = matchRoutes(routes, currentPath())!;
+          return h(match.component, match.params);
+        },
+      ),
+      h(
+        "div",
+        {
+          when: () => matchRoutes(routes, currentPath()) === null,
+        },
+        fallback,
+      ),
+    );
   }
 
   function Link(props: { to: string; children?: any; [key: string]: any }): Node {

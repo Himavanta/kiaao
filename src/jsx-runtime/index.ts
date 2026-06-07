@@ -5,14 +5,6 @@
 
 import { h } from "../dom.ts";
 
-// ── Fragment ───────────────────────────────────────────
-
-export const Fragment = Symbol("Fragment");
-
-function isFragment(type: any): boolean {
-  return type === Fragment;
-}
-
 // ── JSX Factories ──────────────────────────────────────
 
 function normalizeChildren(children: any): any[] | undefined {
@@ -29,23 +21,6 @@ function normalizeChildren(children: any): any[] | undefined {
 }
 
 function createJsxElement(type: any, props: Record<string, any> | null, _key?: any): any {
-  // Fragment: unwrap children into a DocumentFragment
-  if (isFragment(type)) {
-    const frag = document.createDocumentFragment();
-    const children = normalizeChildren(props?.children);
-    if (children) {
-      for (const child of children) {
-        if (child == null || typeof child === "boolean") continue;
-        if (child instanceof Node) {
-          frag.appendChild(child);
-        } else {
-          frag.appendChild(document.createTextNode(String(child)));
-        }
-      }
-    }
-    return frag;
-  }
-
   // Normal element or component: forward props.children as rest args
   if (props == null) return h(type);
 

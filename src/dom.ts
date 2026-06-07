@@ -16,8 +16,8 @@ import {
   getRenderMode,
 } from "./runtime.ts";
 
-import { createDisposeFn } from "./lifecycle.ts";
-import { hSSR } from "./ssr-helpers.ts";
+import { createDisposeFn, triggerMount, disposeNode } from "./lifecycle.ts";
+import { hSSR, isVoidElement } from "./ssr-helpers.ts";
 
 // ── Prop Processing ─────────────────────────────────────
 
@@ -108,6 +108,165 @@ function processChildren(children: any[]): Node[] {
   return result;
 }
 
+// ── Control-flow directive helpers ─────────────────────
+
+/** 如果宿主元素已在文档中，触发新子节点的 mount 回调 */
+function triggerMountIfConnected(host: Node, node: Node): void {
+  if (host.isConnected) {
+    triggerMount(node);
+  }
+}
+
+/** 创建条件渲染元素（when 指令） */
+function createWhenElement(
+  tag: string,
+  props: any,
+  children: any[],
+  whenFn: any,
+  eachFn?: any,
+  _keyFn?: any,
+): HTMLElement {
+  if (isVoidElement(tag)) {
+    throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
+  }
+
+  const el = document.createElement(tag);
+  const instance = createComponentInstance();
+
+  // ── 设置常规/事件/响应式属性 ──
+  if (props && typeof props === "object") {
+    for (const key of Object.keys(props)) {
+      const value = props[key];
+
+      if (EVENT_RE.test(key)) {
+        setProp(el, key, value);
+      } else if ((value as any)?.[IS_REACTIVE]) {
+        const stop = effect(() => {
+          setProp(el, key, value());
+        });
+        addLocalEffect(el, stop);
+      } else {
+        setProp(el, key, value);
+      }
+    }
+  }
+
+  // 判断是否为惰性求值模式（子节点为单一函数，且无 each）
+  const isLazy = eachFn === undefined && children.length === 1 && typeof children[0] === "function";
+  const hasEach = eachFn !== undefined;
+
+  const stop = effect(() => {
+    const show = Boolean(typeof whenFn === "function" ? whenFn() : whenFn);
+
+    // 清空旧子节点
+    while (el.firstChild) {
+      disposeNode(el.firstChild);
+      el.removeChild(el.firstChild);
+    }
+
+    if (!show) return;
+
+    if (hasEach) {
+      // when + each 共存：when 优先，在其内执行 each
+      const items = typeof eachFn === "function" ? eachFn() : eachFn;
+      const childFn = children[0];
+      if (Array.isArray(items) && typeof childFn === "function") {
+        for (let i = 0; i < items.length; i++) {
+          const result = childFn(items[i], i);
+          if (result instanceof Node) {
+            el.appendChild(result);
+            triggerMountIfConnected(el, result);
+          }
+        }
+      }
+    } else if (isLazy) {
+      // 惰性求值
+      const result = children[0]();
+      if (result instanceof Node) {
+        el.appendChild(result);
+        triggerMountIfConnected(el, result);
+      }
+    } else {
+      // 静态子节点（已由 h() 外层求值）
+      const nodes = processChildren(children);
+      for (const node of nodes) {
+        el.appendChild(node);
+        triggerMountIfConnected(el, node);
+      }
+    }
+  });
+
+  // 注册清理
+  addLocalEffect(el, stop);
+  (el as any)[INSTANCE_KEY] = instance;
+  (el as any)[DISPOSE_KEY] = createDisposeFn(instance);
+
+  return el;
+}
+
+/** 创建列表渲染元素（each 指令） */
+function createEachElement(
+  tag: string,
+  props: any,
+  children: any[],
+  eachFn: any,
+  _keyFn?: any,
+): HTMLElement {
+  if (isVoidElement(tag)) {
+    throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
+  }
+
+  const el = document.createElement(tag);
+  const instance = createComponentInstance();
+
+  // ── 设置属性 ──
+  if (props && typeof props === "object") {
+    for (const key of Object.keys(props)) {
+      const value = props[key];
+
+      if (EVENT_RE.test(key)) {
+        setProp(el, key, value);
+      } else if ((value as any)?.[IS_REACTIVE]) {
+        const stop = effect(() => {
+          setProp(el, key, value());
+        });
+        addLocalEffect(el, stop);
+      } else {
+        setProp(el, key, value);
+      }
+    }
+  }
+
+  const childFn = children[0]; // (item, index) => Node
+
+  const stop = effect(() => {
+    const items = typeof eachFn === "function" ? eachFn() : eachFn;
+
+    // 清空旧子节点
+    while (el.firstChild) {
+      disposeNode(el.firstChild);
+      el.removeChild(el.firstChild);
+    }
+
+    // 渲染新列表项
+    if (Array.isArray(items) && typeof childFn === "function") {
+      for (let i = 0; i < items.length; i++) {
+        const result = childFn(items[i], i);
+        if (result instanceof Node) {
+          el.appendChild(result);
+          triggerMountIfConnected(el, result);
+        }
+      }
+    }
+  });
+
+  addLocalEffect(el, stop);
+  (el as any)[INSTANCE_KEY] = instance;
+  (el as any)[DISPOSE_KEY] = createDisposeFn(instance);
+
+  return el;
+}
+
 // ── h ───────────────────────────────────────────────────
 
 export function h<K extends keyof HTMLElementTagNameMap>(
@@ -141,7 +300,17 @@ export function h<K extends keyof HTMLElementTagNameMap>(
     return result as HTMLElement;
   }
 
-  // DOM mode
+  // ── DOM 模式：控制流指令 ──
+  if (props?.when !== undefined) {
+    const { when, each, key, ...rest } = props;
+    return createWhenElement(tag, rest, children, when, each, key);
+  }
+  if (props?.each !== undefined) {
+    const { each, key, ...rest } = props;
+    return createEachElement(tag, rest, children, each, key);
+  }
+
+  // ── DOM 模式：普通元素 ──
   const el = document.createElement(tag);
 
   if (props && typeof props === "object" && !(props as any)[IS_REACTIVE]) {
