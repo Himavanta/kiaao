@@ -1,6 +1,6 @@
 // kiaao — Astro server renderer
 
-import { renderToString } from "../server.ts";
+import { renderToString } from "../server/index.ts";
 
 export default {
   name: "kiaao",

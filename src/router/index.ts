@@ -12,9 +12,9 @@
 //     return h("div", null, h(RouterView));
 //   }
 
-import { define, derive } from "./runtime.ts";
-import { h } from "./dom.ts";
-import { Show } from "./components.ts";
+import { define, derive } from "../runtime.ts";
+import { h } from "../dom.ts";
+import { Show } from "../components.ts";
 
 // ── Types ──────────────────────────────────────────────
 

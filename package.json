@@ -28,10 +28,10 @@
     "./astro": "./dist/astro/index.js",
     "./astro/client": "./dist/astro/client.js",
     "./astro/server": "./dist/astro/server.js",
-    "./jsx-dev-runtime": "./dist/jsx-dev-runtime.js",
-    "./jsx-runtime": "./dist/jsx-runtime.js",
-    "./router": "./dist/router.js",
-    "./server": "./dist/server.js",
+    "./jsx-dev-runtime": "./dist/jsx-dev-runtime/index.js",
+    "./jsx-runtime": "./dist/jsx-runtime/index.js",
+    "./router": "./dist/router/index.js",
+    "./server": "./dist/server/index.js",
     "./package.json": "./package.json"
   },
   "publishConfig": {

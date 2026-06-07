@@ -7,10 +7,10 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
-      "src/jsx-runtime.ts",
-      "src/jsx-dev-runtime.ts",
-      "src/router.ts",
-      "src/server.ts",
+      "src/jsx-runtime/index.ts",
+      "src/jsx-dev-runtime/index.ts",
+      "src/router/index.ts",
+      "src/server/index.ts",
       "src/astro/index.ts",
       "src/astro/client.ts",
       "src/astro/server.ts",

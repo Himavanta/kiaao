@@ -2,7 +2,7 @@
 
 import { expect, test, describe, beforeEach } from "vite-plus/test";
 import { h } from "../src/index.ts";
-import { createRouter } from "../src/router.ts";
+import { createRouter } from "../src/router/index.ts";
 
 // Reset location before each test to avoid cross-test pollution from navigate()
 beforeEach(() => {

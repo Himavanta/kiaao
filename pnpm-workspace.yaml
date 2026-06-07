@@ -1,7 +1,7 @@
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@^0.1.24
   vitest: npm:@voidzero-dev/vite-plus-test@^0.1.24
-  vite-plus: latest
+  vite-plus: ^0.1.24
 overrides:
   vite: "catalog:"
   vitest: "catalog:"
@@ -15,5 +15,6 @@ peerDependencyRules:
 packages:
   - packages/*
 allowBuilds:
+  "@parcel/watcher": true
   esbuild: true
   sharp: true

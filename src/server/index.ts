@@ -4,9 +4,9 @@
 //   import { renderToString } from "kiaao/server";
 //   const html = renderToString(MyComponent, { name: "kiaao" });
 
-import { h } from "./dom.ts";
-import { setRenderMode, getRenderMode } from "./runtime.ts";
-import { isSSRSafe } from "./ssr-helpers.ts";
+import { h } from "../dom.ts";
+import { setRenderMode, getRenderMode } from "../runtime.ts";
+import { isSSRSafe } from "../ssr-helpers.ts";
 
 export function renderToString(
   component: (props: any) => any,
