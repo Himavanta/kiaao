@@ -155,7 +155,6 @@ function createWhenElement(
   }
 
   const el = document.createElement(tag);
-  const instance = createComponentInstance();
 
   // ── 设置属性 ──
   setProps(el, props);
@@ -207,8 +206,6 @@ function createWhenElement(
 
   // 注册清理
   addLocalEffect(el, stop);
-  (el as any)[INSTANCE_KEY] = instance;
-  (el as any)[DISPOSE_KEY] = createDisposeFn(instance);
 
   return el;
 }
@@ -226,7 +223,6 @@ function createEachElement(
   }
 
   const el = document.createElement(tag);
-  const instance = createComponentInstance();
 
   // ── 设置属性 ──
   setProps(el, props);
@@ -255,8 +251,6 @@ function createEachElement(
   });
 
   addLocalEffect(el, stop);
-  (el as any)[INSTANCE_KEY] = instance;
-  (el as any)[DISPOSE_KEY] = createDisposeFn(instance);
 
   return el;
 }
