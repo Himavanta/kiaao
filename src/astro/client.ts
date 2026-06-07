@@ -16,7 +16,7 @@ export default (rootElement: HTMLElement) => {
     }
 
     rootElement.innerHTML = "";
-    const mergedProps = { ...props, children: slots.default ?? props.children };
+    const mergedProps = { ...props, children: slots.default ?? props.children, slots };
     const el = h(Component, mergedProps);
     mount(el, rootElement);
 

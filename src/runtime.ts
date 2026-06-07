@@ -283,7 +283,7 @@ export function derive<T>(computeFn: () => T): () => T {
   const deriveFn = (() => {
     // Subscribe to the version signal so downstream effects are notified
     // when the internal effect recomputes us.
-    getVer((v) => v)();
+    getVer();
     return cached;
   }) as any;
 
