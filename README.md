@@ -266,7 +266,8 @@ function App() {
     <div>
       <button onClick={() => setVisible((v) => !v)}>Toggle</button>
 
-      <section when={visible}>
+      {/* display: contents 使宿主元素不参与布局，仅作为逻辑容器 */}
+      <section when={visible} style="display: contents">
         <span>Visible</span>
       </section>
 
