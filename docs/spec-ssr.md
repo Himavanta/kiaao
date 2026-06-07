@@ -65,7 +65,7 @@ export function getRenderMode(): RenderMode {
 if (getRenderMode() === "ssr") return hSSR(tag, props, children);
 ```
 
-- `hSSR` 实现字符串拼接（元素模式、组件模式）。
+- `hSSR` 实现字符串拼接（元素模式、组件模式）。`hSSR` 在处理 props 时，对每个属性值先判断是否为响应式函数（`IS_REACTIVE` 标记）。若是，则调用 `value()` 获取当前静态值，再用该值进行 HTML 拼接。事件属性在 SSR 中直接跳过。
 - 控制流 SSR 变体通过 `SSR_COMPONENT` 挂载：
   - `Show`、`List`：正常渲染分支/列表。
   - `Teleport`、`lazy`：返回占位注释。
