@@ -110,7 +110,7 @@ const el = h("div", { class: "container" }, h("h1", null, "Hello"), h("p", null,
 // event handling
 const btn = h("button", { onClick: () => console.log("clicked") }, "Click me");
 
-// dynamic binding: pass a reactive function, text updates automatically
+// dynamic binding: pass a reactive function to text or attributes, updates automatically
 const [count, setCount] = define(0);
 const display = h(
   "p",
@@ -118,6 +118,14 @@ const display = h(
   count((v) => `Count: ${v}`),
 );
 // textContent updates automatically when count changes
+
+// reactive attributes work the same way
+const [isActive, setActive] = define(false);
+const box = h("div", {
+  class: isActive((v) => (v ? "active" : "inactive")),
+  "data-state": isActive,
+});
+// class and data-state update automatically when isActive changes
 ```
 
 ### Components

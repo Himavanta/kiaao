@@ -116,7 +116,7 @@ const btn = h(
   "Click me",
 );
 
-// 动态绑定：传入响应式函数，自动更新文本
+// 动态绑定：传入响应式函数给文本或属性，自动更新
 const [count, setCount] = define(0);
 const display = h(
   "p",
@@ -124,6 +124,14 @@ const display = h(
   count((v) => `Count: ${v}`),
 );
 // 当 count 变化时，p 元素的文本自动更新
+
+// 属性也支持相同的响应式绑定
+const [isActive, setActive] = define(false);
+const box = h("div", {
+  class: isActive((v) => (v ? "active" : "inactive")),
+  "data-state": isActive,
+});
+// class 和 data-state 在 isActive 变化时自动更新
 ```
 
 ### 组件
