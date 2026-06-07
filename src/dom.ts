@@ -136,7 +136,28 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 
   if (props && typeof props === "object" && !(props as any)[IS_REACTIVE]) {
     for (const key of Object.keys(props)) {
-      setProp(el, key, (props as any)[key]);
+      if (key === "children") continue;
+
+      const value = (props as any)[key];
+
+      if (key.startsWith("on")) {
+        // Events: static binding once
+        setProp(el, key, value);
+      } else if ((value as any)?.[IS_REACTIVE]) {
+        // Reactive attribute binding: create effect, register cleanup
+        const stop = effect(() => {
+          setProp(el, key, value());
+        });
+        let stops = (el as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+        if (!stops) {
+          stops = new Set();
+          (el as any)[LOCAL_EFFECTS] = stops;
+        }
+        stops.add(stop);
+      } else {
+        // Static attribute
+        setProp(el, key, value);
+      }
     }
   }
 

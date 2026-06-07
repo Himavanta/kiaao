@@ -110,6 +110,74 @@ describe("h — reactive bindings", () => {
   });
 });
 
+describe("h — reactive attribute bindings", () => {
+  test("reactive class binding updates when signal changes", () => {
+    const [isActive, setActive] = define(false);
+    const el = h("div", { class: isActive((v) => (v ? "active" : "")) });
+    expect(el.className).toBe("");
+
+    setActive(true);
+    expect(el.className).toBe("active");
+
+    setActive(false);
+    expect(el.className).toBe("");
+  });
+
+  test("reactive style string binding", () => {
+    const [theme, setTheme] = define("light");
+    const el = h("div", {
+      style: theme((v) =>
+        v === "dark" ? "color: white; background: black" : "color: black; background: white",
+      ),
+    });
+    expect(el.style.color).toBe("black");
+
+    setTheme("dark");
+    expect(el.style.color).toBe("white");
+  });
+
+  test("reactive style object binding", () => {
+    const [color, setColor] = define("red");
+    const el = h("div", { style: color((v) => ({ color: v })) });
+    expect(el.style.color).toBe("red");
+
+    setColor("blue");
+    expect(el.style.color).toBe("blue");
+  });
+
+  test("reactive boolean attribute", () => {
+    const [disabled, setDisabled] = define(false);
+    const el = h("button", { disabled: disabled((v) => v) });
+    expect(el.hasAttribute("disabled")).toBe(false);
+
+    setDisabled(true);
+    expect(el.hasAttribute("disabled")).toBe(true);
+  });
+
+  test("reactive and static props mix", () => {
+    const [title, setTitle] = define("hello");
+    const el = h("div", { id: "static-id", "data-title": title });
+    expect(el.id).toBe("static-id");
+    expect(el.getAttribute("data-title")).toBe("hello");
+
+    setTitle("world");
+    expect(el.getAttribute("data-title")).toBe("world");
+  });
+
+  test("reactive props cleaned up on unmount", () => {
+    const [cls, setCls] = define("initial");
+    const el = h("div", { class: cls });
+    mount(el, document.body);
+    expect(el.className).toBe("initial");
+
+    unmount(el);
+
+    // After unmount, changes should no longer update the disposed element
+    setCls("changed");
+    expect(el.className).toBe("initial");
+  });
+});
+
 describe("h — component mode", () => {
   test("calls component function with props", () => {
     function Greet(props: { name: string }) {

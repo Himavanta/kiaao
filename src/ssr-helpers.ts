@@ -65,10 +65,17 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
 
   if (props && typeof props === "object") {
     for (const key of Object.keys(props)) {
-      if (key === "class" || key === "className") {
-        html += ` class="${escapeAttr(props[key])}"`;
+      if (key === "children") continue;
+
+      // Resolve reactive function values to their current static value
+      let val = props[key];
+      if ((val as any)?.[IS_REACTIVE]) val = val();
+
+      if (key.startsWith("on")) {
+        continue;
+      } else if (key === "class" || key === "className") {
+        html += ` class="${escapeAttr(val)}"`;
       } else if (key === "style") {
-        const val = props[key];
         if (typeof val === "string") {
           html += ` style="${escapeAttr(val)}"`;
         } else if (typeof val === "object" && val !== null) {
@@ -77,12 +84,8 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
             .join("; ");
           html += ` style="${escapeAttr(cssText)}"`;
         }
-      } else if (key.startsWith("on")) {
-        continue;
-      } else if (key === "children") {
-        continue;
       } else {
-        html += ` ${key}="${escapeAttr(String(props[key]))}"`;
+        html += ` ${key}="${escapeAttr(String(val))}"`;
       }
     }
   }

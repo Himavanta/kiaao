@@ -94,6 +94,54 @@ describe("renderToString — reactive bindings", () => {
   });
 });
 
+describe("renderToString — reactive attributes", () => {
+  test("renders reactive class attribute", () => {
+    const [isActive] = define(true);
+    function Comp() {
+      return h("div", { class: isActive((v) => (v ? "active" : "")) });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div class="active"></div>');
+  });
+
+  test("renders reactive style string attribute", () => {
+    const [theme] = define("dark");
+    function Comp() {
+      return h("div", { style: theme((v) => (v === "dark" ? "color: white" : "color: black")) });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div style="color: white"></div>');
+  });
+
+  test("renders reactive style object attribute", () => {
+    const [color] = define("red");
+    function Comp() {
+      return h("div", { style: color((v) => ({ color: v })) });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div style="color: red"></div>');
+  });
+
+  test("renders raw getter as attribute value", () => {
+    const [title] = define("hello");
+    function Comp() {
+      return h("div", { "data-title": title });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div data-title="hello"></div>');
+  });
+
+  test("static and reactive props in SSR", () => {
+    const [title] = define("world");
+    function Comp() {
+      return h("div", { id: "greeting", "data-title": title, class: "box" });
+    }
+    // Object.keys preserves insertion order: id, data-title, class
+    const html = renderToString(Comp);
+    expect(html).toBe('<div id="greeting" data-title="world" class="box"></div>');
+  });
+});
+
 describe("renderToString — components", () => {
   test("renders nested components", () => {
     function Inner(props: { text: string }) {
