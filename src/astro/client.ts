@@ -1,17 +1,31 @@
-import { h, mount } from "../index.ts";
+// kiaao — Astro client entry
+
+import { h, mount, unmount } from "../index.ts";
 
 export default (rootElement: HTMLElement) => {
-  return async (Component: any, props: any, slots: any, { client }: { client: string }) => {
-    // 第一阶段仅完整支持 client:only，其余策略降级并警告
+  return async (
+    Component: any,
+    props: any,
+    slots: Record<string, string>,
+    { client }: { client: string },
+  ) => {
     if (client !== "only") {
       console.warn(
         `[kiaao] Hydration "${client}" is not yet supported. Falling back to client:only behavior.`,
       );
     }
 
-    // 清空 Astro 可能生成的静态占位，并完整挂载
     rootElement.innerHTML = "";
-    const el = h(Component, props);
+    const mergedProps = { ...props, children: slots.default ?? props.children };
+    const el = h(Component, mergedProps);
     mount(el, rootElement);
+
+    rootElement.addEventListener(
+      "astro:unmount",
+      () => {
+        unmount(el);
+      },
+      { once: true },
+    );
   };
 };

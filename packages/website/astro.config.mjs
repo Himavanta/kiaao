@@ -1,4 +1,3 @@
-// @ts-check
 import { defineConfig } from "astro/config";
 import kiaao from "kiaao/astro";
 

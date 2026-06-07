@@ -255,10 +255,12 @@ export function effect(fn: () => void): () => void {
 // ── derive ─────────────────────────────────────────────
 
 export function derive<T>(computeFn: () => T): () => T {
-  // SSR mode: one-time computation, return fixed-value function
+  // SSR mode: one-time computation, return fixed-value function with IS_REACTIVE
   if (getRenderMode() === "ssr") {
     const value = computeFn();
-    return () => value;
+    const fn = () => value;
+    (fn as any)[IS_REACTIVE] = true;
+    return fn;
   }
   const [getVer, setVer] = define(0);
   let cached: T = undefined as any;
