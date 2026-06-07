@@ -1,28 +1,52 @@
-**English** | [中文](README.zh.md)
+[中文](README.zh.md) | **English**
 
 # kiaao
 
-A minimal reactive frontend framework. No virtual DOM, no compiler dependency, no Proxy, direct DOM manipulation.
+A pure-runtime, zero-virtual-DOM reactive UI framework. No Proxy, no compiler dependency, every update is a precise DOM operation.
+
+## Design Principles
+
+kiaao is built upon reflection on mainstream frameworks. If you’ve felt uneasy about Vue’s Proxy magic, tired of React’s re-renders and caching rules, or confused by Solid’s compiler requirement and split primitives, kiaao might be the answer you’ve been looking for.
+
+- **No virtual DOM** — updates are direct `textNode.textContent = newValue` or attribute assignments, without tree-diffing.
+- **No Proxy interception** — state is plain JavaScript objects. What you see in the debugger is the real value, with no hidden reactive shells.
+- **Explicit selector reactivity** — developers declare dependencies via `getter(selector)`, rather than relying on Proxy traps or compiler inference.
+- **Components run once** — no re-rendering, no `useMemo`/`useCallback` mental overhead, only precise DOM updates.
+- **No compiler plugin required** — pure `h()` calls or standard JSX transformation is all you need.
+- **No Context / provide-inject** — signals are standalone value containers that can be created and shared at module level, without extra cross-level communication mechanisms.
+- **Update granularity at selector-result level** — when a signal changes, only effects whose selected value has actually changed are triggered; unrelated components never re-run.
+
+Since the getter itself is a function carrying the `IS_REACTIVE` marker, `{count}` and `{count(v => v)}` behave the same in JSX—both are recognized by the framework and establish dynamic bindings. The former subscribes to the whole value, the latter subscribes to a slice via the selector.
 
 ## Core Concepts
 
-kiaao has only 4 core APIs:
+kiaao has only 4 core APIs that form the entire reactive system:
 
-- **define** — create reactive state
-- **derive** — create derived state with caching
-- **effect** — run side effects with automatic dependency tracking
-- **h** — create real DOM nodes
+- **define** — create reactive state, returns a getter/setter pair
+- **derive** — create derived state with caching and a dirty flag; downstream is not notified when the computed result hasn’t changed
+- **effect** — run side effects, automatically tracking dependencies; returns a stop function
+- **h** — create real DOM nodes, compatible with standard JSX transformation
 
-Other APIs are components and utilities built on top of these 4:
+All other APIs are components or utilities built on these four primitives:
 
-- **Show** — conditional rendering
-- **List** — list rendering
-- **Teleport** — render content to a different DOM container
+- **Show / List / Teleport** — control-flow components
 - **onMount / onUnmount** — lifecycle hooks
-- **mount / unmount** — mount and unmount helpers
+- **mount / unmount** — explicit mounting and unmounting
 - **lazy** — async component loading
 
-## Getting Started
+## Comparison with Other Frameworks
+
+| Aspect               | React              | Vue                   | Solid                  | kiaao                        |
+| -------------------- | ------------------ | --------------------- | ---------------------- | ---------------------------- |
+| Data purity          | pure               | impure (Proxy)        | pure (two APIs)        | pure (one API)               |
+| Component execution  | re-runs every time | shell runs once       | shell runs once        | shell runs once              |
+| Virtual DOM          | yes                | yes                   | no                     | no                           |
+| Compiler dependency  | none               | optional              | required               | none                         |
+| Reactivity principle | none (full re-run) | Proxy                 | compile-time expansion | explicit selectors           |
+| Update granularity   | component-level    | component/block-level | DOM node-level         | selector-result level        |
+| Context/Provide      | yes                | yes                   | yes                    | no (signals are the channel) |
+
+## Quick Start
 
 ### Installation
 
@@ -30,7 +54,7 @@ Other APIs are components and utilities built on top of these 4:
 npm install kiaao
 ```
 
-### Create reactive state
+### Creating Reactive State
 
 ```typescript
 import { define } from "kiaao";
@@ -41,29 +65,32 @@ console.log(count()); // 0
 setCount(42);
 console.log(count()); // 42
 
-// functional update
+// supports functional updates
 setCount((prev) => prev + 1);
 ```
 
-### Selector subscription
+### Selector Subscriptions
 
-Getters accept a selector function for granular subscriptions:
+The getter accepts a selector function for precise subscriptions. The selector returns a derived function; dependent effects are only triggered when the selected value actually changes.
 
 ```typescript
 const [user, setUser] = define({ name: "tom", age: 18 });
 
-// returns a reactive function that only subscribes to name
 const name = user((v) => v.name);
-console.log(name()); // "tom"
+
+effect(() => {
+  console.log("name:", name());
+});
+// immediately prints: name: tom
 
 setUser((prev) => ({ ...prev, age: 19 }));
-console.log(name()); // "tom" — age change does not trigger name update
+// age changed, but name did not — nothing printed
 
 setUser((prev) => ({ ...prev, name: "jerry" }));
-console.log(name()); // "jerry"
+// prints: name: jerry
 ```
 
-### Side effects
+### Side Effects
 
 ```typescript
 import { define, effect } from "kiaao";
@@ -73,64 +100,64 @@ const [count, setCount] = define(0);
 const stop = effect(() => {
   console.log("count is", count());
 });
-// logs: count is 0
+// immediately prints: count is 0
 
-setCount(1);
-// logs: count is 1
-
-// cancel the effect
+setCount(1); // prints: count is 1
 stop();
-setCount(2);
-// no output
+setCount(2); // nothing printed
 ```
 
-### Derived state
+### Derived State
 
 ```typescript
-import { define, derive } from "kiaao";
+import { define, derive, effect } from "kiaao";
 
 const [count, setCount] = define(5);
 const double = derive(() => count() * 2);
 
-console.log(double()); // 10
+effect(() => {
+  console.log("double:", double());
+});
+// immediately prints: double: 10
 
-setCount(10);
-console.log(double()); // 20
+setCount(10); // prints: double: 20
+setCount(10); // same value, double does not notify downstream, nothing printed
 ```
 
-### Creating DOM
+`derive` caches its result. If upstream changes but the computed value stays the same, downstream subscribers are not notified.
+
+### Creating DOM Elements
 
 ```typescript
 import { h } from "kiaao";
 
-// create an element
-const el = h("div", { class: "container" }, h("h1", null, "Hello"), h("p", null, "World"));
-// returns a real DOM node
+// static elements
+const el = h("div", { class: "container" }, h("h1", null, "Hello"));
 
-// event handling
+// event binding
 const btn = h("button", { onClick: () => console.log("clicked") }, "Click me");
 
-// dynamic binding: pass a reactive function to text or attributes, updates automatically
+// dynamic text: pass a reactive function, it auto-updates
 const [count, setCount] = define(0);
-const display = h(
+const display = h("p", null, count); // count itself is a reactive function
+// or use a selector
+const display2 = h(
   "p",
   null,
   count((v) => `Count: ${v}`),
 );
-// textContent updates automatically when count changes
 
-// reactive attributes work the same way
+// dynamic attributes: class, style, and arbitrary attributes support reactive binding
 const [isActive, setActive] = define(false);
 const box = h("div", {
   class: isActive((v) => (v ? "active" : "inactive")),
   "data-state": isActive,
 });
-// class and data-state update automatically when isActive changes
 ```
 
 ### Components
 
-A component in kiaao is a function that returns a DOM node. Component functions run only once:
+A component is simply a function that returns a DOM node. It runs only once. When state changes, the component function does not re-run—only the DOM nodes bound by reactive functions update in place.
 
 ```typescript
 import { define, h } from "kiaao";
@@ -150,15 +177,12 @@ function Counter() {
   );
 }
 
-// use the component
 const el = h(Counter, null);
 ```
 
-When `h()` receives a function as its first argument, it enters component mode: creates a component instance, calls the function, and returns the generated DOM node.
-
 ### Props
 
-Components receive props via their argument:
+Components receive props via function parameters, just like regular functions.
 
 ```typescript
 function Greet(props: { name: string }) {
@@ -171,11 +195,10 @@ const el = h(Greet, { name: "kiaao" });
 ### Lifecycle
 
 ```typescript
-import { define, h, onMount, onUnmount } from "kiaao";
+import { h, onMount, onUnmount, mount, unmount } from "kiaao";
 
 function Timer() {
   const [time, setTime] = define(new Date());
-
   const timer = setInterval(() => setTime(new Date()), 1000);
   onUnmount(() => clearInterval(timer));
 
@@ -187,21 +210,19 @@ function Timer() {
 }
 
 const root = h(Timer, null);
-
-// mount to the page, triggers onMount
-mount(root, document.body);
-
-// unmount, triggers onUnmount and cleans up all effects
-unmount(root);
+mount(root, document.body); // mount and trigger onMount
+// ...
+unmount(root); // unmount, trigger onUnmount, and clean up all effects
 ```
 
-### Conditional rendering
+### Conditional Rendering and List Rendering
 
 ```typescript
-import { define, h, Show } from "kiaao";
+import { define, h, Show, List } from "kiaao";
 
 function App() {
   const [visible, setVisible] = define(true);
+  const [items, setItems] = define(["a", "b", "c"]);
 
   return h(
     "div",
@@ -212,135 +233,61 @@ function App() {
       fallback: () => h("p", null, "Hidden"),
       children: () => h("p", null, "Visible"),
     }),
+    h(
+      "ul",
+      null,
+      h(List, {
+        each: items,
+        key: (item) => item,
+        children: (item) => h("li", null, item),
+      }),
+    ),
   );
 }
 ```
 
-`when` accepts both reactive functions (getter directly) and plain functions:
-
-```typescript
-// reactive function
-h(Show, { when: visible, children: () => ... })
-
-// plain function
-h(Show, { when: () => count() > 0, children: () => ... })
-```
-
-### List rendering
-
-```typescript
-import { define, h, List } from "kiaao";
-
-function App() {
-  const [items, setItems] = define(["a", "b", "c"]);
-
-  return h(
-    "ul",
-    null,
-    h(List, {
-      each: items,
-      key: (item: string) => item,
-      children: (item: string) => h("li", null, item),
-    }),
-  );
-}
-```
+`Show`'s `when` accepts either a reactive function or a plain function. When the branch switches, old DOM nodes are cleaned up and new ones trigger the mount lifecycle.
 
 ### Teleport
 
-Render content to a different DOM container. The content stays logically part of the current component tree -- lifecycle hooks work normally, and cleanup is automatic.
+Render content into a specified DOM container while logically remaining inside the current component tree. Content is automatically removed from the target when the component unmounts.
 
 ```typescript
 import { h, Teleport } from "kiaao";
 
-function Modal() {
-  return h("div", { class: "modal" }, "This is rendered in a different container");
-}
-
-// in a component
 h(Teleport, {
-  to: "#modal-root", // CSS selector
-  children: () => h(Modal, null),
+  to: "#modal-root",
+  children: () => h("div", { class: "modal" }, "Teleported content"),
 });
-
-// or pass a DOM element directly
-document.body.appendChild(
-  h(Teleport, {
-    to: document.querySelector("#portal")!,
-    children: () => h("span", null, "teleported"),
-  }),
-);
 ```
 
-### Async components (lazy)
+`children` can be either a JSX expression or a function returning content.
 
-Wrap a dynamic import for code splitting. Renders nothing (comment placeholder) while loading, then switches to the real component.
+### Async Components (lazy)
+
+Combine with dynamic imports for code splitting. Shows a placeholder comment while loading, then automatically swaps in the real component once loaded.
 
 ```typescript
 import { lazy } from "kiaao";
-
 const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
-
-// use like any other component
 h(HeavyProfile, { userId: 42 });
 ```
 
-Loading errors can be handled via an optional callback:
+## Server-Side Rendering and Astro Integration
 
-```typescript
-const Profile = lazy(() => import("./Profile.ts"), {
-  onError: (err) => console.error("Failed to load profile", err),
-});
-```
-
-If no `onError` is provided, the error is stored internally and thrown during rendering, allowing it to be caught by an error boundary.
-
-## Server-side rendering
-
-kiaao can render components to HTML strings on the server via `renderToString`.
+Use `renderToString` to render a component to an HTML string.
 
 ```typescript
 import { renderToString } from "kiaao/server";
-
 const html = renderToString(MyComponent, { name: "kiaao" });
-// "<div>Hello, kiaao!</div>"
 ```
 
-During SSR:
+In SSR mode, `effect` is disabled, `derive` computes once, and `onMount`/`onUnmount` do not fire.
 
-- `effect` is disabled (returns a noop stop function)
-- `derive` computes once and returns a fixed value with `IS_REACTIVE` marker
-- `onMount` / `onUnmount` do not fire (they only run inside `mount()`)
-- Reactive bindings in `h()` are evaluated once for their current value
-
-## Astro integration
-
-kiaao provides an official Astro integration for static SSR and `client:only` components.
+kiaao provides an official Astro integration. Purely static components output zero JavaScript; `client:only` components are fully mounted in the browser.
 
 ```bash
 npm install kiaao astro
-```
-
-Add JSX configuration to your tsconfig.json:
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "kiaao"
-  }
-}
-```
-
-Configure Astro:
-
-```ts
-// astro.config.ts
-import kiaao from "kiaao/astro";
-
-export default defineConfig({
-  integrations: [kiaao()],
-});
 ```
 
 ```astro
@@ -348,18 +295,16 @@ export default defineConfig({
 import Counter from "../components/Counter.tsx";
 ---
 
-<!-- Static HTML, zero JavaScript -->
+<!-- pure static HTML -->
 <Counter />
 
-<!-- Fully interactive, mounted in the browser -->
+<!-- full client-side interactivity -->
 <Counter client:only />
 ```
 
-Static components render to HTML during build with no client JavaScript. Components with `client:only` are mounted entirely in the browser with full reactive behavior.
-
 ## Routing
 
-kiaao provides a simple client-side router as a separate entry point. It is built entirely on the core primitives (define, h, Show) with no extra concepts.
+A lightweight client-side router is available as the separate package `kiaao/router`, built entirely on the core primitives.
 
 ```typescript
 import { createRouter } from "kiaao/router";
@@ -379,34 +324,13 @@ function App() {
 }
 ```
 
-Route params are passed as props to the matched component, and also available via `currentParams`:
+Route parameters are passed to the matched component as props, and are also available via `currentParams()`. A fallback component can be provided for 404s.
 
-```typescript
-function UserProfile(props: { id: string }) {
-  return h("div", null, `User ${props.id}`);
-}
-
-// alternatively, outside the component
-console.log(currentParams()); // { id: "42" }
-```
-
-A fallback component can be provided for unmatched routes:
-
-```typescript
-const { RouterView } = createRouter(routes, { fallback: () => h("div", null, "Custom 404") });
-```
-
-## Setup
-
-### npm
+## Installation and JSX Configuration
 
 ```bash
 npm install kiaao
 ```
-
-### JSX / TSX support
-
-kiaao provides a JSX runtime for the automatic transform.
 
 tsconfig.json:
 
@@ -419,18 +343,6 @@ tsconfig.json:
 }
 ```
 
-vite.config.ts:
-
-```ts
-export default defineConfig({
-  oxc: {
-    jsx: {
-      importSource: "kiaao",
-    },
-  },
-});
-```
-
 Writing components with JSX:
 
 ```tsx
@@ -438,7 +350,6 @@ import { define, mount } from "kiaao";
 
 function App() {
   const [count, setCount] = define(0);
-
   return (
     <div>
       <p>Count: {count}</p>
@@ -450,34 +361,26 @@ function App() {
 mount((<App />) as HTMLElement, document.querySelector("#app")!);
 ```
 
+If you prefer not to use JSX, you can use the `h()` function directly.
+
 ## API Reference
 
-| API            | Description                                            |
-| -------------- | ------------------------------------------------------ |
-| define         | create reactive state, returns [getter, setter]        |
-| derive         | create derived state with caching and dirty flag       |
-| effect         | run side effects with automatic dependency tracking    |
-| h              | create real DOM nodes or invoke component functions    |
-| Show           | conditional rendering, when accepts reactive functions |
-| List           | list rendering with key-based node management          |
-| Teleport       | render content to a different DOM container            |
-| lazy           | async component loading with dynamic import            |
-| onMount        | run once after the component is mounted                |
-| onUnmount      | run before the component is destroyed                  |
-| mount          | attach the component tree to the DOM and trigger hooks |
-| unmount        | detach the component tree and clean up all effects     |
-| renderToString | render a component to HTML string (from kiaao/server)  |
-| createRouter   | client-side router (from kiaao/router)                 |
-
-## Design Principles
-
-- **No virtual DOM** — updates are direct `textNode.textContent` replacements, no diffing
-- **No compiler plugin required** — works with plain `h()` calls or standard JSX transform
-- **No Proxy, no setters, no getters** — state is pure plain objects, no interception layer
-- **Explicit selector-based reactivity** — dependency is declared by the developer through `getter(selector)`, not inferred through Proxy traps
-- **No Context / provide-inject** — signals are value containers that can be imported directly anywhere
-- **Component functions execute only once** — no re-rendering, only targeted DOM updates
-- **Update granularity is at the selector result level** — signal change triggers only effects whose selected value actually changed
+| API            | Purpose                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| define         | Create reactive state, returns [getter, setter]                                       |
+| derive         | Create derived state with caching; does not notify downstream when value is unchanged |
+| effect         | Run side effects with automatic dependency tracking; returns a stop function          |
+| h              | Create real DOM nodes or invoke component functions                                   |
+| Show           | Conditional rendering; `when` supports reactive functions                             |
+| List           | List rendering with key-based node management                                         |
+| Teleport       | Render content into a specified DOM container while preserving lifecycle              |
+| lazy           | Async component loading for use with dynamic imports                                  |
+| onMount        | Runs once after the component is mounted                                              |
+| onUnmount      | Runs before the component is destroyed                                                |
+| mount          | Mount a component tree into a container and trigger lifecycle                         |
+| unmount        | Unmount a component tree and clean up all effects                                     |
+| renderToString | Render a component to an HTML string (from kiaao/server)                              |
+| createRouter   | Client-side routing (from kiaao/router)                                               |
 
 ## License
 
