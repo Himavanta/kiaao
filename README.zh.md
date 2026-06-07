@@ -46,17 +46,55 @@ kiaao 只有 4 个核心 API，它们构成了整个框架的响应式系统：
 | 更新粒度        | 组件级   | 组件/块级     | DOM节点级  | 选择器结果级   |
 | Context/Provide | 有       | 有            | 有         | 无(信号即通道) |
 
-## 快速开始
-
-### 安装
+## 安装与 JSX 配置
 
 ```bash
 npm install kiaao
 ```
 
+**tsconfig.json：**
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiaao"
+  }
+}
+```
+
+**vite.config.ts（使用 oxc 编译器）：**
+
+```ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  oxc: {
+    jsx: {
+      importSource: "kiaao",
+    },
+  },
+});
+```
+
+如果使用 esbuild 作为编译器，则在 `vite.config.ts` 中配置：
+
+```ts
+export default defineConfig({
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "kiaao",
+  },
+});
+```
+
+配置完成后即可直接在 `.tsx` 文件中编写组件，编译后自动转换为 `h()` 调用。如果不想使用 JSX，也可以直接用 `h()` 函数。
+
+## 快速开始
+
 ### 创建响应式状态
 
-```typescript
+```tsx
 import { define } from "kiaao";
 
 const [count, setCount] = define(0);
@@ -73,7 +111,9 @@ setCount((prev) => prev + 1);
 
 getter 支持传入选择器函数进行精准订阅。选择器返回的是一个派生函数，仅当所选值变化时才会触发依赖更新。
 
-```typescript
+```tsx
+import { define, effect } from "kiaao";
+
 const [user, setUser] = define({ name: "tom", age: 18 });
 
 const name = user((v) => v.name);
@@ -92,7 +132,7 @@ setUser((prev) => ({ ...prev, name: "jerry" }));
 
 ### 副作用
 
-```typescript
+```tsx
 import { define, effect } from "kiaao";
 
 const [count, setCount] = define(0);
@@ -109,7 +149,9 @@ setCount(2); // 不输出
 
 ### 派生状态
 
-```typescript
+`derive` 会缓存计算结果，并在上游变化时重新计算。若新结果与缓存相同，则不通知下游，有效避免无效更新。与 `getter(selector)` 返回的普通派生函数（无缓存）不同，`derive` 适合计算昂贵或需要多处复用的场景。
+
+```tsx
 import { define, derive, effect } from "kiaao";
 
 const [count, setCount] = define(5);
@@ -124,59 +166,25 @@ setCount(10); // 输出: double: 20
 setCount(10); // 值相同，double 不通知下游，不输出
 ```
 
-`derive` 内部会缓存结果，如果上游变化但计算结果相同，下游不会收到通知。
-
-### 创建 DOM
-
-```typescript
-import { h } from "kiaao";
-
-// 静态元素
-const el = h("div", { class: "container" }, h("h1", null, "Hello"));
-
-// 事件绑定
-const btn = h("button", { onClick: () => console.log("clicked") }, "Click me");
-
-// 动态文本：传入响应式函数，自动更新
-const [count, setCount] = define(0);
-const display = h("p", null, count); // count 本身是响应式函数
-// 或使用选择器
-const display2 = h(
-  "p",
-  null,
-  count((v) => `Count: ${v}`),
-);
-
-// 动态属性：class、style、任意属性均支持响应式绑定
-const [isActive, setActive] = define(false);
-const box = h("div", {
-  class: isActive((v) => (v ? "active" : "inactive")),
-  "data-state": isActive,
-});
-```
-
 ### 组件
 
-组件就是返回 DOM 节点的函数，只执行一次。状态变化时组件函数不重跑，只有被响应式函数绑定的 DOM 节点原地更新。
+组件就是返回 JSX 的函数，只执行一次。状态变化时组件函数不重跑，只有被响应式函数绑定的 DOM 节点原地更新。
 
-```typescript
-import { define, h } from "kiaao";
+```tsx
+import { define } from "kiaao";
 
 function Counter() {
   const [count, setCount] = define(0);
 
-  return h(
-    "div",
-    null,
-    h(
-      "p",
-      null,
-      count((v) => `Count: ${v}`),
-    ),
-    h("button", { onClick: () => setCount((p) => p + 1) }, "+1"),
+  return (
+    <div>
+      <p>Count: {count((v) => v)}</p>
+      <button onClick={() => setCount((p) => p + 1)}>+1</button>
+    </div>
   );
 }
 
+// 使用组件
 const el = h(Counter, null);
 ```
 
@@ -184,29 +192,52 @@ const el = h(Counter, null);
 
 组件通过参数接收 props，与函数参数完全一致。
 
-```typescript
+```tsx
 function Greet(props: { name: string }) {
-  return h("p", null, `Hello, ${props.name}!`);
+  return <p>Hello, {props.name}!</p>;
 }
 
 const el = h(Greet, { name: "kiaao" });
 ```
 
+### 动态属性与事件
+
+JSX 中所有属性均支持传入响应式函数进行动态绑定，包括 `class`、`style` 及任意 data 属性。事件使用标准的 `onXxx` 驼峰写法。
+
+```tsx
+import { define } from "kiaao";
+
+function App() {
+  const [isActive, setActive] = define(false);
+
+  return (
+    <div
+      class={isActive((v) => (v ? "active" : "inactive"))}
+      data-state={isActive}
+      onClick={() => setActive((v) => !v)}
+    >
+      Click to toggle
+    </div>
+  );
+}
+```
+
 ### 生命周期
 
-```typescript
-import { h, onMount, onUnmount, mount, unmount } from "kiaao";
+组件通过 `onMount` 和 `onUnmount` 注册生命周期回调，需要在组件函数顶层同步调用。组件通过 `mount` 挂载到容器后才触发 `onMount`。
+
+```tsx
+import { define, onMount, onUnmount, mount, unmount } from "kiaao";
 
 function Timer() {
   const [time, setTime] = define(new Date());
+
+  onMount(() => console.log("Timer mounted"));
+
   const timer = setInterval(() => setTime(new Date()), 1000);
   onUnmount(() => clearInterval(timer));
 
-  return h(
-    "div",
-    null,
-    time((v) => v.toLocaleTimeString()),
-  );
+  return <div>{time((v) => v.toLocaleTimeString())}</div>;
 }
 
 const root = h(Timer, null);
@@ -217,67 +248,64 @@ unmount(root); // 卸载并触发 onUnmount，清理所有 effect
 
 ### 条件渲染与列表渲染
 
-```typescript
-import { define, h, Show, List } from "kiaao";
+`Show` 和 `List` 是内置的控制流组件。`Show` 的 `when` 可以传入响应式函数或普通函数，分支切换时旧 DOM 会被清理，新 DOM 会触发挂载生命周期。
+
+```tsx
+import { define, Show, List } from "kiaao";
 
 function App() {
   const [visible, setVisible] = define(true);
   const [items, setItems] = define(["a", "b", "c"]);
 
-  return h(
-    "div",
-    null,
-    h("button", { onClick: () => setVisible((v) => !v) }, "Toggle"),
-    h(Show, {
-      when: visible,
-      fallback: () => h("p", null, "Hidden"),
-      children: () => h("p", null, "Visible"),
-    }),
-    h(
-      "ul",
-      null,
-      h(List, {
-        each: items,
-        key: (item) => item,
-        children: (item) => h("li", null, item),
-      }),
-    ),
+  return (
+    <div>
+      <button onClick={() => setVisible((v) => !v)}>Toggle</button>
+
+      <Show when={visible} fallback={() => <p>Hidden</p>}>
+        {() => <p>Visible</p>}
+      </Show>
+
+      <ul>
+        <List each={items} key={(item) => item}>
+          {(item) => <li>{item}</li>}
+        </List>
+      </ul>
+    </div>
   );
 }
 ```
 
-`Show` 的 `when` 可以直接传入响应式函数或普通函数。分支切换时旧 DOM 会被清理，新 DOM 会触发挂载生命周期。
-
 ### Teleport
 
-将内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树。组件卸载时内容自动从目标容器移除。
+将内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树。组件卸载时内容自动从目标容器移除。若目标容器不存在，Teleport 返回一个占位注释节点，内容不会渲染。
 
-```typescript
-import { h, Teleport } from "kiaao";
+```tsx
+import { Teleport } from "kiaao";
 
-h(Teleport, {
-  to: "#modal-root",
-  children: () => h("div", { class: "modal" }, "传送内容"),
-});
+function Modal() {
+  return (
+    <Teleport to="#modal-root">
+      <div class="modal">传送内容</div>
+    </Teleport>
+  );
+}
 ```
-
-`children` 可以直接传入 JSX 表达式，也可以传入返回内容的函数。
 
 ### 异步组件（lazy）
 
-配合动态导入实现代码拆分。加载中显示占位注释，加载完成后自动替换为真实组件。
+配合动态导入实现代码拆分。加载中显示占位注释，加载完成后自动替换为真实组件。加载失败时抛出错误，可被上层错误边界捕获。
 
-```typescript
+```tsx
 import { lazy } from "kiaao";
-const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
-h(HeavyProfile, { userId: 42 });
+const HeavyProfile = lazy(() => import("./HeavyProfile.tsx"));
+const el = h(HeavyProfile, { userId: 42 });
 ```
 
 ## 服务端渲染与 Astro 集成
 
 通过 `renderToString` 将组件渲染为 HTML 字符串。
 
-```typescript
+```tsx
 import { renderToString } from "kiaao/server";
 const html = renderToString(MyComponent, { name: "kiaao" });
 ```
@@ -288,6 +316,26 @@ kiaao 提供官方 Astro 集成。纯静态组件零 JavaScript 输出，`client
 
 ```bash
 npm install kiaao astro
+```
+
+```json
+// tsconfig.json：
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiaao"
+  }
+}
+```
+
+```ts
+// astro.config.ts
+import { defineConfig } from "astro/config";
+import kiaao from "kiaao/astro";
+
+export default defineConfig({
+  integrations: [kiaao()],
+});
 ```
 
 ```astro
@@ -306,81 +354,50 @@ import Counter from "../components/Counter.tsx";
 
 轻量客户端路由作为独立包 `kiaao/router` 提供，完全基于核心原语构建。
 
-```typescript
+```tsx
 import { createRouter } from "kiaao/router";
 
-const { RouterView, navigate, Link, currentParams } = createRouter([
-  { path: "/", component: Home },
-  { path: "/users/:id", component: UserProfile },
-]);
+const { RouterView, navigate, Link, currentParams } = createRouter(
+  [
+    { path: "/", component: Home },
+    { path: "/users/:id", component: UserProfile },
+  ],
+  { fallback: () => <div>404 Not Found</div> },
+);
 
 function App() {
-  return h(
-    "div",
-    null,
-    h("nav", null, h(Link, { to: "/" }, "首页"), h(Link, { to: "/users/1" }, "用户 1")),
-    h(RouterView),
-  );
-}
-```
-
-路由参数作为 props 传入组件，也可通过 `currentParams()` 获取。支持 fallback 组件处理 404。
-
-## 安装与 JSX 配置
-
-```bash
-npm install kiaao
-```
-
-tsconfig.json:
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "kiaao"
-  }
-}
-```
-
-使用 JSX 编写组件：
-
-```tsx
-import { define, mount } from "kiaao";
-
-function App() {
-  const [count, setCount] = define(0);
   return (
     <div>
-      <p>Count: {count}</p>
-      <button onClick={() => setCount((p) => p + 1)}>+1</button>
+      <nav>
+        <Link to="/">首页</Link>
+        <Link to="/users/1">用户 1</Link>
+      </nav>
+      <RouterView />
     </div>
   );
 }
-
-mount((<App />) as HTMLElement, document.querySelector("#app")!);
 ```
 
-如果不想使用 JSX，也可以直接用 `h()` 函数。
+路由参数作为 props 传入组件，也可通过 `currentParams()` 获取。
 
 ## API 参考
 
-| API            | 用途                                             |
-| -------------- | ------------------------------------------------ |
-| define         | 创建响应式状态，返回 [getter, setter]            |
-| derive         | 创建派生状态，带缓存和脏标记，值不变时不通知下游 |
-| effect         | 执行副作用，自动追踪依赖，返回 stop 函数         |
-| h              | 创建真实 DOM 节点或调用组件函数                  |
-| Show           | 条件渲染，when 支持响应式函数                    |
-| List           | 列表渲染，基于 key 管理节点                      |
-| Teleport       | 将内容渲染到指定 DOM 容器，保持生命周期          |
-| lazy           | 异步组件加载，配合动态导入使用                   |
-| onMount        | 组件挂载后执行一次                               |
-| onUnmount      | 组件销毁前执行                                   |
-| mount          | 将组件树挂载到容器并触发生命周期                 |
-| unmount        | 卸载组件树并清理所有 effect                      |
-| renderToString | 服务端渲染为 HTML 字符串（来自 kiaao/server）    |
-| createRouter   | 客户端路由（来自 kiaao/router）                  |
+| API            | 用途                                                              |
+| -------------- | ----------------------------------------------------------------- |
+| define         | 创建响应式状态，返回 [getter, setter]                             |
+| derive         | 创建派生状态，带缓存和脏标记，值不变时不通知下游                  |
+| effect         | 执行副作用，自动追踪依赖，返回 stop 函数                          |
+| h              | 创建真实 DOM 节点或调用组件函数                                   |
+| Show           | 条件渲染，when 支持响应式函数                                     |
+| List           | 列表渲染，基于 key 管理节点                                       |
+| Teleport       | 将内容渲染到指定 DOM 容器，保持生命周期；目标不存在时返回占位注释 |
+| lazy           | 异步组件加载；失败时抛出错误，可被错误边界捕获                    |
+| onMount        | 组件挂载后执行一次                                                |
+| onUnmount      | 组件销毁前执行                                                    |
+| mount          | 将组件树挂载到容器并触发生命周期                                  |
+| unmount        | 卸载组件树并清理所有 effect                                       |
+| renderToString | 服务端渲染为 HTML 字符串（来自 kiaao/server）                     |
+| createRouter   | 客户端路由（来自 kiaao/router）                                   |
 
 ## 许可证
 
