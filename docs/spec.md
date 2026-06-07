@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.7
+# kiaao 框架规范 v1.8
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -61,7 +61,7 @@ setUser((prev) => ({ ...prev, age: prev.age + 1 }));
 
 **数据纯净度**：内部存储的是纯普通对象/基本类型。任何时候拿到的都是普通值，无 Proxy，无 getter/setter 劫持。更新采用不可变替换，但框架不依赖引用对比触发更新，而是依赖选择器函数的结果对比。
 
-**内部标记**：Getter 的 `value(selector)` 返回的函数以及 `derive` 返回的函数，均挂载 `Symbol('is_reactive')` 属性（常量 `IS_REACTIVE`），供 `h()` 识别。
+**内部标记**：`define` 返回的原始 getter 函数本身也挂载 `IS_REACTIVE` 标记。当它作为子节点传入 `h()` 时，框架识别该标记并调用 `getter()` 获取当前值、建立依赖。这使得 `{count}` 和 `{count(v => v)}` 在 JSX 中行为一致——前者订阅整个值的变化，后者通过选择器订阅局部变化。此外，`derive` 返回的函数同样带有该标记。
 
 ---
 
@@ -544,15 +544,15 @@ function createCounter() {
 
 框架在所有外部对象上使用 `Symbol` 键存储内部数据：
 
-| Symbol            | 挂载位置                               | 用途                                |
-| ----------------- | -------------------------------------- | ----------------------------------- |
-| `IS_REACTIVE`     | Getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别       |
-| `LOCAL_EFFECTS`   | 动态文本节点                           | 存储该节点上的 effect stop 函数集合 |
-| `DISPOSE_KEY`     | DOM 节点（组件根节点）                 | 存储组件销毁回调                    |
-| `INSTANCE_KEY`    | DOM 节点                               | 存储组件实例引用                    |
-| `INITIALIZED_KEY` | 组件实例                               | 标记已初始化                        |
-| `DISPOSED_KEY`    | 组件实例                               | 标记已销毁                          |
-| `STOP_KEY`        | derive 返回的函数                      | 存储停止内部 effect 的函数          |
+| Symbol            | 挂载位置                                             | 用途                                |
+| ----------------- | ---------------------------------------------------- | ----------------------------------- |
+| `IS_REACTIVE`     | Getter 函数 / getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别       |
+| `LOCAL_EFFECTS`   | 动态文本节点                                         | 存储该节点上的 effect stop 函数集合 |
+| `DISPOSE_KEY`     | DOM 节点（组件根节点）                               | 存储组件销毁回调                    |
+| `INSTANCE_KEY`    | DOM 节点                                             | 存储组件实例引用                    |
+| `INITIALIZED_KEY` | 组件实例                                             | 标记已初始化                        |
+| `DISPOSED_KEY`    | 组件实例                                             | 标记已销毁                          |
+| `STOP_KEY`        | derive 返回的函数                                    | 存储停止内部 effect 的函数          |
 
 ---
 

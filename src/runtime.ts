@@ -188,6 +188,9 @@ export function define<T>(initialValue: T): [Getter<T>, Setter<T>] {
     return reactiveFn;
   }) as Getter<T>;
 
+  // 原始 getter 本身也挂载 IS_REACTIVE 标记，使 {count} 在 h() 中被识别为响应式
+  (getter as any)[IS_REACTIVE] = true;
+
   const setter = ((updater: any): any => {
     const oldValue = signal.value;
 

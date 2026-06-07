@@ -33,7 +33,7 @@
 .counter_btn:hover {
   background: #f3f4f6;
 }
-.counter_btn.reset {
+.counter_btn_reset {
   color: #ef4444;
   border-color: #fca5a5;
 }
