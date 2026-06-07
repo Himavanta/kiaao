@@ -1,12 +1,17 @@
-// kiaao — Astro client entry
-// Handles client:only — mounts the component in the browser.
-
 import { h, mount } from "../index.ts";
 
-export default async (Component: any, props: any, root: HTMLElement, hydrateType: string) => {
-  if (hydrateType === "only") {
-    root.innerHTML = "";
+export default (rootElement: HTMLElement) => {
+  return async (Component: any, props: any, slots: any, { client }: { client: string }) => {
+    // 第一阶段仅完整支持 client:only，其余策略降级并警告
+    if (client !== "only") {
+      console.warn(
+        `[kiaao] Hydration "${client}" is not yet supported. Falling back to client:only behavior.`,
+      );
+    }
+
+    // 清空 Astro 可能生成的静态占位，并完整挂载
+    rootElement.innerHTML = "";
     const el = h(Component, props);
-    mount(el, root);
-  }
+    mount(el, rootElement);
+  };
 };

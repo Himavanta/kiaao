@@ -15,6 +15,7 @@ export default function createIntegration() {
           name: "kiaao",
           serverEntrypoint: "kiaao/astro/server",
           clientEntrypoint: "kiaao/astro/client",
+          jsxImportSource: "kiaao",
         });
       },
     },
