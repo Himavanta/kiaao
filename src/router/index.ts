@@ -15,6 +15,7 @@
 import { define, derive } from "../runtime.ts";
 import { h } from "../dom.ts";
 import { Show } from "../components.ts";
+import type { Getter } from "../types.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -31,11 +32,11 @@ export interface Router {
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
-  currentPath: () => string;
+  currentPath: Getter<string>;
   /** Current route params derived from currentPath */
   currentParams: () => Record<string, string>;
   /** Declarative navigation link component */
-  Link: (props: { to: string; children?: any }) => Node;
+  Link: (props: { to: string; children?: any; [key: string]: any }) => Node;
 }
 
 // ── Path Matching ──────────────────────────────────────
