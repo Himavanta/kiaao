@@ -25,26 +25,27 @@ kiaao has only 4 core APIs that form the entire reactive system:
 - **define** — create reactive state, returns a getter/setter pair
 - **derive** — create derived state with caching and a dirty flag; downstream is not notified when the computed result hasn’t changed
 - **effect** — run side effects, automatically tracking dependencies; returns a stop function
-- **h** — create real DOM nodes, compatible with standard JSX transformation
+- **h** — create real DOM nodes, with built-in `when` and `each` attribute directives for control flow
 
 All other APIs are components or utilities built on these four primitives:
 
-- **Show / List / Teleport** — control-flow components
+- **Teleport** — portal component
 - **onMount / onUnmount** — lifecycle hooks
 - **mount / unmount** — explicit mounting and unmounting
 - **lazy** — async component loading
 
 ## Comparison with Other Frameworks
 
-| Aspect               | React              | Vue                   | Solid                  | kiaao                        |
-| -------------------- | ------------------ | --------------------- | ---------------------- | ---------------------------- |
-| Data purity          | pure               | impure (Proxy)        | pure (two APIs)        | pure (one API)               |
-| Component execution  | re-runs every time | shell runs once       | shell runs once        | shell runs once              |
-| Virtual DOM          | yes                | yes                   | no                     | no                           |
-| Compiler dependency  | none               | optional              | required               | none                         |
-| Reactivity principle | none (full re-run) | Proxy                 | compile-time expansion | explicit selectors           |
-| Update granularity   | component-level    | component/block-level | DOM node-level         | selector-result level        |
-| Context/Provide      | yes                | yes                   | yes                    | no (signals are the channel) |
+| Aspect             | React     | Vue             | Solid      | kiaao                    |
+| ------------------ | --------- | --------------- | ---------- | ------------------------ |
+| Data purity        | pure      | impure (Proxy)  | pure (two) | pure (one)               |
+| Component runs     | re-runs   | shell once      | shell once | shell once               |
+| Virtual DOM        | yes       | yes             | no         | no                       |
+| Compiler needed    | no        | optional        | required   | no                       |
+| Reactivity         | none      | Proxy           | compile    | explicit selectors       |
+| Control flow       | ternary   | v-if/v-for      | Show/For   | when/each directives     |
+| Update granularity | component | component/block | node       | selector result          |
+| Context/Provide    | yes       | yes             | yes        | no (signals are channel) |
 
 ## Installation and JSX Configuration
 
@@ -246,12 +247,16 @@ mount(root, document.body); // mount and trigger onMount
 unmount(root); // unmount, trigger onUnmount, and clean up all effects
 ```
 
-### Conditional Rendering and List Rendering
+### Conditional and List Rendering
 
-`Show` and `List` are built-in control-flow components. `Show`'s `when` accepts either a reactive function or a plain function. When the branch switches, old DOM nodes are cleaned up and new ones trigger the mount lifecycle.
+kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components.
+
+`when` controls the mounting and unmounting of its host element's child nodes. When the condition is falsy, child nodes are removed and properly disposed. It also supports lazy evaluation functions, which execute only when the condition becomes truthy, avoiding unnecessary initialization.
+
+`each` generates child nodes inside its host element from an array. Old nodes are cleaned up and new ones are created on every change. It's recommended to provide a `key` for future optimizations.
 
 ```tsx
-import { define, Show, List } from "kiaao";
+import { define } from "kiaao";
 
 function App() {
   const [visible, setVisible] = define(true);
@@ -261,14 +266,12 @@ function App() {
     <div>
       <button onClick={() => setVisible((v) => !v)}>Toggle</button>
 
-      <Show when={visible} fallback={() => <p>Hidden</p>}>
-        {() => <p>Visible</p>}
-      </Show>
+      <section when={visible}>
+        <span>Visible</span>
+      </section>
 
-      <ul>
-        <List each={items} key={(item) => item}>
-          {(item) => <li>{item}</li>}
-        </List>
+      <ul each={() => items()} key={(item) => item}>
+        {(item) => <li>{item}</li>}
       </ul>
     </div>
   );
@@ -319,7 +322,7 @@ npm install kiaao astro
 ```
 
 ```json
-// tsconfig.json：
+// tsconfig.json
 {
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -382,22 +385,20 @@ Route parameters are passed to the matched component as props, and are also avai
 
 ## API Reference
 
-| API            | Purpose                                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| define         | Create reactive state, returns [getter, setter]                                                                   |
-| derive         | Create derived state with caching; does not notify downstream when value is unchanged                             |
-| effect         | Run side effects with automatic dependency tracking; returns a stop function                                      |
-| h              | Create real DOM nodes or invoke component functions                                                               |
-| Show           | Conditional rendering; `when` supports reactive functions                                                         |
-| List           | List rendering with key-based node management                                                                     |
-| Teleport       | Render content into a specified DOM container while preserving lifecycle; returns placeholder if target not found |
-| lazy           | Async component loading; throws on failure, can be caught by an error boundary                                    |
-| onMount        | Runs once after the component is mounted                                                                          |
-| onUnmount      | Runs before the component is destroyed                                                                            |
-| mount          | Mount a component tree into a container and trigger lifecycle                                                     |
-| unmount        | Unmount a component tree and clean up all effects                                                                 |
-| renderToString | Render a component to an HTML string (from kiaao/server)                                                          |
-| createRouter   | Client-side routing (from kiaao/router)                                                                           |
+| API            | Purpose                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| define         | Create reactive state, returns [getter, setter]                    |
+| derive         | Create derived state with caching; does not notify when unchanged  |
+| effect         | Run side effects with automatic dependency tracking; returns stop  |
+| h              | Create real DOM nodes, with built-in when/each directives          |
+| Teleport       | Render content into a specified container; fallback to placeholder |
+| lazy           | Async component loading; throws on failure, can be caught          |
+| onMount        | Runs once after the component is mounted                           |
+| onUnmount      | Runs before the component is destroyed                             |
+| mount          | Mount a component tree and trigger lifecycle                       |
+| unmount        | Unmount a component tree and clean up all effects                  |
+| renderToString | Render to an HTML string (from kiaao/server)                       |
+| createRouter   | Client-side routing (from kiaao/router)                            |
 
 ## License
 

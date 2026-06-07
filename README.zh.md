@@ -25,26 +25,27 @@ kiaao 只有 4 个核心 API，它们构成了整个框架的响应式系统：
 - **define** — 创建响应式状态，返回 getter/setter 对
 - **derive** — 创建派生状态，带缓存和脏标记，计算结果不变时不通知下游
 - **effect** — 执行副作用，自动追踪依赖，返回停止函数
-- **h** — 创建真实 DOM 节点，支持标准 JSX 转换
+- **h** — 创建真实 DOM 节点，并内置了 `when` 和 `each` 属性指令来处理条件渲染和列表渲染
 
 其他 API 都是基于这 4 个核心构建的组件或工具：
 
-- **Show / List / Teleport** — 控制流组件
+- **Teleport** — 传送门组件
 - **onMount / onUnmount** — 生命周期钩子
 - **mount / unmount** — 显式挂载与卸载
 - **lazy** — 异步组件加载
 
 ## 与其他框架的对比
 
-| 维度            | React    | Vue           | Solid      | kiaao          |
-| --------------- | -------- | ------------- | ---------- | -------------- |
-| 数据纯净度      | 纯净     | 不纯净(Proxy) | 纯净(两套) | 纯净(一套)     |
-| 组件运行次数    | 每次重跑 | 外壳一次      | 外壳一次   | 外壳一次       |
-| 虚拟 DOM        | 有       | 有            | 无         | 无             |
-| 编译器依赖      | 无       | 可选          | 强依赖     | 无             |
-| 响应式原理      | 无(全量) | Proxy         | 编译期展开 | 显式选择器     |
-| 更新粒度        | 组件级   | 组件/块级     | DOM节点级  | 选择器结果级   |
-| Context/Provide | 有       | 有            | 有         | 无(信号即通道) |
+| 维度            | React    | Vue           | Solid      | kiaao              |
+| --------------- | -------- | ------------- | ---------- | ------------------ |
+| 数据纯净度      | 纯净     | 不纯净(Proxy) | 纯净(两套) | 纯净(一套)         |
+| 组件运行次数    | 每次重跑 | 外壳一次      | 外壳一次   | 外壳一次           |
+| 虚拟 DOM        | 有       | 有            | 无         | 无                 |
+| 编译器依赖      | 无       | 可选          | 强依赖     | 无                 |
+| 响应式原理      | 无(全量) | Proxy         | 编译期展开 | 显式选择器         |
+| 控制流方式      | 三元/map | v-if/v-for    | Show/For   | when/each 属性指令 |
+| 更新粒度        | 组件级   | 组件/块级     | DOM节点级  | 选择器结果级       |
+| Context/Provide | 有       | 有            | 有         | 无(信号即通道)     |
 
 ## 安装与 JSX 配置
 
@@ -248,10 +249,14 @@ unmount(root); // 卸载并触发 onUnmount，清理所有 effect
 
 ### 条件渲染与列表渲染
 
-`Show` 和 `List` 是内置的控制流组件。`Show` 的 `when` 可以传入响应式函数或普通函数，分支切换时旧 DOM 会被清理，新 DOM 会触发挂载生命周期。
+kiaao 通过 `h()` 的原生属性指令 `when` 和 `each` 实现控制流，无需额外的组件。
+
+`when` 控制宿主元素内部子节点的显示。当条件为假时，子节点被移除并自动清理。`when` 也支持惰性求值函数，在条件成立时才执行渲染，避免不必要的初始化。
+
+`each` 在宿主元素内按数组生成子节点，每次数据变化时自动清理旧节点并重建。当前版本使用全量重建策略，建议配合 `key` 属性为未来优化预留。
 
 ```tsx
-import { define, Show, List } from "kiaao";
+import { define } from "kiaao";
 
 function App() {
   const [visible, setVisible] = define(true);
@@ -261,14 +266,12 @@ function App() {
     <div>
       <button onClick={() => setVisible((v) => !v)}>Toggle</button>
 
-      <Show when={visible} fallback={() => <p>Hidden</p>}>
-        {() => <p>Visible</p>}
-      </Show>
+      <section when={visible}>
+        <span>Visible</span>
+      </section>
 
-      <ul>
-        <List each={items} key={(item) => item}>
-          {(item) => <li>{item}</li>}
-        </List>
+      <ul each={() => items()} key={(item) => item}>
+        {(item) => <li>{item}</li>}
       </ul>
     </div>
   );
@@ -387,9 +390,7 @@ function App() {
 | define         | 创建响应式状态，返回 [getter, setter]                             |
 | derive         | 创建派生状态，带缓存和脏标记，值不变时不通知下游                  |
 | effect         | 执行副作用，自动追踪依赖，返回 stop 函数                          |
-| h              | 创建真实 DOM 节点或调用组件函数                                   |
-| Show           | 条件渲染，when 支持响应式函数                                     |
-| List           | 列表渲染，基于 key 管理节点                                       |
+| h              | 创建真实 DOM 节点，内置 when/each 指令                            |
 | Teleport       | 将内容渲染到指定 DOM 容器，保持生命周期；目标不存在时返回占位注释 |
 | lazy           | 异步组件加载；失败时抛出错误，可被错误边界捕获                    |
 | onMount        | 组件挂载后执行一次                                                |
