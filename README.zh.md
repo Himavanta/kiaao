@@ -281,6 +281,68 @@ const HeavyProfile = lazy(() => import("./HeavyProfile.ts"));
 h(HeavyProfile, { userId: 42 });
 ```
 
+## 服务端渲染
+
+通过 `renderToString` 在服务端将组件渲染为 HTML 字符串。
+
+```typescript
+import { renderToString } from "kiaao/server";
+
+const html = renderToString(MyComponent, { name: "kiaao" });
+// "<div>Hello, kiaao!</div>"
+```
+
+SSR 模式下的行为差异：
+
+- `effect` 被禁用，返回空 stop 函数
+- `derive` 执行一次计算，返回固定值（带 `IS_REACTIVE` 标记）
+- `onMount` / `onUnmount` 不触发（仅在 `mount()` 时执行）
+- `h()` 中的响应式绑定只取值一次
+
+## Astro 集成
+
+kiaao 提供了官方 Astro 集成，支持纯静态 SSR 和 `client:only` 组件。
+
+```bash
+npm install kiaao astro
+```
+
+在 tsconfig.json 中添加 JSX 配置：
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiaao"
+  }
+}
+```
+
+配置 Astro：
+
+```ts
+// astro.config.ts
+import kiaao from "kiaao/astro";
+
+export default defineConfig({
+  integrations: [kiaao()],
+});
+```
+
+```astro
+---
+import Counter from "../components/Counter.tsx";
+---
+
+<!-- 纯静态 HTML，零 JavaScript -->
+<Counter />
+
+<!-- 浏览器端挂载，完整交互 -->
+<Counter client:only />
+```
+
+纯静态组件在构建时渲染为 HTML，不输出 JavaScript。带 `client:only` 的组件在浏览器中完整挂载，拥有全部响应式能力。
+
 ## 路由
 
 kiaao 提供了一个轻量客户端路由，作为独立入口引入。完全基于核心原语（define、h、Show）构建。
@@ -376,21 +438,22 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## API 参考
 
-| API          | 用途                                     |
-| ------------ | ---------------------------------------- |
-| define       | 创建响应式状态，返回 [getter, setter]    |
-| derive       | 创建派生状态，带缓存和脏标记             |
-| effect       | 执行副作用，自动追踪依赖，返回 stop 函数 |
-| h            | 创建真实 DOM 节点或调用组件函数          |
-| Show         | 条件渲染，when 支持响应式函数            |
-| List         | 列表渲染，基于 key 的节点管理            |
-| Teleport     | 将内容渲染到指定 DOM 容器                |
-| lazy         | 异步组件加载，配合动态导入使用           |
-| onMount      | 组件挂载后执行一次                       |
-| onUnmount    | 组件销毁前执行                           |
-| mount        | 将组件树挂载到容器并触发生命周期         |
-| unmount      | 卸载组件树并清理所有 effect              |
-| createRouter | 客户端路由（来自 kiaao/router）          |
+| API            | 用途                                              |
+| -------------- | ------------------------------------------------- |
+| define         | 创建响应式状态，返回 [getter, setter]             |
+| derive         | 创建派生状态，带缓存和脏标记                      |
+| effect         | 执行副作用，自动追踪依赖，返回 stop 函数          |
+| h              | 创建真实 DOM 节点或调用组件函数                   |
+| Show           | 条件渲染，when 支持响应式函数                     |
+| List           | 列表渲染，基于 key 的节点管理                     |
+| Teleport       | 将内容渲染到指定 DOM 容器                         |
+| lazy           | 异步组件加载，配合动态导入使用                    |
+| onMount        | 组件挂载后执行一次                                |
+| onUnmount      | 组件销毁前执行                                    |
+| mount          | 将组件树挂载到容器并触发生命周期                  |
+| unmount        | 卸载组件树并清理所有 effect                       |
+| renderToString | 服务端渲染组件为 HTML 字符串（来自 kiaao/server） |
+| createRouter   | 客户端路由（来自 kiaao/router）                   |
 
 ## 设计原则
 

@@ -287,6 +287,68 @@ const Profile = lazy(() => import("./Profile.ts"), {
 
 If no `onError` is provided, the error is stored internally and thrown during rendering, allowing it to be caught by an error boundary.
 
+## Server-side rendering
+
+kiaao can render components to HTML strings on the server via `renderToString`.
+
+```typescript
+import { renderToString } from "kiaao/server";
+
+const html = renderToString(MyComponent, { name: "kiaao" });
+// "<div>Hello, kiaao!</div>"
+```
+
+During SSR:
+
+- `effect` is disabled (returns a noop stop function)
+- `derive` computes once and returns a fixed value with `IS_REACTIVE` marker
+- `onMount` / `onUnmount` do not fire (they only run inside `mount()`)
+- Reactive bindings in `h()` are evaluated once for their current value
+
+## Astro integration
+
+kiaao provides an official Astro integration for static SSR and `client:only` components.
+
+```bash
+npm install kiaao astro
+```
+
+Add JSX configuration to your tsconfig.json:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiaao"
+  }
+}
+```
+
+Configure Astro:
+
+```ts
+// astro.config.mjs
+import kiaao from "kiaao/astro";
+
+export default defineConfig({
+  integrations: [kiaao()],
+});
+```
+
+```astro
+---
+import Counter from "../components/Counter.tsx";
+---
+
+<!-- Static HTML, zero JavaScript -->
+<Counter />
+
+<!-- Fully interactive, mounted in the browser -->
+<Counter client:only />
+```
+
+Static components render to HTML during build with no client JavaScript. Components with `client:only` are mounted entirely in the browser with full reactive behavior.
+
 ## Routing
 
 kiaao provides a simple client-side router as a separate entry point. It is built entirely on the core primitives (define, h, Show) with no extra concepts.
@@ -382,21 +444,22 @@ mount((<App />) as HTMLElement, document.querySelector("#app")!);
 
 ## API Reference
 
-| API          | Description                                            |
-| ------------ | ------------------------------------------------------ |
-| define       | create reactive state, returns [getter, setter]        |
-| derive       | create derived state with caching and dirty flag       |
-| effect       | run side effects with automatic dependency tracking    |
-| h            | create real DOM nodes or invoke component functions    |
-| Show         | conditional rendering, when accepts reactive functions |
-| List         | list rendering with key-based node management          |
-| Teleport     | render content to a different DOM container            |
-| lazy         | async component loading with dynamic import            |
-| onMount      | run once after the component is mounted                |
-| onUnmount    | run before the component is destroyed                  |
-| mount        | attach the component tree to the DOM and trigger hooks |
-| unmount      | detach the component tree and clean up all effects     |
-| createRouter | client-side router (from kiaao/router)                 |
+| API            | Description                                            |
+| -------------- | ------------------------------------------------------ |
+| define         | create reactive state, returns [getter, setter]        |
+| derive         | create derived state with caching and dirty flag       |
+| effect         | run side effects with automatic dependency tracking    |
+| h              | create real DOM nodes or invoke component functions    |
+| Show           | conditional rendering, when accepts reactive functions |
+| List           | list rendering with key-based node management          |
+| Teleport       | render content to a different DOM container            |
+| lazy           | async component loading with dynamic import            |
+| onMount        | run once after the component is mounted                |
+| onUnmount      | run before the component is destroyed                  |
+| mount          | attach the component tree to the DOM and trigger hooks |
+| unmount        | detach the component tree and clean up all effects     |
+| renderToString | render a component to HTML string (from kiaao/server)  |
+| createRouter   | client-side router (from kiaao/router)                 |
 
 ## Design Principles
 
