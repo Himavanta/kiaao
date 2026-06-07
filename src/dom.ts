@@ -43,6 +43,8 @@ function setProp(el: HTMLElement, key: string, value: any): void {
       if (typeof value === "string") {
         el.style.cssText = value;
       } else if (typeof value === "object" && value !== null) {
+        // 先清空所有内联样式，再用新对象赋值（替换而非合并）
+        el.removeAttribute("style");
         Object.assign(el.style, value);
       }
       break;
@@ -58,6 +60,18 @@ function setProp(el: HTMLElement, key: string, value: any): void {
       }
       break;
   }
+}
+
+// ── Helpers ─────────────────────────────────────────────
+
+/** 在节点上注册一个 effect stop，节点移除时自动清理 */
+function addLocalEffect(node: Node, stop: () => void): void {
+  let stops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+  if (!stops) {
+    stops = new Set();
+    (node as any)[LOCAL_EFFECTS] = stops;
+  }
+  stops.add(stop);
 }
 
 // ── Child Processing ────────────────────────────────────
@@ -78,12 +92,7 @@ function processChildren(children: any[]): Node[] {
       const stop = effect(() => {
         textNode.textContent = String(child());
       });
-      let stops = (textNode as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
-      if (!stops) {
-        stops = new Set();
-        (textNode as any)[LOCAL_EFFECTS] = stops;
-      }
-      stops.add(stop);
+      addLocalEffect(textNode, stop);
       result.push(textNode);
       continue;
     }
@@ -149,12 +158,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
         const stop = effect(() => {
           setProp(el, key, value());
         });
-        let stops = (el as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
-        if (!stops) {
-          stops = new Set();
-          (el as any)[LOCAL_EFFECTS] = stops;
-        }
-        stops.add(stop);
+        addLocalEffect(el, stop);
       } else {
         // 静态属性：直接通过 setProp 设置
         setProp(el, key, value);
