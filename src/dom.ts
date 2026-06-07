@@ -21,14 +21,15 @@ import { hSSR } from "./ssr-helpers.ts";
 
 // ── Prop Processing ─────────────────────────────────────
 
-const EVENT_RE = /^on([A-Z])/;
+// 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
+// 排除 only、onto 等以 on 开头的非事件属性
+const EVENT_RE = /^on[A-Z]/;
 
 function setProp(el: HTMLElement, key: string, value: any): void {
   if (value == null) return;
 
-  const eventMatch = key.match(EVENT_RE);
-  if (eventMatch) {
-    const eventName = eventMatch[1]!.toLowerCase() + key.slice(2 + eventMatch[1]!.length);
+  if (EVENT_RE.test(key)) {
+    const eventName = key.slice(2).toLowerCase();
     el.addEventListener(eventName, value);
     return;
   }
@@ -140,11 +141,11 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 
       const value = (props as any)[key];
 
-      if (key.startsWith("on")) {
-        // Events: static binding once
+      if (EVENT_RE.test(key)) {
+        // 事件属性：直接静态绑定，不走响应式
         setProp(el, key, value);
       } else if ((value as any)?.[IS_REACTIVE]) {
-        // Reactive attribute binding: create effect, register cleanup
+        // 响应式属性：创建 effect，运行 setProp 更新 DOM
         const stop = effect(() => {
           setProp(el, key, value());
         });
@@ -155,7 +156,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
         }
         stops.add(stop);
       } else {
-        // Static attribute
+        // 静态属性：直接通过 setProp 设置
         setProp(el, key, value);
       }
     }
