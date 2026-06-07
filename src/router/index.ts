@@ -104,17 +104,21 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
     });
   }
 
-  function Link(props: { to: string; children?: any }): Node {
+  function Link(props: { to: string; children?: any; [key: string]: any }): Node {
+    const { to, children, onClick: userOnClick, ...rest } = props;
+
     return h(
       "a",
       {
-        href: props.to,
+        ...rest,
+        href: to,
         onClick: (e: Event) => {
           e.preventDefault();
-          navigate(props.to);
+          userOnClick?.(e);
+          navigate(to);
         },
       },
-      props.children,
+      children,
     );
   }
 
