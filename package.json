@@ -1,6 +1,6 @@
 {
   "name": "kiaao",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A minimal reactive frontend framework. No virtual DOM, no compiler, no Proxy, direct DOM updates.",
   "keywords": [
     "framework",
