@@ -77,11 +77,7 @@ describe("renderToString — reactive bindings", () => {
   test("evaluates getter selector once", () => {
     const [count] = define(42);
     function Comp() {
-      return h(
-        "p",
-        null,
-        count((v) => v),
-      );
+      return h("p", null, count);
     }
     const html = renderToString(Comp);
     expect(html).toBe("<p>42</p>");

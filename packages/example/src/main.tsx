@@ -32,7 +32,7 @@ function Counter() {
 
   return (
     <button id="counter" type="button" class="counter" onClick={() => setCount((prev) => prev + 1)}>
-      Count is {count((v) => v)}
+      Count is {count}
     </button>
   );
 }

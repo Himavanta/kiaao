@@ -427,7 +427,7 @@ function App() {
 
   return (
     <div>
-      <p>Count: {count((v) => v)}</p>
+      <p>Count: {count}</p>
       <button onClick={() => setCount((p) => p + 1)}>+1</button>
     </div>
   );

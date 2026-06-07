@@ -443,11 +443,7 @@ function createCounter() {
     return h(
       "div",
       null,
-      h(
-        "span",
-        null,
-        count((v) => v),
-      ),
+      h("span", null, count),
       h("button", { onClick: () => setCount((c) => c + 1) }, "+"),
     );
   }

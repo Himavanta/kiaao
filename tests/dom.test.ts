@@ -68,21 +68,13 @@ describe("h — DOM mode", () => {
 describe("h — reactive bindings", () => {
   test("creates dynamic text node for getter selector", () => {
     const [count] = define(42);
-    const el = h(
-      "p",
-      null,
-      count((v) => v),
-    );
+    const el = h("p", null, count);
     expect(el.textContent).toBe("42");
   });
 
   test("updates text content when signal changes", () => {
     const [count, setCount] = define(0);
-    const el = h(
-      "p",
-      null,
-      count((v) => v),
-    );
+    const el = h("p", null, count);
     expect(el.textContent).toBe("0");
 
     setCount(100);
@@ -187,11 +179,7 @@ describe("lifecycle", () => {
         count();
         effectCalls++;
       });
-      return h(
-        "p",
-        null,
-        count((v) => v),
-      );
+      return h("p", null, count);
     }
 
     const root = h(Counter, null) as HTMLElement;
@@ -211,11 +199,7 @@ describe("lifecycle", () => {
     const [count, setCount] = define(0);
 
     function Counter() {
-      return h(
-        "p",
-        null,
-        count((v) => v),
-      );
+      return h("p", null, count);
     }
 
     const root = h(Counter, null) as HTMLElement;
