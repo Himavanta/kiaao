@@ -108,6 +108,30 @@ function processChildren(children: any[]): Node[] {
   return result;
 }
 
+// ── Shared Props Handler ───────────────────────────────
+
+/** 在元素上设置一组属性（事件/响应式/静态），effect 注册到 LOCAL_EFFECTS */
+function setProps(el: HTMLElement, props: Record<string, any> | null | undefined): void {
+  if (!props || typeof props !== "object") return;
+
+  for (const key of Object.keys(props)) {
+    if (key === "children") continue;
+
+    const value = props[key];
+
+    if (EVENT_RE.test(key)) {
+      setProp(el, key, value);
+    } else if ((value as any)?.[IS_REACTIVE]) {
+      const stop = effect(() => {
+        setProp(el, key, value());
+      });
+      addLocalEffect(el, stop);
+    } else {
+      setProp(el, key, value);
+    }
+  }
+}
+
 // ── Control-flow directive helpers ─────────────────────
 
 /** 如果宿主元素已在文档中，触发新子节点的 mount 回调 */
@@ -133,23 +157,8 @@ function createWhenElement(
   const el = document.createElement(tag);
   const instance = createComponentInstance();
 
-  // ── 设置常规/事件/响应式属性 ──
-  if (props && typeof props === "object") {
-    for (const key of Object.keys(props)) {
-      const value = props[key];
-
-      if (EVENT_RE.test(key)) {
-        setProp(el, key, value);
-      } else if ((value as any)?.[IS_REACTIVE]) {
-        const stop = effect(() => {
-          setProp(el, key, value());
-        });
-        addLocalEffect(el, stop);
-      } else {
-        setProp(el, key, value);
-      }
-    }
-  }
+  // ── 设置属性 ──
+  setProps(el, props);
 
   // 判断是否为惰性求值模式（子节点为单一函数，且无 each）
   const isLazy = eachFn === undefined && children.length === 1 && typeof children[0] === "function";
@@ -220,22 +229,7 @@ function createEachElement(
   const instance = createComponentInstance();
 
   // ── 设置属性 ──
-  if (props && typeof props === "object") {
-    for (const key of Object.keys(props)) {
-      const value = props[key];
-
-      if (EVENT_RE.test(key)) {
-        setProp(el, key, value);
-      } else if ((value as any)?.[IS_REACTIVE]) {
-        const stop = effect(() => {
-          setProp(el, key, value());
-        });
-        addLocalEffect(el, stop);
-      } else {
-        setProp(el, key, value);
-      }
-    }
-  }
+  setProps(el, props);
 
   const childFn = children[0]; // (item, index) => Node
 
@@ -313,27 +307,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   // ── DOM 模式：普通元素 ──
   const el = document.createElement(tag);
 
-  if (props && typeof props === "object" && !(props as any)[IS_REACTIVE]) {
-    for (const key of Object.keys(props)) {
-      if (key === "children") continue;
-
-      const value = (props as any)[key];
-
-      if (EVENT_RE.test(key)) {
-        // 事件属性：直接静态绑定，不走响应式
-        setProp(el, key, value);
-      } else if ((value as any)?.[IS_REACTIVE]) {
-        // 响应式属性：创建 effect，运行 setProp 更新 DOM
-        const stop = effect(() => {
-          setProp(el, key, value());
-        });
-        addLocalEffect(el, stop);
-      } else {
-        // 静态属性：直接通过 setProp 设置
-        setProp(el, key, value);
-      }
-    }
-  }
+  setProps(el, props && typeof props === "object" && !(props as any)[IS_REACTIVE] ? props : null);
 
   const childNodes = processChildren(children);
 

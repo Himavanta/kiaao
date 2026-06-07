@@ -49,7 +49,7 @@ export function lazy<T extends (...args: any[]) => any>(
       setComponent(() => (mod as any).default || mod);
     })
     .catch((err) => {
-      setError(() => err);
+      setError(err);
       options?.onError?.(err);
     });
 
