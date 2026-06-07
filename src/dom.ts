@@ -257,7 +257,6 @@ function createEachElement(
 
     // ── 有 key：基于 key 的增量更新 ──
     const newKeys = new Set<any>();
-    let prevNode: Node = anchor;
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -277,12 +276,11 @@ function createEachElement(
       const newNode = childFn(item, i);
       if (!(newNode instanceof Node)) continue;
 
-      // 插入到正确位置
-      el.insertBefore(newNode, prevNode.nextSibling);
+      // anchor 是固定参考点，始终在它之前插入
+      el.insertBefore(newNode, anchor);
       if (el.isConnected) triggerMount(newNode);
 
       nodeMap.set(key, newNode);
-      prevNode = newNode;
     }
 
     // 清理不再使用的旧节点

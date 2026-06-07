@@ -91,26 +91,22 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
   const fallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
 
   function RouterView(): Node {
+    // 单个 when 元素，惰性函数内部分支判断
+    // 惰性函数内部调用 currentPath() 注册为 when effect 的依赖，
+    // 路由变化时 effect 重新执行，自动切换渲染内容
     return h(
       "div",
-      { style: { display: "contents" } },
-      h(
-        "div",
-        {
-          when: () => matchRoutes(routes, currentPath()) !== null,
-        },
-        () => {
-          const match = matchRoutes(routes, currentPath())!;
+      {
+        when: () => true,
+        style: { display: "contents" },
+      },
+      () => {
+        const match = matchRoutes(routes, currentPath());
+        if (match) {
           return h(match.component, match.params);
-        },
-      ),
-      h(
-        "div",
-        {
-          when: () => matchRoutes(routes, currentPath()) === null,
-        },
-        fallback,
-      ),
+        }
+        return fallback();
+      },
     );
   }
 
