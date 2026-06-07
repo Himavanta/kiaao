@@ -7,7 +7,7 @@ export const { RouterView, Link, navigate, currentPath, currentParams } = create
     component: lazy(() => import("./components/dashbord")),
   },
   {
-    path: "/about",
+    path: "/expore",
     component: lazy(() => import("./components/dashbord/nav")),
   },
 ]);

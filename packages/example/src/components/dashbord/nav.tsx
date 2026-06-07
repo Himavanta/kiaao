@@ -11,15 +11,15 @@ const menus = [
   },
   {
     title: "知识库",
-    path: "dataset",
+    path: "/dataset",
   },
   {
     title: "工具",
-    path: "tools",
+    path: "/tools",
   },
   {
     title: "插件",
-    path: "plugins",
+    path: "/plugins",
   },
 ];
 
