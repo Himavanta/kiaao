@@ -164,7 +164,7 @@ stop();
 
 - **`when` + `each` 共存**：`when` 优先。当 `when` 为 falsy 时，不执行 `each`，不渲染任何子节点；当 `when` 为 truthy 时，再根据 `each` 生成子节点。语义等价于 `when` 包裹 `each`。
 
-- **`key`**：配合 `each` 使用，用于列表项标识。当前版本保留此属性，为未来节点复用优化预留。
+- **`key`**：配合 `each` 使用的函数 `(item: T, index: number) => any`，必须为每个列表项返回唯一且稳定的值。提供 `key` 后，列表更新时基于 key 进行增量更新：始终调用渲染函数生成新节点，旧节点在 key 相同时先销毁后重建（确保数据正确），不再使用的 key 对应的旧节点被自动清理。若未提供 `key`，则回退到全量重建模式。
 
 **类型约束**：
 
@@ -632,7 +632,6 @@ function renderToString(
 - DevTools：依赖图谱可视化
 - Transition / TransitionGroup 动画支持
 - 批量更新调度优化
-- `each` 中基于 key 的节点复用优化
 
 ---
 

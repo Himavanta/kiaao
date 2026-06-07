@@ -253,7 +253,7 @@ kiaao handles control flow via native `when` and `each` attribute directives on 
 
 `when` controls the mounting and unmounting of its host element's child nodes. When the condition is falsy, child nodes are removed and properly disposed. It also supports lazy evaluation functions, which execute only when the condition becomes truthy, avoiding unnecessary initialization.
 
-`each` generates child nodes inside its host element from an array. Old nodes are cleaned up and new ones are created on every change. It's recommended to provide a `key` for future optimizations.
+`each` generates child nodes inside its host element from an array. When a `key` function is provided, updates are incremental — new nodes are created for every item, stale ones are cleaned up, and each node is inserted at the correct position. Without `key`, falls back to full rebuild.
 
 ```tsx
 import { define } from "kiaao";

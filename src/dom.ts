@@ -216,7 +216,7 @@ function createEachElement(
   props: any,
   children: any[],
   eachFn: any,
-  _keyFn?: any,
+  keyFn?: any,
 ): HTMLElement {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
@@ -227,25 +227,72 @@ function createEachElement(
   // ── 设置属性 ──
   setProps(el, props);
 
+  // 锚点：作为列表起始位置的固定参考点
+  const anchor = document.createComment("each");
+  el.appendChild(anchor);
+
+  const nodeMap = new Map<any, Node>(); // key → 旧 DOM 节点
   const childFn = children[0]; // (item, index) => Node
 
   const stop = effect(() => {
     const items = typeof eachFn === "function" ? eachFn() : eachFn;
 
-    // 清空旧子节点
-    while (el.firstChild) {
-      disposeNode(el.firstChild);
-      el.removeChild(el.firstChild);
+    // ── 无 key：全量重建（兼容行为） ──
+    if (!keyFn) {
+      while (el.firstChild !== anchor) {
+        disposeNode(el.firstChild!);
+        el.removeChild(el.firstChild!);
+      }
+      if (Array.isArray(items) && typeof childFn === "function") {
+        for (let i = 0; i < items.length; i++) {
+          const node = childFn(items[i], i);
+          if (node instanceof Node) {
+            el.insertBefore(node, anchor);
+            if (el.isConnected) triggerMount(node);
+          }
+        }
+      }
+      return;
     }
 
-    // 渲染新列表项
-    if (Array.isArray(items) && typeof childFn === "function") {
-      for (let i = 0; i < items.length; i++) {
-        const result = childFn(items[i], i);
-        if (result instanceof Node) {
-          el.appendChild(result);
-          triggerMountIfConnected(el, result);
+    // ── 有 key：基于 key 的增量更新 ──
+    const newKeys = new Set<any>();
+    let prevNode: Node = anchor;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const key = keyFn(item, i);
+      newKeys.add(key);
+
+      // 同一 key 的旧节点不再需要，先清理
+      const oldNode = nodeMap.get(key);
+      if (oldNode) {
+        disposeNode(oldNode);
+        if (oldNode.parentNode) {
+          oldNode.parentNode.removeChild(oldNode);
         }
+      }
+
+      // 始终调用 childFn 生成新节点（方向 B：保证数据与 item 同步）
+      const newNode = childFn(item, i);
+      if (!(newNode instanceof Node)) continue;
+
+      // 插入到正确位置
+      el.insertBefore(newNode, prevNode.nextSibling);
+      if (el.isConnected) triggerMount(newNode);
+
+      nodeMap.set(key, newNode);
+      prevNode = newNode;
+    }
+
+    // 清理不再使用的旧节点
+    for (const [key, oldNode] of nodeMap) {
+      if (!newKeys.has(key)) {
+        disposeNode(oldNode);
+        if (oldNode.parentNode) {
+          oldNode.parentNode.removeChild(oldNode);
+        }
+        nodeMap.delete(key);
       }
     }
   });

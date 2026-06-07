@@ -618,4 +618,42 @@ describe("h — each directive", () => {
     expect(el.children[0].textContent).toBe("a");
     expect(el.children[1].textContent).toBe("b");
   });
+
+  test("key ensures correct DOM order when items are reordered", () => {
+    const [items, setItems] = define([
+      { id: 1, text: "first" },
+      { id: 2, text: "second" },
+    ]);
+
+    const el = h(
+      "ul",
+      {
+        each: () => items(),
+        key: (item: { id: number; text: string }) => item.id,
+      },
+      (item: { id: number; text: string }) => h("li", null, item.text),
+    );
+
+    expect(el.children[0].textContent).toBe("first");
+    expect(el.children[1].textContent).toBe("second");
+
+    // Reverse order
+    setItems([
+      { id: 2, text: "second" },
+      { id: 1, text: "first" },
+    ]);
+    expect(el.children[0].textContent).toBe("second");
+    expect(el.children[1].textContent).toBe("first");
+  });
+
+  test("no key falls back to full rebuild", () => {
+    const [items, setItems] = define(["a", "b"]);
+
+    const el = h("ul", { each: () => items() }, (item: string) => h("li", null, item));
+    expect(el.children.length).toBe(2);
+
+    setItems(["c"]);
+    expect(el.children.length).toBe(1);
+    expect(el.children[0].textContent).toBe("c");
+  });
 });
