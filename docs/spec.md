@@ -1,4 +1,4 @@
-# kiaao 框架规范 v1.9
+# kiaao 框架规范 v2.0
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -48,6 +48,8 @@ value((v) => v.age >= 18); // 返回派生函数，就地计算逻辑
 
 **Getter 引用稳定性**：Getter 函数引用在组件生命周期内保持稳定。子组件在初始化时通过 props 或闭包接收父组件的 getter，并通过 `getter(selector)` 创建针对该信号的局部订阅。该订阅直接向信号注册，与中间组件无关。更新时中间组件不重跑。
 
+**内部标记**：`define` 返回的原始 getter 函数本身也挂载 `IS_REACTIVE` 标记。当它作为子节点或属性值传入 `h()` 时，框架识别该标记并调用 `getter()` 获取当前值、建立依赖。这使得 `{count}` 和 `{count(v => v)}` 在 JSX 中行为一致——前者订阅整个值的变化，后者通过选择器订阅局部变化。此外，`derive` 返回的函数同样带有该标记。
+
 #### Setter：`setValue(updater)`
 
 - **传新值**：直接替换内部状态。
@@ -60,8 +62,6 @@ setUser((prev) => ({ ...prev, age: prev.age + 1 }));
 ```
 
 **数据纯净度**：内部存储的是纯普通对象/基本类型。任何时候拿到的都是普通值，无 Proxy，无 getter/setter 劫持。更新采用不可变替换，但框架不依赖引用对比触发更新，而是依赖选择器函数的结果对比。
-
-**内部标记**：`define` 返回的原始 getter 函数本身也挂载 `IS_REACTIVE` 标记。当它作为子节点或属性值传入 `h()` 时，框架识别该标记并调用 `getter()` 获取当前值、建立依赖。这使得 `{count}` 和 `{count(v => v)}` 在 JSX 中行为一致——前者订阅整个值的变化，后者通过选择器订阅局部变化。此外，`derive` 返回的函数同样带有该标记。
 
 ---
 
@@ -122,23 +122,25 @@ stop();
 
 **属性处理规则**：
 
-- **事件属性**（`onXxx`）：识别并转换为 `addEventListener` 绑定。事件名取 `on` 之后的部分全小写（如 `onClick` → `click`）。值应为函数，在组件初始化时绑定一次。事件属性不参与响应式绑定。
+- **事件属性**（`onXxx`，匹配 `/^on[A-Z]/`）：识别并转换为 `addEventListener` 绑定。事件名取 `on` 之后的部分**全小写**（如 `onClick` → `click`，`onMouseOver` → `mouseover`）。值应为函数，在组件初始化时绑定一次。**事件属性不参与响应式绑定**，即使值为响应式函数也直接读取其当前值作为回调注册一次。
 
 - **响应式属性绑定**：除 `children` 和事件属性外，若属性值为响应式函数（携带 `IS_REACTIVE` 标记），`h()` 会自动创建 `effect` 在值变化时通过 `setProp` 更新该属性。该 effect 挂载到元素节点的 `LOCAL_EFFECTS` 集合中，随元素移除而自动清理。
 
 - **静态属性**：除 `children` 和事件属性外，若属性值为非响应式普通值，则在初始化时通过 `setProp` 设置一次。
 
-- **`class` / `className`**：只接受字符串（静态或响应式函数返回的字符串）。直接赋值给 `el.className`。不支持对象或数组形式的自动转换。
+- **`class` / `className`**：只接受字符串（静态或响应式函数返回的字符串）。直接赋值给 `el.className`。不支持对象或数组形式的自动转换。动态 class 应通过选择器函数返回字符串实现。
 
 - **`style`**：接受字符串或对象（静态或响应式函数返回的字符串/对象）。
   - 字符串：直接设置 `el.style.cssText`。
-  - 对象：使用 `Object.assign(el.style, value)` 合并样式。**注意**：响应式更新时采用合并而非替换，若新对象中缺少某个已有属性，该样式不会被清除。这是 `Object.assign` 的固有行为。
+  - 对象：**先清空内联样式**，再 `Object.assign(el.style, value)`。这意味着每次对象形式的更新都是**完全替换**，新对象中缺失的属性会被清除。若需要混合静态/动态值，应使用 `derive(() => ({ color: 'red', height: count() }))` 返回完整对象。
 
 - **布尔属性**：值为 `true` 时设置空字符串 attribute，值为 `false` 时移除 attribute。
 
 - **其他属性**：直接调用 `setAttribute(key, String(value))`。
 
 - **`children`**：保留用于组件模式的 `props.children`，不设置为 DOM 属性。在 DOM 模式中作为子节点单独处理。
+
+**SSR 属性处理**：在 SSR 模式下，`hSSR` 对每个属性值先判断是否为响应式函数（`IS_REACTIVE` 标记）。若是，则调用 `value()` 获取当前静态值，再用该值进行 HTML 拼接。事件属性在 SSR 中直接跳过。
 
 #### 组件模式（`tag` 为函数）
 
@@ -221,7 +223,7 @@ h(Show, { when: visible, children: () => h("div", null, "内容") });
 `when` 为响应式函数时直接传入，`Show` 内部通过 `when()` 获取当前值并自动依赖追踪。若需要逻辑转换，可使用普通函数包裹：
 
 ```javascript
-h(Show, { when: () => count() > 0, children: ... })
+h(Show, { when: () => count() > 0, children: ... });
 ```
 
 函数签名：
@@ -383,7 +385,7 @@ function UserProfile() {
 ```
 
 - 没有返回渲染函数，直接返回由 `h()` 创建的真实 DOM 节点。
-- 状态变化时，组件函数不重新执行，只有被响应式函数绑定的具体 DOM 文本节点原地更新。
+- 状态变化时，组件函数不重新执行，只有被响应式函数绑定的具体 DOM 文本节点或属性原地更新。
 
 ### 多实例隔离（推荐模式）
 
@@ -487,7 +489,7 @@ function createCounter() {
 2. 执行组件外壳一次。
 3. 遇到 `define()` 创建信号。
 4. 遇到 `user(v => v.name)` 时返回一个携带 `IS_REACTIVE` 的派生函数，作为参数传给 `h()`。
-5. `h()` 检测到子节点是响应式函数，创建文本节点占位，启动 `effect` 绑定，并将 effect 停止函数挂载到文本节点上。
+5. `h()` 检测到子节点或属性值是响应式函数，创建文本节点占位或属性 effect 绑定（完成首次求值和依赖收集），并将 effect 停止函数挂载到对应 DOM 节点上。
 6. 返回真实 DOM 树，组件实例出栈。
 7. 用户调用 `mount(root, container)` 将 DOM 挂载到页面，并触发 `onMount` 回调。
 
@@ -498,12 +500,12 @@ function createCounter() {
 3. 遍历该信号的所有选择器依赖。
 4. 对每个依赖：用旧值执行选择器 → 用新值执行选择器 → 使用 `!==` 浅对比。
 5. 结果不同 → 触发对应的 `effect` 重新执行（DOM 更新或 `effect` 回调）。
-6. DOM 更新是单点文本节点替换，无虚拟 DOM Diff，无组件重跑。
+6. DOM 更新是单点文本节点替换或属性更新，无虚拟 DOM Diff，无组件重跑。
 
 ### 无虚拟 DOM
 
 - 不创建 VNode 树，不进行树形 Diff 算法。
-- DOM 更新是直接的 `textNode.textContent = newValue`。
+- DOM 更新是直接的 `textNode.textContent = newValue` 或 `setProp(el, key, newValue)`。
 
 ---
 
@@ -536,7 +538,7 @@ function createCounter() {
 
 ### 节点级 Effect 清理
 
-由 `h()` 为响应式子节点创建的 `effect`，其 `stop` 函数存储在对应文本节点的 `LOCAL_EFFECTS` 集合中。当 `disposeNode` 递归清理节点时，会执行该节点上的所有本地 effect 停止函数，确保动态绑定随 DOM 移除而释放。
+由 `h()` 为响应式子节点创建的 `effect` 以及为响应式属性创建的 `effect`，其 `stop` 函数存储在对应 DOM 节点的 `LOCAL_EFFECTS` 集合中。当 `disposeNode` 递归清理节点时，会执行该节点上的所有本地 effect 停止函数，确保动态绑定随 DOM 移除而释放。
 
 ### 组件级 Effect 清理
 
@@ -563,7 +565,7 @@ function createCounter() {
 | Symbol            | 挂载位置                                             | 用途                                |
 | ----------------- | ---------------------------------------------------- | ----------------------------------- |
 | `IS_REACTIVE`     | Getter 函数 / getter 选择器返回的函数 / DeriveSignal | 标识响应式函数，供 `h()` 识别       |
-| `LOCAL_EFFECTS`   | 动态文本节点                                         | 存储该节点上的 effect stop 函数集合 |
+| `LOCAL_EFFECTS`   | DOM 节点（文本节点/元素节点）                        | 存储该节点上的 effect stop 函数集合 |
 | `DISPOSE_KEY`     | DOM 节点（组件根节点）                               | 存储组件销毁回调                    |
 | `INSTANCE_KEY`    | DOM 节点                                             | 存储组件实例引用                    |
 | `INITIALIZED_KEY` | 组件实例                                             | 标记已初始化                        |
@@ -594,19 +596,19 @@ kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号
 
 核心 API：
 
-- `createRouter(routes)` 返回 `{ RouterView, navigate, currentPath }`。
+- `createRouter(routes)` 返回 `{ RouterView, navigate, currentPath, currentParams }`。
 - `RouterView` 组件根据当前路径匹配路由表并渲染对应组件。
 - `navigate(path)` 进行编程式导航。
-- 支持动态路径参数、通配符、嵌套路由等（V2 扩展）。
+- `currentParams` 为派生信号，返回当前路由的动态参数对象。
 
 示例：
 
 ```javascript
 import { createRouter } from "kiaao-router";
 
-const { RouterView, navigate } = createRouter([
+const { RouterView, navigate, currentParams } = createRouter([
   { path: "/", component: Home },
-  { path: "/about", component: About },
+  { path: "/users/:id", component: UserProfile },
 ]);
 
 function App() {
@@ -663,20 +665,20 @@ function lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default
 
 ## 十三、API 总览
 
-| API          | 分类     | 用途                                                             |
-| ------------ | -------- | ---------------------------------------------------------------- |
-| `define`     | 核心     | 创建响应式状态（唯一原语）                                       |
-| `derive`     | 核心     | 派生状态（缓存 + 拦截），上游变化时重新计算                      |
-| `effect`     | 核心     | 副作用执行（自动收集依赖），返回停止函数                         |
-| `h`          | 渲染     | 创建真实 DOM 或调用函数组件，自动扁平化 children，节点级动态绑定 |
-| `<Show>`     | 控制流   | 条件渲染（when 支持响应式函数）                                  |
-| `<List>`     | 控制流   | 列表渲染，全量重建并清理旧节点                                   |
-| `<Teleport>` | 控制流   | 将内容渲染到指定 DOM 容器，保持生命周期                          |
-| `lazy`       | 异步     | 包装动态导入的组件，自动处理加载状态                             |
-| `onMount`    | 生命周期 | 挂载后回调（需配合 mount 触发）                                  |
-| `onUnmount`  | 生命周期 | 销毁前清理（需配合 unmount 触发）                                |
-| `mount`      | 挂载     | 将组件树挂载到容器并触发 onMount                                 |
-| `unmount`    | 挂载     | 卸载组件树，递归清理所有资源                                     |
+| API          | 分类     | 用途                                                      |
+| ------------ | -------- | --------------------------------------------------------- |
+| `define`     | 核心     | 创建响应式状态（唯一原语）                                |
+| `derive`     | 核心     | 派生状态（缓存 + 拦截），上游变化时重新计算               |
+| `effect`     | 核心     | 副作用执行（自动收集依赖），返回停止函数                  |
+| `h`          | 渲染     | 创建真实 DOM 或调用函数组件，支持属性和子节点的响应式绑定 |
+| `<Show>`     | 控制流   | 条件渲染（when 支持响应式函数）                           |
+| `<List>`     | 控制流   | 列表渲染，全量重建并清理旧节点                            |
+| `<Teleport>` | 控制流   | 将内容渲染到指定 DOM 容器，保持生命周期                   |
+| `lazy`       | 异步     | 包装动态导入的组件，自动处理加载状态                      |
+| `onMount`    | 生命周期 | 挂载后回调（需配合 mount 触发）                           |
+| `onUnmount`  | 生命周期 | 销毁前清理（需配合 unmount 触发）                         |
+| `mount`      | 挂载     | 将组件树挂载到容器并触发 onMount                          |
+| `unmount`    | 挂载     | 卸载组件树，递归清理所有资源                              |
 
 **核心概念仍为 4 个（define、derive、effect、h），其余为基于核心的扩展。**
 
@@ -707,7 +709,7 @@ function lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default
 | `define`                                          | 40-50             |
 | `derive`                                          | 25                |
 | `effect`                                          | 20                |
-| `h` (含组件模式与 children 扁平化)                | 45-55             |
+| `h` (含组件模式、children 扁平化、属性响应式绑定) | 55-65             |
 | 全局上下文与调度                                  | 30                |
 | `<Show>`                                          | 25                |
 | `<List>`                                          | 35                |
@@ -716,7 +718,7 @@ function lazy<T extends (...args: any[]) => any>(loader: () => Promise<{ default
 | 生命周期钩子                                      | 15                |
 | 组件实例与清理（含 mount/unmount、节点级 effect） | 35                |
 | TypeScript 类型定义                               | 40                |
-| **总计**                                          | **约 345-395 行** |
+| **总计**                                          | **约 355-405 行** |
 
 ---
 
