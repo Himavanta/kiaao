@@ -1,4 +1,4 @@
-# kiaao 框架规范 v3.0
+# kiaao 框架规范 v3.1
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -146,11 +146,19 @@ stop();
 
 **控制流指令**：
 
-- **`when`**：控制宿主元素**内部子节点**的挂载/卸载。宿主元素始终存在于 DOM 中。`when` 接受响应式函数或普通函数，当其返回值 truthy 时，子节点被插入宿主元素；falsy 时，子节点被递归清理（`disposeNode`）并从宿主元素移除。`when` 仅在 `tag` 为字符串时生效，在自定义组件上无效。`when` 在 void 元素（`<br>`、`<input>` 等）上使用会抛出错误（开发模式 `throw`，生产模式静默忽略）。
+- **`when`**：控制宿主元素**内部子节点**的挂载/卸载。宿主元素始终存在于 DOM 中。`when` 接受响应式函数或普通函数，当其返回值 truthy 时，子节点被插入宿主元素；falsy 时，子节点被递归清理（`disposeNode`）并从宿主元素移除。
 
-- **`each`**：控制宿主元素内部按数组生成子节点。`each` 接受返回数组的 getter/derive 函数。每次数组变化时，先递归清理旧子节点，再为每个数组元素调用渲染函数生成新子节点并插入。渲染函数接收 `(item, index)` 作为参数。`each` 仅在 `tag` 为字符串时生效。`each` 在 void 元素上同样会抛出错误。
+  `when` 仅在 `tag` 为字符串时生效，在自定义组件上无效。`when` 在 void 元素（`<br>`、`<input>` 等）上使用会抛出错误（开发模式 `throw`，生产模式静默忽略）。
 
-- **`when` + `each` 共存**：`when` 优先。当 `when` 为 falsy 时，不执行 `each`；当 `when` 为 truthy 时，再根据 `each` 生成子节点。语义等价于 `when` 包裹 `each`。
+  **`when` 的 children 形式**：
+  - 若不存在 `each`，`children` 可以是静态内容（任意节点、字符串等），也可以是**惰性求值函数** `() => any`。若传入函数且不存在 `each`，该函数被视为惰性求值函数，仅在 `when` 条件为真时调用以获取内容。惰性求值允许延迟执行昂贵的初始化操作（如动态导入的组件）。
+  - 若同时存在 `each`，则 `children` 必须为 `(item: T, index: number) => any`，惰性函数模式被忽略。
+
+- **`each`**：控制宿主元素内部按数组生成子节点。`each` 接受返回数组的 getter/derive 函数。每次数组变化时，先递归清理旧子节点，再为每个数组元素调用渲染函数生成新子节点并插入。
+
+  `children` 必须为渲染函数 `(item: T, index: number) => any`。`each` 仅在 `tag` 为字符串时生效。在 void 元素上使用同样会抛出错误。
+
+- **`when` + `each` 共存**：`when` 优先。当 `when` 为 falsy 时，不执行 `each`，不渲染任何子节点；当 `when` 为 truthy 时，再根据 `each` 生成子节点。语义等价于 `when` 包裹 `each`。
 
 - **`key`**：配合 `each` 使用，用于列表项标识。当前版本保留此属性，为未来节点复用优化预留。
 
@@ -179,7 +187,7 @@ function h(
 
 **SSR 中的控制流指令**：
 
-- `when`：条件判断后决定是否序列化子节点。
+- `when`：条件判断后决定是否序列化子节点，但**宿主元素始终保留**（即使 when 为 false，仍输出空标签，与客户端行为一致）。
 - `each`：宿主元素序列化一次，子节点在内部按数组重复渲染（需要三段式序列化：开标签 → 重复子节点 → 闭标签）。
 
 #### 组件模式（`tag` 为函数）
@@ -203,9 +211,14 @@ function h(
   <p>年龄：{user(v => v.age)}</p>
 </div>
 
-// 条件渲染
+// 条件渲染（静态内容）
 <section when={visible}>
   <span>可见内容</span>
+</section>
+
+// 条件渲染（惰性求值）
+<section when={showDashboard}>
+  {() => <Dashboard />}
 </section>
 
 // 列表渲染
@@ -247,7 +260,7 @@ function Teleport(props: { to: string | HTMLElement; children: () => any }): Nod
 包装异步加载的组件，与构建工具的代码拆分（`import()`）配合使用。返回一个代理组件函数，初始渲染时显示占位注释节点，待模块加载完成后自动替换为真实组件。
 
 - `loader`：返回 Promise 的函数，通常为 `() => import('./Component.tsx')` 形式。
-- 代理组件内部使用响应式信号管理加载状态，无需手动触发更新。
+- 代理组件内部使用 `when` 指令（而非独立的 Show 组件）管理加载状态，利用惰性求值延迟初始化。
 - 加载失败时抛出错误，可被上层 `ErrorBoundary` 类组件捕获（未来提供或用户自行实现）。
 
 ```javascript
@@ -481,7 +494,7 @@ const { RouterView, navigate } = createRouter(
 - **`effect`**：SSR 下禁用，返回空 `stop` 函数。
 - **`derive`**：退化为一次性计算，返回固定值但保留 `IS_REACTIVE` 标记。
 - **`onMount` / `onUnmount`**：SSR 中不触发。
-- **`h()`**：SSR 模式委托给 `hSSR`，`hSSR` 负责字符串拼接。属性值若为响应式函数则调用取值，事件属性跳过。控制流指令按规则生成对应 HTML。
+- **`h()`**：SSR 模式委托给 `hSSR`，`hSSR` 负责字符串拼接。属性值若为响应式函数则调用取值，事件属性跳过。控制流指令按规则生成对应 HTML：`when` 为 false 时保留宿主空元素标签；`each` 采用三段式序列化；`when` 与 `each` 共存时先判断 `when`。
 
 ### `renderToString`
 
@@ -566,6 +579,8 @@ function renderToString(
 | `renderToString` | SSR      | 服务端渲染为 HTML 字符串（来自 `kiaao/server`）                  |
 | `createRouter`   | 路由     | 客户端路由（来自 `kiaao/router`）                                |
 
+**核心概念为 4 个（define、derive、effect、h），控制流由 `h()` 的原生属性指令实现，无需额外的 Show/List 组件。**
+
 ---
 
 ## 十四、与主流框架差异
@@ -594,15 +609,15 @@ function renderToString(
 | `define`                                                          | 40-50             |
 | `derive`                                                          | 25                |
 | `effect`                                                          | 20                |
-| `h` (含组件模式、children 扁平化、属性响应式绑定、when/each 指令) | 80-100            |
+| `h` (含组件模式、children 扁平化、属性响应式绑定、when/each 指令) | 90-110            |
 | 全局上下文与调度                                                  | 30                |
 | `<Teleport>`                                                      | 15                |
 | `lazy`                                                            | 20                |
 | 生命周期钩子                                                      | 15                |
 | 组件实例与清理（含 mount/unmount、节点级 effect）                 | 35                |
-| SSR 相关 (`hSSR`, `renderToString`)                               | 50-60             |
+| SSR 相关 (`hSSR`, `renderToString`)                               | 55-65             |
 | TypeScript 类型定义                                               | 40                |
-| **总计**                                                          | **约 370-430 行** |
+| **总计**                                                          | **约 385-445 行** |
 
 ---
 
