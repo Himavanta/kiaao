@@ -8,9 +8,14 @@
     "build": "tsc && vp build",
     "preview": "vp preview"
   },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "tailwindcss": "^4.3.0"
+  },
   "devDependencies": {
-    "kiaao": "workspace:",
-    "typescript": "~6.0.2",
+    "kiaao": "workspace:^",
+    "sass-embedded": "^1.100.0",
+    "typescript": "~6.0.3",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }
