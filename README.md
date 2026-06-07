@@ -327,7 +327,7 @@ Add JSX configuration to your tsconfig.json:
 Configure Astro:
 
 ```ts
-// astro.config.mjs
+// astro.config.ts
 import kiaao from "kiaao/astro";
 
 export default defineConfig({
