@@ -4,11 +4,11 @@ import { Link, currentPath } from "/src/router";
 const menus = [
   {
     title: "探索",
-    path: "expore",
+    path: "/expore",
   },
   {
     title: "工作室",
-    path: "/",
+    path: "/apps",
   },
   {
     title: "知识库",

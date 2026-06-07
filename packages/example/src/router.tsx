@@ -3,7 +3,7 @@ import { createRouter } from "kiaao/router";
 
 export const { RouterView, Link, navigate, currentPath, currentParams } = createRouter([
   {
-    path: "/",
+    path: "/apps",
     component: lazy(() => import("./components/dashbord")),
   },
   {
