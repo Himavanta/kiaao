@@ -5,6 +5,7 @@ import {
   INSTANCE_KEY,
   DISPOSE_KEY,
   LOCAL_EFFECTS,
+  SKIP_UPDATE,
   type ReactiveFunction,
 } from "./types.ts";
 
@@ -265,17 +266,37 @@ function createWhenElement(
   const stop = effect(() => {
     const show = Boolean(typeof whenFn === "function" ? whenFn() : whenFn);
 
-    // 清空旧子节点（包含旧的 each 锚点）
+    if (isLazy) {
+      // 惰性求值：先调用，SKIP_UPDATE 时跳过 DOM 操作
+      const result = children[0]();
+      if (result === SKIP_UPDATE) return;
+
+      // 非 SKIP_UPDATE：清空旧节点再渲染
+      while (el.firstChild) {
+        disposeNode(el.firstChild);
+        el.removeChild(el.firstChild);
+      }
+      if (eachStop) {
+        eachStop();
+        eachStop = undefined;
+      }
+      if (!show) return;
+      if (result instanceof Node) {
+        el.appendChild(result);
+        triggerMountIfConnected(el, result);
+      }
+      return;
+    }
+
+    // 非惰性路径：先清空再渲染
     while (el.firstChild) {
       disposeNode(el.firstChild);
       el.removeChild(el.firstChild);
     }
-    // 停止旧的 each effect
     if (eachStop) {
       eachStop();
       eachStop = undefined;
     }
-
     if (!show) return;
 
     if (hasEach) {
@@ -283,13 +304,6 @@ function createWhenElement(
       const childFn = children[0];
       const { stop: estop } = renderEach(el, eachFn, childFn, keyFn);
       eachStop = estop;
-    } else if (isLazy) {
-      // 惰性求值
-      const result = children[0]();
-      if (result instanceof Node) {
-        el.appendChild(result);
-        triggerMountIfConnected(el, result);
-      }
     } else {
       // 静态子节点（已由 h() 外层求值）
       const nodes = processChildren(children);

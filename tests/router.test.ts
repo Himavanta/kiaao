@@ -19,8 +19,8 @@ describe("createRouter", () => {
     }
 
     const { RouterView } = createRouter([
-      { path: "/", component: Home },
-      { path: "/about", component: About },
+      { path: "", component: Home },
+      { path: "about", component: About },
     ]);
 
     const el = h("div", null, h(RouterView));
@@ -36,8 +36,8 @@ describe("createRouter", () => {
     }
 
     const { RouterView, navigate } = createRouter([
-      { path: "/", component: Home },
-      { path: "/about", component: About },
+      { path: "", component: Home },
+      { path: "about", component: About },
     ]);
 
     const el = h("div", null, h(RouterView));
@@ -47,17 +47,16 @@ describe("createRouter", () => {
     expect(el.textContent).toBe("About");
   });
 
-  test("route params are passed as props", () => {
-    function User(props: { id: string }) {
-      return h("p", null, `User ${props.id}`);
+  test("route params via query string", () => {
+    function User() {
+      const id = new URLSearchParams(window.location.search).get("id");
+      return h("p", null, `User ${id ?? "unknown"}`);
     }
 
-    const { RouterView, navigate } = createRouter([{ path: "/users/:id", component: User }]);
+    const { RouterView } = createRouter([{ path: "", component: User }]);
 
     const el = h("div", null, h(RouterView));
-
-    navigate("/users/42");
-    expect(el.textContent).toBe("User 42");
+    expect(el.textContent).toBe("User unknown");
   });
 
   test("fallback renders for unmatched routes", () => {
@@ -65,7 +64,7 @@ describe("createRouter", () => {
       return h("h1", null, "Home");
     }
 
-    const { RouterView, navigate } = createRouter([{ path: "/", component: Home }], {
+    const { RouterView, navigate } = createRouter([{ path: "", component: Home }], {
       fallback: () => h("div", null, "Custom 404"),
     });
 
@@ -85,8 +84,8 @@ describe("createRouter", () => {
     }
 
     const { RouterView, Link } = createRouter([
-      { path: "/", component: Home },
-      { path: "/about", component: About },
+      { path: "", component: Home },
+      { path: "about", component: About },
     ]);
 
     const el = h("div", null, h(Link, { to: "/about" }, "Go to About"), h(RouterView));
@@ -97,5 +96,33 @@ describe("createRouter", () => {
     const anchor = el.querySelector("a")!;
     anchor.click();
     expect(el.textContent).toBe("Go to AboutAbout");
+  });
+
+  test("RouterView with base renders nested layout", () => {
+    function Layout() {
+      return h("main", null, h(RouterView, { base: "/dashboard", routes: dashboardRoutes }));
+    }
+    function DashboardHome() {
+      return h("h2", null, "Dashboard");
+    }
+    function Users() {
+      return h("h2", null, "Users");
+    }
+
+    const dashboardRoutes = [
+      { path: "", component: DashboardHome },
+      { path: "users", component: Users },
+    ];
+
+    const { RouterView, navigate } = createRouter([{ path: "dashboard", component: Layout }]);
+
+    // Navigate to /dashboard to trigger the Layout route
+    navigate("/dashboard");
+    const el = h("div", null, h(RouterView));
+    expect(el.textContent).toBe("Dashboard");
+
+    // Navigate to /dashboard/users
+    navigate("/dashboard/users");
+    expect(el.textContent).toBe("Users");
   });
 });

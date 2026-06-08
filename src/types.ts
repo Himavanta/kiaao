@@ -29,6 +29,9 @@ export const LOCAL_EFFECTS = Symbol("local_effects");
 /** 挂载 SSR 变体的唯一键 */
 export const SSR_COMPONENT = Symbol("kiaao.ssr");
 
+/** RouterView 向 when 指令发送的信号：段未变，跳过 DOM 更新 */
+export const SKIP_UPDATE = Symbol("kiaao.skip_update");
+
 // ── Public API Types ───────────────────────────────────
 
 export interface Getter<T> {
