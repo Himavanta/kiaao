@@ -5,6 +5,7 @@ import {
   STOP_KEY,
   type Getter,
   type Setter,
+  type ReactiveFunction,
   type ComponentInstance,
 } from "./types.ts";
 
@@ -257,7 +258,7 @@ export function effect(fn: () => void): () => void {
 
 // ── derive ─────────────────────────────────────────────
 
-export function derive<T>(computeFn: () => T): () => T {
+export function derive<T>(computeFn: () => T): ReactiveFunction<T> {
   // SSR mode: one-time computation, return fixed-value function with IS_REACTIVE
   if (getRenderMode() === "ssr") {
     const value = computeFn();

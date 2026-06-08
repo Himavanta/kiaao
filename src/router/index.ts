@@ -32,22 +32,40 @@ export interface Route {
   component: RouteComponent;
 }
 
+/** RouterView 的配置属性，可用于嵌套路由场景。 */
+export interface RouterViewProps {
+  /** 路径前缀，以 / 开头不含尾 /。该 RouterView 只响应 base 内的路径变化。 */
+  base?: string;
+  /** 专属路由表，不传则使用 createRouter 的默认路由表。 */
+  routes?: Route[];
+  /** 无匹配时的后备内容，不传则使用 createRouter 的全局 fallback。 */
+  fallback?: RouteComponent;
+}
+
+export interface RouterLinkProps {
+  /** 导航目标路径，支持响应式 getter。 */
+  to: string | (() => string);
+  children?: any;
+  onClick?: (e: Event) => void;
+  [key: string]: any;
+}
+
+export interface RouterOptions {
+  /** 当没有路由匹配时显示的后备组件。 */
+  fallback?: RouteComponent;
+}
+
 export interface Router {
-  /**
-   * 路由视图组件。
-   * - base：路径前缀，以 / 开头不含尾 /。该 RouterView 只响应 base 内的路径变化。
-   * - routes：专属路由表，不传则使用 createRouter 的默认路由表。
-   * - fallback：无匹配时的后备内容，不传则使用 createRouter 的全局 fallback。
-   */
-  RouterView: (props?: { base?: string; routes?: Route[]; fallback?: () => any }) => Node;
-  /** Programmatic navigation — accepts full absolute path. */
+  /** View component — renders the matched route */
+  RouterView: (props?: RouterViewProps) => Node;
+  /** Programmatic navigation */
   navigate: (path: string) => void;
-  /** Current pathname signal (getter). */
+  /** Current pathname signal (getter) */
   currentPath: Getter<string>;
   /** Query parameters from current URL. */
   currentParams: () => Record<string, string>;
   /** Declarative navigation link component. */
-  Link: (props: { to: string | (() => string); children?: any; [key: string]: any }) => Node;
+  Link: (props: RouterLinkProps) => Node;
 }
 
 // ── Segment Extraction ─────────────────────────────────
@@ -79,7 +97,7 @@ function matchRoute(routes: Route[], segment: string): Route | null {
 
 // ── createRouter ───────────────────────────────────────
 
-export function createRouter(routes: Route[], options: { fallback?: RouteComponent } = {}): Router {
+export function createRouter(routes: Route[], options: RouterOptions = {}): Router {
   const [currentPath, setPath] = define(window.location.pathname);
 
   window.addEventListener("popstate", () => {
@@ -95,7 +113,7 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
 
   const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
 
-  function RouterView(props?: { base?: string; routes?: Route[]; fallback?: () => any }): Node {
+  function RouterView(props?: RouterViewProps): Node {
     const myRoutes = props?.routes ?? routes;
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
@@ -129,7 +147,7 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
     );
   }
 
-  function Link(props: { to: string | (() => string); children?: any; [key: string]: any }): Node {
+  function Link(props: RouterLinkProps): Node {
     const { to, children, onClick: userOnClick, ...rest } = props;
 
     // 解析导航目标值（支持 getter）
