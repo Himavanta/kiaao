@@ -47,7 +47,7 @@ export interface Router {
   /** Query parameters from current URL. */
   currentParams: () => Record<string, string>;
   /** Declarative navigation link component. */
-  Link: (props: { to: string; children?: any; [key: string]: any }) => Node;
+  Link: (props: { to: string | (() => string); children?: any; [key: string]: any }) => Node;
 }
 
 // ── Segment Extraction ─────────────────────────────────
@@ -129,8 +129,11 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
     );
   }
 
-  function Link(props: { to: string; children?: any; [key: string]: any }): Node {
+  function Link(props: { to: string | (() => string); children?: any; [key: string]: any }): Node {
     const { to, children, onClick: userOnClick, ...rest } = props;
+
+    // 解析导航目标值（支持 getter）
+    const resolveTo = () => (typeof to === "function" ? to() : to);
 
     return h(
       "a",
@@ -140,7 +143,7 @@ export function createRouter(routes: Route[], options: { fallback?: RouteCompone
         onClick: (e: Event) => {
           e.preventDefault();
           userOnClick?.(e);
-          navigate(to);
+          navigate(resolveTo());
         },
       },
       children,
