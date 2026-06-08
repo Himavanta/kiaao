@@ -46,11 +46,15 @@ function renderEach(
     const entries = normalizeEachSource(source);
     const newKeys = new Set<any>();
 
+    // 追踪上一个 DOM 节点，用于判断当前节点是否需要移动
+    let prevNode: Node | null = null;
+
     for (let i = 0; i < entries.length; i++) {
       const [entryKey, rawValue, index] = entries[i];
       const identity = keyFn ? keyFn(rawValue, index, entryKey) : entryKey;
       newKeys.add(identity);
 
+      // ── 获取或创建响应式 item getter ──
       let itemGetter: any;
       const isReactive = rawValue != null && (rawValue as any)[IS_REACTIVE];
 
@@ -77,23 +81,36 @@ function renderEach(
         }
       }
 
+      // ── 复用或创建 DOM ──
       if (nodeMap.has(identity)) {
         const node = nodeMap.get(identity)!;
-        container.insertBefore(node, anchor);
+        // 仅在节点位置发生变化时才移动，减少不必要的 DOM 重排
+        const needsMove =
+          prevNode === null ? container.firstChild !== node : node.previousSibling !== prevNode;
+        if (needsMove) {
+          container.insertBefore(node, anchor);
+        }
+        prevNode = node;
       } else {
         const node = childFn(itemGetter, index, entryKey);
         if (node instanceof Node) {
           container.insertBefore(node, anchor);
           if (container.isConnected) triggerMount(node);
-          nodeMap.set(identity, node);
+          // DocumentFragment 插入后会变空，不可复用，跳过 nodeMap 追踪
+          if (node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+            nodeMap.set(identity, node);
+          }
+          prevNode = node;
         }
       }
     }
 
+    // ── 批量清理消失的节点 ──
+    const removedFragment = document.createDocumentFragment();
     for (const [key, node] of nodeMap) {
       if (!newKeys.has(key)) {
         disposeNode(node);
-        if (node.parentNode) node.parentNode.removeChild(node);
+        removedFragment.appendChild(node);
         nodeMap.delete(key);
       }
     }
@@ -156,9 +173,11 @@ export function createWhenElement(
         eachStop();
         eachStop = undefined;
       }
+      // 批量移除旧节点，减少重排
+      const removed = document.createDocumentFragment();
       while (el.firstChild) {
         disposeNode(el.firstChild);
-        el.removeChild(el.firstChild);
+        removed.appendChild(el.firstChild);
       }
       if (!show) return;
       if (result instanceof Node) {
@@ -168,9 +187,11 @@ export function createWhenElement(
       return;
     }
 
+    // 非惰性路径：批量移除旧节点
+    const removed = document.createDocumentFragment();
     while (el.firstChild) {
       disposeNode(el.firstChild);
-      el.removeChild(el.firstChild);
+      removed.appendChild(el.firstChild);
     }
     if (eachStop) {
       eachStop();
