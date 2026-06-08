@@ -169,7 +169,7 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
     return Array.from({ length: source }, (_, i) => [String(i), undefined, i]);
   }
   if (typeof source === "string") {
-    return [...source].map((v, i) => [String(i), v, i]);
+    return Array.from(source).map((v, i) => [String(i), v, i]);
   }
   // 数组、对象及其他
   const entries = Object.entries(source ?? {});
@@ -318,14 +318,14 @@ function createWhenElement(
       const result = children[0]();
       if (result === SKIP_UPDATE) return;
 
-      // 非 SKIP_UPDATE：清空旧节点再渲染
-      while (el.firstChild) {
-        disposeNode(el.firstChild);
-        el.removeChild(el.firstChild);
-      }
+      // 非 SKIP_UPDATE：先停止内部动态逻辑，再清理 DOM
       if (eachStop) {
         eachStop();
         eachStop = undefined;
+      }
+      while (el.firstChild) {
+        disposeNode(el.firstChild);
+        el.removeChild(el.firstChild);
       }
       if (!show) return;
       if (result instanceof Node) {
