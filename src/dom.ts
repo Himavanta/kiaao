@@ -74,6 +74,17 @@ function addLocalEffect(node: Node, stop: () => void): void {
   stops.add(stop);
 }
 
+/** 从节点上移除一个已注册的 stop，防止 LOCAL_EFFECTS 集合无限增长 */
+function removeLocalEffect(node: Node, stop: () => void): void {
+  const stops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+  if (stops) {
+    stops.delete(stop);
+    if (stops.size === 0) {
+      delete (node as any)[LOCAL_EFFECTS];
+    }
+  }
+}
+
 // ── Child Processing ────────────────────────────────────
 
 function processChildren(children: any[]): Node[] {
@@ -132,6 +143,91 @@ function setProps(el: HTMLElement, props: Record<string, any> | null | undefined
   }
 }
 
+// ── Shared Each Renderer ───────────────────────────────
+
+/**
+ * 在容器内执行列表渲染，管理锚点、key 增量更新和生命周期清理。
+ * 每次调用都会创建新的锚点，stop 自注册到 LOCAL_EFFECTS 且具备自清理能力。
+ */
+function renderEach(
+  container: HTMLElement,
+  eachFn: any,
+  childFn: (item: any, index: number) => any,
+  keyFn?: any,
+): { stop: () => void } {
+  const anchor = document.createComment("each");
+  container.appendChild(anchor);
+
+  const nodeMap = new Map<any, Node>();
+
+  const innerStop = effect(() => {
+    const items = typeof eachFn === "function" ? eachFn() : eachFn;
+
+    // ── 无 key：全量重建 ──
+    if (!keyFn) {
+      while (container.firstChild !== anchor) {
+        disposeNode(container.firstChild!);
+        container.removeChild(container.firstChild!);
+      }
+      if (Array.isArray(items)) {
+        for (let i = 0; i < items.length; i++) {
+          const node = childFn(items[i], i);
+          if (node instanceof Node) {
+            container.insertBefore(node, anchor);
+            if (container.isConnected) triggerMount(node);
+          }
+        }
+      }
+      return;
+    }
+
+    // ── 有 key：增量更新 ──
+    const newKeys = new Set<any>();
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const key = keyFn(item, i);
+      newKeys.add(key);
+
+      const oldNode = nodeMap.get(key);
+      if (oldNode) {
+        disposeNode(oldNode);
+        if (oldNode.parentNode) {
+          oldNode.parentNode.removeChild(oldNode);
+        }
+      }
+
+      const newNode = childFn(item, i);
+      if (!(newNode instanceof Node)) continue;
+
+      container.insertBefore(newNode, anchor);
+      if (container.isConnected) triggerMount(newNode);
+
+      nodeMap.set(key, newNode);
+    }
+
+    // 清理不再使用的旧节点
+    for (const [key, oldNode] of nodeMap) {
+      if (!newKeys.has(key)) {
+        disposeNode(oldNode);
+        if (oldNode.parentNode) {
+          oldNode.parentNode.removeChild(oldNode);
+        }
+        nodeMap.delete(key);
+      }
+    }
+  });
+
+  // 自清理 stop：调用时从 LOCAL_EFFECTS 中移除自身
+  const selfCleaningStop = () => {
+    innerStop();
+    removeLocalEffect(container, selfCleaningStop);
+  };
+
+  addLocalEffect(container, selfCleaningStop);
+
+  return { stop: selfCleaningStop };
+}
+
 // ── Control-flow directive helpers ─────────────────────
 
 /** 如果宿主元素已在文档中，触发新子节点的 mount 回调 */
@@ -148,7 +244,7 @@ function createWhenElement(
   children: any[],
   whenFn: any,
   eachFn?: any,
-  _keyFn?: any,
+  keyFn?: any,
 ): HTMLElement {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
@@ -163,30 +259,30 @@ function createWhenElement(
   const isLazy = eachFn === undefined && children.length === 1 && typeof children[0] === "function";
   const hasEach = eachFn !== undefined;
 
+  // 当前 each 的 stop，when 切换时手动停止
+  let eachStop: (() => void) | undefined;
+
   const stop = effect(() => {
     const show = Boolean(typeof whenFn === "function" ? whenFn() : whenFn);
 
-    // 清空旧子节点
+    // 清空旧子节点（包含旧的 each 锚点）
     while (el.firstChild) {
       disposeNode(el.firstChild);
       el.removeChild(el.firstChild);
+    }
+    // 停止旧的 each effect
+    if (eachStop) {
+      eachStop();
+      eachStop = undefined;
     }
 
     if (!show) return;
 
     if (hasEach) {
-      // when + each 共存：when 优先，在其内执行 each
-      const items = typeof eachFn === "function" ? eachFn() : eachFn;
+      // when + each 共存：when 优先，委托给 renderEach
       const childFn = children[0];
-      if (Array.isArray(items) && typeof childFn === "function") {
-        for (let i = 0; i < items.length; i++) {
-          const result = childFn(items[i], i);
-          if (result instanceof Node) {
-            el.appendChild(result);
-            triggerMountIfConnected(el, result);
-          }
-        }
-      }
+      const { stop: estop } = renderEach(el, eachFn, childFn, keyFn);
+      eachStop = estop;
     } else if (isLazy) {
       // 惰性求值
       const result = children[0]();
@@ -227,75 +323,8 @@ function createEachElement(
   // ── 设置属性 ──
   setProps(el, props);
 
-  // 锚点：作为列表起始位置的固定参考点
-  const anchor = document.createComment("each");
-  el.appendChild(anchor);
-
-  const nodeMap = new Map<any, Node>(); // key → 旧 DOM 节点
-  const childFn = children[0]; // (item, index) => Node
-
-  const stop = effect(() => {
-    const items = typeof eachFn === "function" ? eachFn() : eachFn;
-
-    // ── 无 key：全量重建（兼容行为） ──
-    if (!keyFn) {
-      while (el.firstChild !== anchor) {
-        disposeNode(el.firstChild!);
-        el.removeChild(el.firstChild!);
-      }
-      if (Array.isArray(items) && typeof childFn === "function") {
-        for (let i = 0; i < items.length; i++) {
-          const node = childFn(items[i], i);
-          if (node instanceof Node) {
-            el.insertBefore(node, anchor);
-            if (el.isConnected) triggerMount(node);
-          }
-        }
-      }
-      return;
-    }
-
-    // ── 有 key：基于 key 的增量更新 ──
-    const newKeys = new Set<any>();
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const key = keyFn(item, i);
-      newKeys.add(key);
-
-      // 同一 key 的旧节点不再需要，先清理
-      const oldNode = nodeMap.get(key);
-      if (oldNode) {
-        disposeNode(oldNode);
-        if (oldNode.parentNode) {
-          oldNode.parentNode.removeChild(oldNode);
-        }
-      }
-
-      // 始终调用 childFn 生成新节点（方向 B：保证数据与 item 同步）
-      const newNode = childFn(item, i);
-      if (!(newNode instanceof Node)) continue;
-
-      // anchor 是固定参考点，始终在它之前插入
-      el.insertBefore(newNode, anchor);
-      if (el.isConnected) triggerMount(newNode);
-
-      nodeMap.set(key, newNode);
-    }
-
-    // 清理不再使用的旧节点
-    for (const [key, oldNode] of nodeMap) {
-      if (!newKeys.has(key)) {
-        disposeNode(oldNode);
-        if (oldNode.parentNode) {
-          oldNode.parentNode.removeChild(oldNode);
-        }
-        nodeMap.delete(key);
-      }
-    }
-  });
-
-  addLocalEffect(el, stop);
+  const childFn = children[0];
+  renderEach(el, eachFn, childFn, keyFn);
 
   return el;
 }
