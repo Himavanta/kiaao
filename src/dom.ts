@@ -7,10 +7,13 @@ import {
   LOCAL_EFFECTS,
   SKIP_UPDATE,
   type ReactiveFunction,
+  type Getter,
+  type Setter,
 } from "./types.ts";
 
 import {
   effect,
+  define,
   pushComponent,
   popComponent,
   createComponentInstance,
@@ -147,78 +150,122 @@ function setProps(el: HTMLElement, props: Record<string, any> | null | undefined
 // ── Shared Each Renderer ───────────────────────────────
 
 /**
- * 在容器内执行列表渲染，管理锚点、key 增量更新和生命周期清理。
- * 每次调用都会创建新的锚点，stop 自注册到 LOCAL_EFFECTS 且具备自清理能力。
+ * 将不同类型的数据源统一转换为 `[entryKey, value, index]` 条目数组。
+ * - Array：索引字符串作为 entryKey
+ * - Object：属性名作为 entryKey
+ * - Map：键作为 entryKey
+ * - Set：值本身作为 entryKey
+ * - number：索引字符串，值为 undefined
+ * - string：索引字符串，值为单个字符
+ */
+function normalizeEachSource(source: any): Array<[any, any, number]> {
+  if (source instanceof Map) {
+    return [...source.entries()].map(([k, v], i) => [k, v, i]);
+  }
+  if (source instanceof Set) {
+    return [...source].map((v, i) => [v, v, i]);
+  }
+  if (typeof source === "number") {
+    return Array.from({ length: source }, (_, i) => [String(i), undefined, i]);
+  }
+  if (typeof source === "string") {
+    return [...source].map((v, i) => [String(i), v, i]);
+  }
+  // 数组、对象及其他
+  const entries = Object.entries(source ?? {});
+  return entries.map(([k, v], i) => [k, v, i]);
+}
+
+/**
+ * 在容器内执行列表渲染，支持多种数据源、自动响应式包装和 key 增量更新。
  */
 function renderEach(
   container: HTMLElement,
   eachFn: any,
-  childFn: (item: any, index: number) => any,
-  keyFn?: any,
+  childFn: (item: any, index: number, key: any) => any,
+  keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
   const anchor = document.createComment("each");
   container.appendChild(anchor);
 
+  // key → DOM 节点
   const nodeMap = new Map<any, Node>();
+  // key → [getter, setter]（响应式包装）
+  const itemSignalMap = new Map<any, [Getter<any>, Setter<any>]>();
 
   const innerStop = effect(() => {
-    const items = typeof eachFn === "function" ? eachFn() : eachFn;
-
-    // ── 无 key：全量重建 ──
-    if (!keyFn) {
-      while (container.firstChild !== anchor) {
-        disposeNode(container.firstChild!);
-        container.removeChild(container.firstChild!);
-      }
-      if (Array.isArray(items)) {
-        for (let i = 0; i < items.length; i++) {
-          const node = childFn(items[i], i);
-          if (node instanceof Node) {
-            container.insertBefore(node, anchor);
-            if (container.isConnected) triggerMount(node);
-          }
-        }
-      }
-      return;
-    }
-
-    // ── 有 key：增量更新 ──
+    const source = typeof eachFn === "function" ? eachFn() : eachFn;
+    const entries = normalizeEachSource(source);
     const newKeys = new Set<any>();
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const key = keyFn(item, i);
-      newKeys.add(key);
 
-      const oldNode = nodeMap.get(key);
-      if (oldNode) {
-        disposeNode(oldNode);
-        if (oldNode.parentNode) {
-          oldNode.parentNode.removeChild(oldNode);
+    for (let i = 0; i < entries.length; i++) {
+      const [entryKey, rawValue, index] = entries[i];
+      const identity = keyFn ? keyFn(rawValue, index, entryKey) : entryKey;
+      newKeys.add(identity);
+
+      // ── 获取或创建响应式 item getter ──
+      let itemGetter: any;
+      const isReactive = rawValue != null && (rawValue as any)[IS_REACTIVE];
+
+      if (itemSignalMap.has(identity)) {
+        if (isReactive) {
+          // 响应式 item：引用变化时替换 getter
+          const existing = itemSignalMap.get(identity)!;
+          if (existing[0] !== rawValue) {
+            itemSignalMap.set(identity, [rawValue, () => {}]);
+          }
+          itemGetter = rawValue;
+        } else {
+          // 普通 item：通过 setter 更新已有信号
+          const [, setter] = itemSignalMap.get(identity)!;
+          setter(rawValue);
+          itemGetter = itemSignalMap.get(identity)![0];
+        }
+      } else {
+        if (isReactive) {
+          itemSignalMap.set(identity, [rawValue, () => {}]);
+          itemGetter = rawValue;
+        } else {
+          const [getter, setter] = define(rawValue);
+          itemSignalMap.set(identity, [getter, setter]);
+          itemGetter = getter;
         }
       }
 
-      const newNode = childFn(item, i);
-      if (!(newNode instanceof Node)) continue;
-
-      container.insertBefore(newNode, anchor);
-      if (container.isConnected) triggerMount(newNode);
-
-      nodeMap.set(key, newNode);
+      // ── 复用或创建 DOM ──
+      if (nodeMap.has(identity)) {
+        // 同 key → 复用 DOM，只移动位置
+        const node = nodeMap.get(identity)!;
+        container.insertBefore(node, anchor);
+      } else {
+        // 新 key → 创建 DOM
+        const node = childFn(itemGetter, index, entryKey);
+        if (node instanceof Node) {
+          container.insertBefore(node, anchor);
+          if (container.isConnected) triggerMount(node);
+          nodeMap.set(identity, node);
+        }
+      }
     }
 
-    // 清理不再使用的旧节点
-    for (const [key, oldNode] of nodeMap) {
+    // ── 清理消失的 nodeMap 项 ──
+    for (const [key, node] of nodeMap) {
       if (!newKeys.has(key)) {
-        disposeNode(oldNode);
-        if (oldNode.parentNode) {
-          oldNode.parentNode.removeChild(oldNode);
-        }
+        disposeNode(node);
+        if (node.parentNode) node.parentNode.removeChild(node);
         nodeMap.delete(key);
+      }
+    }
+
+    // ── 清理消失的 itemSignalMap 项 ──
+    for (const [key] of itemSignalMap) {
+      if (!newKeys.has(key)) {
+        itemSignalMap.delete(key);
       }
     }
   });
 
-  // 自清理 stop：调用时从 LOCAL_EFFECTS 中移除自身
+  // 自清理 stop
   const selfCleaningStop = () => {
     innerStop();
     removeLocalEffect(container, selfCleaningStop);

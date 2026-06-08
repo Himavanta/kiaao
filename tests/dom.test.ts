@@ -543,11 +543,11 @@ describe("h — each directive", () => {
     const [items, setItems] = define(["a"]);
     let mountedCount = 0;
 
-    function Item(props: { text: string }) {
+    function Item() {
       onMount(() => {
         mountedCount++;
       });
-      return h("li", null, props.text);
+      return h("li", null, "item");
     }
 
     const root = h(
@@ -556,28 +556,28 @@ describe("h — each directive", () => {
         each: () => items(),
         key: (item: string) => item,
       },
-      (item: string) => h(Item, { text: item }),
+      () => h(Item, null),
     );
 
     mount(root, document.body);
     expect(mountedCount).toBe(1);
 
     setItems(["a", "b"]);
-    // each re-renders all items
-    expect(mountedCount).toBe(3);
+    // identity "a" matches → DOM reused, no re-mount; "b" is new
+    expect(mountedCount).toBe(2);
 
     unmount(root);
   });
 
   test("cleans up removed items", () => {
     const [items, setItems] = define(["a", "b"]);
-    const unmounted = new Set<string>();
+    let unmountedCount = 0;
 
-    function Item(props: { text: string }) {
+    function Item() {
       onUnmount(() => {
-        unmounted.add(props.text);
+        unmountedCount++;
       });
-      return h("li", null, props.text);
+      return h("li", null, "item");
     }
 
     const root = h(
@@ -586,14 +586,14 @@ describe("h — each directive", () => {
         each: () => items(),
         key: (item: string) => item,
       },
-      (item: string) => h(Item, { text: item }),
+      () => h(Item, null),
     );
 
     mount(root, document.body);
 
     setItems(["a"]);
-    // each re-renders all items — old nodes disposed
-    expect(unmounted.has("b")).toBe(true);
+    // identity "b" disappears → disposed
+    expect(unmountedCount).toBe(1);
 
     unmount(root);
   });
@@ -631,7 +631,12 @@ describe("h — each directive", () => {
         each: () => items(),
         key: (item: { id: number; text: string }) => item.id,
       },
-      (item: { id: number; text: string }) => h("li", null, item.text),
+      (item: any) =>
+        h(
+          "li",
+          null,
+          item((v: any) => v.text),
+        ),
     );
 
     expect(el.children[0].textContent).toBe("first");

@@ -1,4 +1,4 @@
-# each 指令改造方案 v1.2
+# each 指令改造方案 v1.3
 
 ## 一、改造目标
 
@@ -14,14 +14,14 @@
 
 ### 2.1 支持的输入类型
 
-| 输入类型 | 处理方式                                                         | entries 结果                      |
-| -------- | ---------------------------------------------------------------- | --------------------------------- |
-| `Array`  | `Object.entries(arr)`                                            | `[["0", item], ["1", item], ...]` |
-| `Object` | `Object.entries(obj)`                                            | `[["key", value], ...]`           |
-| `Map`    | `[...map.entries()]`                                             | `[["key", value], ...]`           |
-| `Set`    | `[...set].map((v, i) => [i, v])`                                 | `[[0, item], [1, item], ...]`     |
-| `number` | `Array.from({ length: n }, (_, i) => [String(i), undefined, i])` | `[["0", undefined], ...]`         |
-| `string` | `[...str].map((v, i) => [String(i), v, i])`                      | `[["0", char], ...]`              |
+| 输入类型 | 处理方式                                                         | entries 结果                            |
+| -------- | ---------------------------------------------------------------- | --------------------------------------- |
+| `Array`  | `Object.entries(arr)`                                            | `[["0", item, 0], ["1", item, 1], ...]` |
+| `Object` | `Object.entries(obj)`                                            | `[["key", value, 0], ...]`              |
+| `Map`    | `[...map.entries()]`                                             | `[["key", value, 0], ...]`              |
+| `Set`    | `[...set].map((v, i) => [v, v, i])`                              | `[[value, value, 0], ...]`              |
+| `number` | `Array.from({ length: n }, (_, i) => [String(i), undefined, i])` | `[["0", undefined, 0], ...]`            |
+| `string` | `[...str].map((v, i) => [String(i), v, i])`                      | `[["0", char, 0], ...]`                 |
 
 ### 2.2 统一转换函数
 
@@ -31,7 +31,7 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
     return [...source.entries()].map(([k, v], i) => [k, v, i]);
   }
   if (source instanceof Set) {
-    return [...source].map((v, i) => [i, v, i]);
+    return [...source].map((v, i) => [v, v, i]);
   }
   if (typeof source === "number") {
     return Array.from({ length: source }, (_, i) => [String(i), undefined, i]);
@@ -47,13 +47,13 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 
 ### 2.3 childFn 参数扩展
 
-`childFn` 的签名扩展为 `(value: any, key: any, index: number) => Node`：
+`childFn` 的签名扩展为 `(value: any, index: number, key: any) => Node`：
 
 - `value`：entries 的值（响应式包装后的 getter）
+- `index`：从 0 开始的数字序号
 - `key`：entries 的键（对象属性名、数组索引等）
-- `index`：从 0 开始的序号
 
-用户可以选择性使用这些参数，向后兼容现有的 `(item, index)` 写法。
+**向后兼容**：现有 `(item, index) => ...` 的用法不受影响。用户如需使用 key，按需添加第三个参数。
 
 ## 三、内部响应式自动包装
 
@@ -67,7 +67,18 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 
 ### 3.2 已响应式 item 的处理
 
-如果 item 本身已经是响应式函数（携带 `IS_REACTIVE` 标记），则不进行二次包装，直接使用其作为 getter，此时不会创建 setter（或创建一个空的 setter）。
+如果 item 本身已经是响应式函数（携带 `IS_REACTIVE` 标记），则不进行二次包装。新值到达时，直接替换 `itemSignalMap` 中的 getter 引用：
+
+```typescript
+const isReactive = rawValue != null && (rawValue as any)[IS_REACTIVE];
+if (isReactive) {
+  const existing = itemSignalMap.get(identity);
+  if (!existing || existing[0] !== rawValue) {
+    itemSignalMap.set(identity, [rawValue, () => {}]);
+  }
+  itemGetter = rawValue;
+}
+```
 
 ### 3.3 内外同步机制
 
@@ -107,20 +118,21 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 
 ### 5.1 推导规则
 
-| 场景                                             | key 推导                                       |
-| ------------------------------------------------ | ---------------------------------------------- |
-| 用户提供了 `keyFn`                               | 使用 `keyFn(item, index, entriesKey)` 的返回值 |
-| 未提供 `keyFn`，数据源是对象                     | 使用 entries 的键（对象属性名）                |
-| 未提供 `keyFn`，数据源是数组且 item 是响应式函数 | 使用 item 函数引用                             |
-| 未提供 `keyFn`，数据源是数组且 item 是普通值     | 使用数组索引（回退行为）                       |
+`key` 的推导遵循统一规则：**无论何种数据源，均使用 entries 的键（`entryKey`）作为默认 identity**。
 
-### 5.2 回退行为说明
+- 用户提供 `keyFn` 时，使用 `keyFn(item, index, entryKey)` 的返回值
+- 用户未提供 `keyFn` 时，使用 `entryKey` 作为 identity：
+  - 数组：索引字符串（`"0"`, `"1"`, ...）
+  - 对象：属性名
+  - Map：键
+  - Set：值本身（与 entryKey 相同）
+  - 数字/字符串：索引字符串
 
-使用数组索引作为 key 时，在数组重排（排序、反转等）场景下，同索引可能指向不同的数据项，导致 DOM 被错误复用。但数据正确性不受影响——因为 `setter` 会更新内部信号值。只是在这种情况下无法享受“保持焦点”的收益。用户如果需要重排时保持焦点，应提供稳定的 `key`。
+此规则简洁统一，避免了在不同数据类型间切换时的行为差异。使用 `entryKey` 作为 identity 时，数据正确性由 `setter` 同步保证；若希望重排时保持焦点，用户需显式提供 `keyFn`。
 
 ## 六、keyFn 参数扩展
 
-`keyFn` 签名扩展为 `(item: any, index: number, entriesKey: any) => any`。新增的第三个参数 `entriesKey` 是 `normalizeEachSource` 中 entries 的原始键，对于对象来说是属性名，对于数组来说是索引字符串。这允许用户构建更灵活的 identity。
+`keyFn` 签名扩展为 `(item: any, index: number, entryKey: any) => any`。新增的第三个参数 `entryKey` 是 `normalizeEachSource` 中 entries 的原始键，对于对象来说是属性名，对于数组来说是索引字符串。这允许用户构建更灵活的 identity。
 
 ## 七、实现要点
 
@@ -130,14 +142,14 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 function renderEach(
   container: HTMLElement,
   eachFn: () => any,
-  childFn: (value: any, key: any, index: number) => Node,
-  keyFn?: (item: any, index: number, entriesKey: any) => any,
+  childFn: (value: any, index: number, key: any) => Node,
+  keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
   const anchor = document.createComment("each");
   container.appendChild(anchor);
 
-  const nodeMap = new Map<any, Node>(); // key → DOM
-  const itemSignalMap = new Map<any, [Getter, Setter]>(); // key → [getter, setter]
+  const nodeMap = new Map<any, Node>();
+  const itemSignalMap = new Map<any, [Getter, Setter]>();
 
   const stop = effect(() => {
     const source = typeof eachFn === "function" ? eachFn() : eachFn;
@@ -149,19 +161,32 @@ function renderEach(
       const identity = keyFn ? keyFn(rawValue, index, entryKey) : entryKey;
       newKeys.add(identity);
 
-      // 获取或创建响应式 item getter
       let itemGetter: any;
+      const isReactive = rawValue != null && (rawValue as any)[IS_REACTIVE];
+
       if (itemSignalMap.has(identity)) {
-        const [, setter] = itemSignalMap.get(identity)!;
-        // 更新已有信号（同步外部变化）
-        setter(rawValue);
-        itemGetter = itemSignalMap.get(identity)![0];
+        if (isReactive) {
+          // 响应式 item：直接替换 getter 引用
+          const existing = itemSignalMap.get(identity)!;
+          if (existing[0] !== rawValue) {
+            itemSignalMap.set(identity, [rawValue, () => {}]);
+          }
+          itemGetter = rawValue;
+        } else {
+          // 普通 item：通过 setter 更新已有信号
+          const [, setter] = itemSignalMap.get(identity)!;
+          setter(rawValue);
+          itemGetter = itemSignalMap.get(identity)![0];
+        }
       } else {
-        // 已响应式则不二次包装
-        const isReactive = rawValue != null && (rawValue as any)[IS_REACTIVE];
-        const [getter, setter] = isReactive ? [rawValue, () => {}] : define(rawValue);
-        itemSignalMap.set(identity, [getter, setter]);
-        itemGetter = getter;
+        if (isReactive) {
+          itemSignalMap.set(identity, [rawValue, () => {}]);
+          itemGetter = rawValue;
+        } else {
+          const [getter, setter] = define(rawValue);
+          itemSignalMap.set(identity, [getter, setter]);
+          itemGetter = getter;
+        }
       }
 
       // 复用或创建 DOM
@@ -169,7 +194,7 @@ function renderEach(
         const node = nodeMap.get(identity)!;
         container.insertBefore(node, anchor);
       } else {
-        const node = childFn(itemGetter, entryKey, index);
+        const node = childFn(itemGetter, index, entryKey);
         if (node instanceof Node) {
           container.insertBefore(node, anchor);
           if (container.isConnected) triggerMount(node);
@@ -178,12 +203,18 @@ function renderEach(
       }
     }
 
-    // 清理消失的 identity
+    // 清理消失的 nodeMap 项
     for (const [key, node] of nodeMap) {
       if (!newKeys.has(key)) {
         disposeNode(node);
         if (node.parentNode) node.parentNode.removeChild(node);
         nodeMap.delete(key);
+      }
+    }
+
+    // 清理消失的 itemSignalMap 项
+    for (const [key] of itemSignalMap) {
+      if (!newKeys.has(key)) {
         itemSignalMap.delete(key);
       }
     }
@@ -211,11 +242,9 @@ function renderEach(
 if (hasEach) {
   const childFn = children[0];
   const { stop: eachStop } = renderEach(el, eachFn, childFn, keyFn);
-  eachStopRef = eachStop; // 保存以便 when 切换时停止
+  eachStopRef = eachStop;
 }
 ```
-
-**行为总结表**：
 
 | when 条件              | each 数据变化                               | 行为 |
 | ---------------------- | ------------------------------------------- | ---- |
@@ -228,7 +257,7 @@ if (hasEach) {
 ## 八、与现有代码的兼容性
 
 - **API 不变**：`each` 和 `key` 属性保持不变
-- **childFn 签名扩展**：新增第二个参数 `key`，但现有只用 `(item, index)` 的代码完全兼容
+- **childFn 签名扩展**：新增第三个参数 `key`，但现有只用 `(item, index)` 的代码完全兼容
 - **行为变化**：同 key 的列表项在更新时保留 DOM，这是预期增强
 - **数据源扩展**：现有数组用法完全不变，新增对象/Map/Set/字符串/数字支持
 
