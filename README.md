@@ -34,6 +34,8 @@ All other APIs are components or utilities built on these four primitives:
 - **mount / unmount** — explicit mounting and unmounting
 - **lazy** — async component loading
 
+> **Note**: The `when` and `each` directives can only be used on native HTML elements (e.g. `<div>`, `<section>`, `<ul>`, etc.), not on custom components. To use them in a component, place the directive on a native element inside the component's root.
+
 ## Comparison with Other Frameworks
 
 | Aspect             | React     | Vue             | Solid      | kiaao                    |
@@ -249,7 +251,7 @@ unmount(root); // unmount, trigger onUnmount, and clean up all effects
 
 ### Conditional and List Rendering
 
-kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components.
+kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components. These directives only work on native HTML elements, not on custom components.
 
 `when` controls the mounting and unmounting of its host element's child nodes. When the condition is falsy, child nodes are removed and properly disposed. It also supports lazy evaluation functions, which execute only when the condition becomes truthy, avoiding unnecessary initialization.
 
@@ -386,20 +388,20 @@ Route parameters are passed to the matched component as props, and are also avai
 
 ## API Reference
 
-| API            | Purpose                                                            |
-| -------------- | ------------------------------------------------------------------ |
-| define         | Create reactive state, returns [getter, setter]                    |
-| derive         | Create derived state with caching; does not notify when unchanged  |
-| effect         | Run side effects with automatic dependency tracking; returns stop  |
-| h              | Create real DOM nodes, with built-in when/each directives          |
-| Teleport       | Render content into a specified container; fallback to placeholder |
-| lazy           | Async component loading; throws on failure, can be caught          |
-| onMount        | Runs once after the component is mounted                           |
-| onUnmount      | Runs before the component is destroyed                             |
-| mount          | Mount a component tree and trigger lifecycle                       |
-| unmount        | Unmount a component tree and clean up all effects                  |
-| renderToString | Render to an HTML string (from kiaao/server)                       |
-| createRouter   | Client-side routing (from kiaao/router)                            |
+| API            | Purpose                                                                          |
+| -------------- | -------------------------------------------------------------------------------- |
+| define         | Create reactive state, returns [getter, setter]                                  |
+| derive         | Create derived state with caching; does not notify when unchanged                |
+| effect         | Run side effects with automatic dependency tracking; returns stop                |
+| h              | Create real DOM nodes, with built-in when/each directives (native elements only) |
+| Teleport       | Render content into a specified container; fallback to placeholder               |
+| lazy           | Async component loading; throws on failure, can be caught                        |
+| onMount        | Runs once after the component is mounted                                         |
+| onUnmount      | Runs before the component is destroyed                                           |
+| mount          | Mount a component tree and trigger lifecycle                                     |
+| unmount        | Unmount a component tree and clean up all effects                                |
+| renderToString | Render to an HTML string (from kiaao/server)                                     |
+| createRouter   | Client-side routing (from kiaao/router)                                          |
 
 ## License
 
