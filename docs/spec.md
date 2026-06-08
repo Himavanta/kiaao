@@ -1,4 +1,4 @@
-# kiaao 框架规范 v3.2
+# kiaao 框架规范 v3.3
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -158,15 +158,19 @@ stop();
   - 若不存在 `each`，`children` 可以是静态内容（任意节点、字符串等），也可以是**惰性求值函数** `() => any`。若传入函数且不存在 `each`，该函数被视为惰性求值函数，仅在 `when` 条件为真时调用以获取内容。惰性求值允许延迟执行昂贵的初始化操作（如动态导入的组件）。
   - 若同时存在 `each`，则 `children` 必须为 `(item: T, index: number) => any`，惰性函数模式被忽略。
 
-- **`each`**：控制宿主元素内部按数组生成子节点。`each` 接受返回数组的 getter/derive 函数。每次数组变化时，先递归清理旧子节点，再为每个数组元素调用渲染函数生成新子节点并插入。
+- **`each`**：控制宿主元素内部按集合生成子节点。`each` 接受返回任意数据源的 getter/derive 函数，支持**数组、对象、Map、Set、数字、字符串**等多种类型。内部统一转换为键值条目，并为每个条目自动创建响应式信号。
 
   > 如果希望宿主元素不参与布局（仅作为逻辑容器），可对其设置 `style="display: contents"`。该样式使元素自身不生成盒子，子节点直接作为父级子元素参与布局，且不影响生命周期管理。
 
-  `children` 必须为渲染函数 `(item: T, index: number) => any`。`each` 仅在 `tag` 为字符串时生效。在 void 元素上使用同样会抛出错误。
+  **`children` 渲染函数**签名为 `(value: any, index: number, key: any) => Node`。其中 `value` 是框架为当前条目创建的响应式 getter，可直接用于选择器订阅（如 `value(v => v.name)`）；`index` 为数字序号；`key` 为条目在原始数据源中的键（数组索引、对象属性名等）。
+
+  **内部自动响应式包装**：`each` 为每个条目维护一个专属的 `define` 信号。数据变化时，同 key 的条目通过 setter 更新信号值，触发细粒度 DOM 更新，而非销毁重建整个列表项。这保证了输入焦点、滚动位置等状态的保持。
+
+  **`key` 属性**：可选的 `key` 函数 `(item: any, index: number, entryKey: any) => any`，用于自定义列表项的身份标识。若未提供，则默认使用条目在数据源中的键（数组索引、对象属性名等）作为 identity。基于 identity 的增量更新策略：同 identity 的 DOM 节点被直接复用（移动位置，不重新渲染），新增项创建节点，消失项销毁节点。这最大程度减少了 DOM 操作。
+
+  `each` 仅在 `tag` 为字符串时生效。在 void 元素上使用同样会抛出错误。
 
 - **`when` + `each` 共存**：`when` 优先。当 `when` 为 falsy 时，不执行 `each`，不渲染任何子节点；当 `when` 为 truthy 时，再根据 `each` 生成子节点。语义等价于 `when` 包裹 `each`。共存时 `key` 同样生效，列表更新策略与单独使用 `each` 一致（基于 key 的增量更新）。
-
-- **`key`**：配合 `each` 使用的函数 `(item: T, index: number) => any`，必须为每个列表项返回唯一且稳定的值。提供 `key` 后，列表更新时基于 key 进行增量更新：始终调用渲染函数生成新节点，旧节点在 key 相同时先销毁后重建（确保数据正确），不再使用的 key 对应的旧节点被自动清理。若未提供 `key`，则回退到全量重建模式。`key` 在 `when` 与 `each` 共存时同样生效。
 
 **类型约束**：
 
@@ -176,8 +180,8 @@ function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: HTMLAttributes & {
     when?: (() => any) | ReactiveFunction;
-    each?: () => any[];
-    key?: (item: any, index: number) => any;
+    each?: () => any; // 支持多种数据源
+    key?: (item: any, index: number, entryKey: any) => any;
     [key: string]: any;
   },
   ...children: any[]
@@ -229,8 +233,16 @@ function h(
 
 // 列表渲染（带 key，增量更新）
 <ul each={() => items()} key={item => item.id}>
-  {(item) => <li>{item.text}</li>}
+  {(item) => <li>{item}</li>}
 </ul>
+
+// 对象属性遍历
+<dl each={() => ({ name: 'kiaao', version: '3.3' })}>
+  {(value, index, key) => [
+    <dt>{key}</dt>,
+    <dd>{value}</dd>
+  ]}
+</dl>
 ```
 
 ---
@@ -466,9 +478,9 @@ kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号
 
 ---
 
-## 十、路由（独立包）
+## 十、路由
 
-路由以独立包 `kiaao-router` 提供，完全基于核心原语实现。
+路由完全基于核心原语实现。
 
 - `createRouter(routes)` 返回 `{ RouterView, navigate, currentPath, currentParams }`。
 - `RouterView` 组件根据当前路径匹配路由表并渲染对应组件。
@@ -477,7 +489,7 @@ kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号
 - 支持 fallback 组件处理 404。
 
 ```javascript
-import { createRouter } from "kiaao-router";
+import { createRouter } from "kiaao/router";
 const { RouterView, navigate } = createRouter(
   [
     { path: "/", component: Home },
@@ -531,19 +543,21 @@ export default defineConfig({ integrations: [kiaao()] });
 ## 十二、TypeScript 核心类型
 
 ```typescript
-interface Getter<T> {
+interface ReactiveFunction<T = any> {
   (): T;
-  <R>(selector: (value: T) => R): () => R;
+  [IS_REACTIVE]?: true;
+}
+
+interface Getter<T> extends ReactiveFunction<T> {
+  /** 无选择器：返回当前值 */
+  (): T;
+  /** 传选择器：返回响应式派生函数 */
+  <R>(selector: (value: T) => R): ReactiveFunction<R>;
 }
 
 interface Setter<T> {
   (newValue: T): T;
   (updater: (prev: T) => T): T;
-}
-
-interface ReactiveFunction {
-  (): any;
-  [IS_REACTIVE]?: true;
 }
 
 function define<T>(initialValue: T): [Getter<T>, Setter<T>];
