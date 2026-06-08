@@ -255,7 +255,7 @@ kiaao handles control flow via native `when` and `each` attribute directives on 
 
 `when` controls the mounting and unmounting of its host element's child nodes. When the condition is falsy, child nodes are removed and properly disposed. It also supports lazy evaluation functions, which execute only when the condition becomes truthy, avoiding unnecessary initialization.
 
-`each` generates child nodes inside its host element from an array. When a `key` function is provided, updates are incremental — new nodes are created for every item, stale ones are cleaned up, and each node is inserted at the correct position. Without `key`, falls back to full rebuild.
+`each` iterates over multiple data sources (arrays, objects, Maps, Sets, etc.), automatically creating a reactive signal for each entry. Providing a `key` function enables incremental DOM reuse, preserving input focus and state of list items.
 
 ```tsx
 import { define } from "kiaao";
@@ -307,86 +307,13 @@ const HeavyProfile = lazy(() => import("./HeavyProfile.tsx"));
 const el = h(HeavyProfile, { userId: 42 });
 ```
 
-## Server-Side Rendering and Astro Integration
+## Server-Side Rendering, Astro Integration, and Routing
 
-Use `renderToString` to render a component to an HTML string.
+See [`guide/router-ssr-astro.md`](guide/router-ssr-astro.md).
 
-```tsx
-import { renderToString } from "kiaao/server";
-const html = renderToString(MyComponent, { name: "kiaao" });
-```
-
-In SSR mode, `effect` is disabled, `derive` computes once, and `onMount`/`onUnmount` do not fire.
-
-kiaao provides an official Astro integration. Purely static components output zero JavaScript; `client:only` components are fully mounted in the browser.
-
-```bash
-npm install kiaao astro
-```
-
-```json
-// tsconfig.json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "kiaao"
-  }
-}
-```
-
-```ts
-// astro.config.ts
-import { defineConfig } from "astro/config";
-import kiaao from "kiaao/astro";
-
-export default defineConfig({
-  integrations: [kiaao()],
-});
-```
-
-```astro
----
-import Counter from "../components/Counter.tsx";
----
-
-<!-- pure static HTML -->
-<Counter />
-
-<!-- full client-side interactivity -->
-<Counter client:only />
-```
-
-## Routing
-
-A lightweight client-side router is available as the separate package `kiaao/router`, built entirely on the core primitives.
-
-```tsx
-import { createRouter } from "kiaao/router";
-
-const { RouterView, navigate, Link, currentParams } = createRouter(
-  [
-    { path: "/", component: Home },
-    { path: "/users/:id", component: UserProfile },
-  ],
-  { fallback: () => <div>404 Not Found</div> },
-);
-
-function App() {
-  return (
-    <div>
-      <nav>
-        <Link to="/">Home</Link>
-        <Link to="/users/1">User 1</Link>
-      </nav>
-      <RouterView />
-    </div>
-  );
-}
-```
-
-Route parameters are passed to the matched component as props, and are also available via `currentParams()`.
-
-## API Reference
+- **Server-Side Rendering**: Use `renderToString` to render a component to HTML (from `kiaao/server`)
+- **Astro Integration**: Official `kiaao/astro` plugin, supports static and `client:only` components
+- **Routing**: Lightweight client-side router (`kiaao/router`), supports nested layouts
 
 | API            | Purpose                                                                          |
 | -------------- | -------------------------------------------------------------------------------- |
@@ -400,8 +327,8 @@ Route parameters are passed to the matched component as props, and are also avai
 | onUnmount      | Runs before the component is destroyed                                           |
 | mount          | Mount a component tree and trigger lifecycle                                     |
 | unmount        | Unmount a component tree and clean up all effects                                |
-| renderToString | Render to an HTML string (from kiaao/server)                                     |
-| createRouter   | Client-side routing (from kiaao/router)                                          |
+| renderToString | Render to an HTML string (see `guide/router-ssr-astro.md`)                       |
+| createRouter   | Client-side routing (see `guide/router-ssr-astro.md`)                            |
 
 ## License
 

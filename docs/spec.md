@@ -476,71 +476,7 @@ kiaao 的组件是普通的 JavaScript 函数，返回真实 DOM，无需 `ref` 
 
 kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号的独立性、闭包的原生能力以及模块机制已覆盖所有跨层级共享场景。
 
----
-
-## 十、路由
-
-路由完全基于核心原语实现。
-
-- `createRouter(routes)` 返回 `{ RouterView, navigate, currentPath, currentParams }`。
-- `RouterView` 组件根据当前路径匹配路由表并渲染对应组件。
-- `navigate(path)` 进行编程式导航。
-- `currentParams` 为派生信号，返回当前路由的动态参数对象。
-- 支持 fallback 组件处理 404。
-
-```javascript
-import { createRouter } from "kiaao/router";
-const { RouterView, navigate } = createRouter(
-  [
-    { path: "/", component: Home },
-    { path: "/users/:id", component: UserProfile },
-  ],
-  { fallback: () => <div>404</div> },
-);
-```
-
----
-
-## 十一、SSR 与 Astro 集成
-
-### 渲染模式
-
-内部状态 `RenderMode = "dom" | "ssr" | "hydrate"`，默认 `"dom"`。`setRenderMode(mode)` 切换模式。
-
-### SSR 核心行为
-
-- **`effect`**：SSR 下禁用，返回空 `stop` 函数。
-- **`derive`**：退化为一次性计算，返回固定值但保留 `IS_REACTIVE` 标记。
-- **`onMount` / `onUnmount`**：SSR 中不触发。
-- **`h()`**：SSR 模式委托给 `hSSR`，`hSSR` 负责字符串拼接。属性值若为响应式函数则调用取值，事件属性跳过。控制流指令按规则生成对应 HTML：`when` 为 false 时保留宿主空元素标签；`each` 采用三段式序列化；`when` 与 `each` 共存时先判断 `when`。
-
-### `renderToString`
-
-```typescript
-function renderToString(
-  component: (props: any) => HTMLElement,
-  props?: any,
-  options?: { slots?: Record<string, string> },
-): string;
-```
-
-### Astro 集成
-
-通过 `kiaao/astro` 插件注册渲染器，支持纯静态组件和 `client:only` 组件。
-
-```bash
-npm install kiaao astro
-```
-
-```ts
-// astro.config.ts
-import kiaao from "kiaao/astro";
-export default defineConfig({ integrations: [kiaao()] });
-```
-
----
-
-## 十二、TypeScript 核心类型
+## 十、TypeScript 核心类型
 
 ```typescript
 interface ReactiveFunction<T = any> {
@@ -596,8 +532,8 @@ function renderToString(
 | `onUnmount`      | 生命周期 | 销毁前清理                                                       |
 | `mount`          | 挂载     | 挂载组件树并触发生命周期                                         |
 | `unmount`        | 挂载     | 卸载组件树并清理所有资源                                         |
-| `renderToString` | SSR      | 服务端渲染为 HTML 字符串（来自 `kiaao/server`）                  |
-| `createRouter`   | 路由     | 客户端路由（来自 `kiaao/router`）                                |
+| `renderToString` | SSR      | 服务端渲染为 HTML 字符串（详见 `guide/router-ssr-astro.md`）     |
+| `createRouter`   | 路由     | 客户端路由（详见 `guide/router-ssr-astro.md`）                   |
 
 **核心概念为 4 个（define、derive、effect、h），控制流由 `h()` 的原生属性指令实现，无需额外的 Show/List 组件。**
 
@@ -605,20 +541,20 @@ function renderToString(
 
 ## 十四、与主流框架差异
 
-| 维度            | React         | Vue                    | Solid            | **kiaao**                  |
-| --------------- | ------------- | ---------------------- | ---------------- | -------------------------- |
-| 数据纯净度      | 纯净          | 不纯净                 | 纯净（两套）     | **纯净（一套）**           |
-| 组件运行次数    | 每次重跑      | 外壳一次               | 外壳一次         | **外壳一次**               |
-| 虚拟 DOM        | 有            | 有                     | 无               | **无**                     |
-| 编译器依赖      | 无            | 可选                   | 强依赖           | **无**                     |
-| 响应式原理      | 无            | Proxy                  | 编译期           | **显式选择器**             |
-| 核心概念数      | 10+           | 8+                     | 6+               | **4**                      |
-| 更新粒度        | 组件级        | 组件/块级              | DOM 节点级       | **选择器结果级**           |
-| 控制流方式      | 三元/`&&`/map | `v-if`/`v-for`         | `<Show>`/`<For>` | **`when`/`each` 属性指令** |
-| Context/Provide | 有            | 有                     | 有               | **无（信号即通道）**       |
-| 传送门          | 有            | 有                     | 有               | **有 (`<Teleport>`)**      |
-| 异步组件        | `lazy`        | `defineAsyncComponent` | `lazy`           | **`lazy`**                 |
-| 路由            | 独立库        | 独立库                 | 独立库           | **独立包**                 |
+| 维度            | React         | Vue                    | Solid            | **kiaao**                                      |
+| --------------- | ------------- | ---------------------- | ---------------- | ---------------------------------------------- |
+| 数据纯净度      | 纯净          | 不纯净                 | 纯净（两套）     | **纯净（一套）**                               |
+| 组件运行次数    | 每次重跑      | 外壳一次               | 外壳一次         | **外壳一次**                                   |
+| 虚拟 DOM        | 有            | 有                     | 无               | **无**                                         |
+| 编译器依赖      | 无            | 可选                   | 强依赖           | **无**                                         |
+| 响应式原理      | 无            | Proxy                  | 编译期           | **显式选择器**                                 |
+| 核心概念数      | 10+           | 8+                     | 6+               | **4**                                          |
+| 更新粒度        | 组件级        | 组件/块级              | DOM 节点级       | **选择器结果级**                               |
+| 控制流方式      | 三元/`&&`/map | `v-if`/`v-for`         | `<Show>`/`<For>` | **`when`/`each` 属性指令**                     |
+| Context/Provide | 有            | 有                     | 有               | **无（信号即通道）**                           |
+| 传送门          | 有            | 有                     | 有               | **有 (`<Teleport>`)**                          |
+| 异步组件        | `lazy`        | `defineAsyncComponent` | `lazy`           | **`lazy`**                                     |
+| 路由            | 独立库        | 独立库                 | 独立库           | **独立包（详见 `guide/router-ssr-astro.md`）** |
 
 ---
 

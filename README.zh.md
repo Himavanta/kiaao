@@ -307,84 +307,13 @@ const HeavyProfile = lazy(() => import("./HeavyProfile.tsx"));
 const el = h(HeavyProfile, { userId: 42 });
 ```
 
-## 服务端渲染与 Astro 集成
+## 服务端渲染、Astro 集成与路由
 
-通过 `renderToString` 将组件渲染为 HTML 字符串。
+详见 [`guide/router-ssr-astro.md`](guide/router-ssr-astro.md)。
 
-```tsx
-import { renderToString } from "kiaao/server";
-const html = renderToString(MyComponent, { name: "kiaao" });
-```
-
-SSR 模式下 `effect` 被禁用，`derive` 执行一次计算，`onMount`/`onUnmount` 不触发。
-
-kiaao 提供官方 Astro 集成。纯静态组件零 JavaScript 输出，`client:only` 组件在浏览器端完整挂载。
-
-```bash
-npm install kiaao astro
-```
-
-```json
-// tsconfig.json：
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "kiaao"
-  }
-}
-```
-
-```ts
-// astro.config.ts
-import { defineConfig } from "astro/config";
-import kiaao from "kiaao/astro";
-
-export default defineConfig({
-  integrations: [kiaao()],
-});
-```
-
-```astro
----
-import Counter from "../components/Counter.tsx";
----
-
-<!-- 纯静态 HTML -->
-<Counter />
-
-<!-- 完整客户端交互 -->
-<Counter client:only />
-```
-
-## 路由
-
-轻量客户端路由作为独立包 `kiaao/router` 提供，完全基于核心原语构建。
-
-```tsx
-import { createRouter } from "kiaao/router";
-
-const { RouterView, navigate, Link, currentParams } = createRouter(
-  [
-    { path: "/", component: Home },
-    { path: "/users/:id", component: UserProfile },
-  ],
-  { fallback: () => <div>404 Not Found</div> },
-);
-
-function App() {
-  return (
-    <div>
-      <nav>
-        <Link to="/">首页</Link>
-        <Link to="/users/1">用户 1</Link>
-      </nav>
-      <RouterView />
-    </div>
-  );
-}
-```
-
-路由参数作为 props 传入组件，也可通过 `currentParams()` 获取。
+- **服务端渲染**：通过 `renderToString` 将组件渲染为 HTML（来自 `kiaao/server`）
+- **Astro 集成**：官方 `kiaao/astro` 插件，支持纯静态和 `client:only` 组件
+- **路由**：轻量客户端路由 `kiaao/router`，支持嵌套布局
 
 ## API 参考
 
@@ -400,8 +329,8 @@ function App() {
 | onUnmount      | 组件销毁前执行                                                    |
 | mount          | 将组件树挂载到容器并触发生命周期                                  |
 | unmount        | 卸载组件树并清理所有 effect                                       |
-| renderToString | 服务端渲染为 HTML 字符串（来自 kiaao/server）                     |
-| createRouter   | 客户端路由（来自 kiaao/router）                                   |
+| renderToString | 服务端渲染为 HTML 字符串（详见 `guide/router-ssr-astro.md`）      |
+| createRouter   | 客户端路由（详见 `guide/router-ssr-astro.md`）                    |
 
 ## 许可证
 
