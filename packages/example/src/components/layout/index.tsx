@@ -3,7 +3,7 @@ import Nav from "./nav";
 
 export default function () {
   return (
-    <section class="h-full w-full bg-amber-300 flex flex-col">
+    <section class="h-full w-full bg-gray-100 flex flex-col">
       <Nav />
       <main class="flex-1">
         <RouterView base="/i" routes={indexRoutes} />
