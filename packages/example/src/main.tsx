@@ -1,5 +1,8 @@
 import { mount } from "kiaao";
-import { RouterView } from "./router";
+import { RouterView, appRoutes } from "./router";
 import "./style.css";
 
-mount((<RouterView />) as HTMLElement, document.querySelector<HTMLDivElement>("#app")!);
+mount(
+  (<RouterView routes={appRoutes} />) as HTMLElement,
+  document.querySelector<HTMLDivElement>("#app")!,
+);

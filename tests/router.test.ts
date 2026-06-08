@@ -9,38 +9,21 @@ beforeEach(() => {
   window.history.pushState(null, "", "/");
 });
 
+const routes = [
+  { path: "", component: () => h("h1", null, "Home") },
+  { path: "about", component: () => h("h1", null, "About") },
+];
+
 describe("createRouter", () => {
   test("renders matched route component", () => {
-    function Home() {
-      return h("h1", null, "Home");
-    }
-    function About() {
-      return h("h1", null, "About");
-    }
-
-    const { RouterView } = createRouter([
-      { path: "", component: Home },
-      { path: "about", component: About },
-    ]);
-
-    const el = h("div", null, h(RouterView));
+    const { RouterView } = createRouter();
+    const el = h("div", null, h(RouterView, { routes }));
     expect(el.textContent).toBe("Home");
   });
 
   test("navigate switches route", () => {
-    function Home() {
-      return h("h1", null, "Home");
-    }
-    function About() {
-      return h("h1", null, "About");
-    }
-
-    const { RouterView, navigate } = createRouter([
-      { path: "", component: Home },
-      { path: "about", component: About },
-    ]);
-
-    const el = h("div", null, h(RouterView));
+    const { RouterView, navigate } = createRouter();
+    const el = h("div", null, h(RouterView, { routes }));
     expect(el.textContent).toBe("Home");
 
     navigate("/about");
@@ -53,22 +36,14 @@ describe("createRouter", () => {
       return h("p", null, `User ${id ?? "unknown"}`);
     }
 
-    const { RouterView } = createRouter([{ path: "", component: User }]);
-
-    const el = h("div", null, h(RouterView));
+    const { RouterView } = createRouter();
+    const el = h("div", null, h(RouterView, { routes: [{ path: "", component: User }] }));
     expect(el.textContent).toBe("User unknown");
   });
 
   test("fallback renders for unmatched routes", () => {
-    function Home() {
-      return h("h1", null, "Home");
-    }
-
-    const { RouterView, navigate } = createRouter([{ path: "", component: Home }], {
-      fallback: () => h("div", null, "Custom 404"),
-    });
-
-    const el = h("div", null, h(RouterView));
+    const { RouterView, navigate } = createRouter({ fallback: () => h("div", null, "Custom 404") });
+    const el = h("div", null, h(RouterView, { routes }));
     expect(el.textContent).toBe("Home");
 
     navigate("/nonexistent");
@@ -76,52 +51,36 @@ describe("createRouter", () => {
   });
 
   test("Link navigates on click", () => {
-    function Home() {
-      return h("h1", null, "Home");
-    }
-    function About() {
-      return h("h1", null, "About");
-    }
-
-    const { RouterView, Link } = createRouter([
-      { path: "", component: Home },
-      { path: "about", component: About },
-    ]);
-
-    const el = h("div", null, h(Link, { to: "/about" }, "Go to About"), h(RouterView));
+    const { RouterView, Link } = createRouter();
+    const el = h("div", null, h(Link, { to: "/about" }, "Go to About"), h(RouterView, { routes }));
 
     expect(el.textContent).toBe("Go to AboutHome");
 
-    // Click the link
     const anchor = el.querySelector("a")!;
     anchor.click();
     expect(el.textContent).toBe("Go to AboutAbout");
   });
 
   test("RouterView with base renders nested layout", () => {
+    const dashboardRoutes = [
+      { path: "", component: () => h("h2", null, "Dashboard") },
+      { path: "users", component: () => h("h2", null, "Users") },
+    ];
+
     function Layout() {
       return h("main", null, h(RouterView, { base: "/dashboard", routes: dashboardRoutes }));
     }
-    function DashboardHome() {
-      return h("h2", null, "Dashboard");
-    }
-    function Users() {
-      return h("h2", null, "Users");
-    }
 
-    const dashboardRoutes = [
-      { path: "", component: DashboardHome },
-      { path: "users", component: Users },
-    ];
+    const { RouterView, navigate } = createRouter();
 
-    const { RouterView, navigate } = createRouter([{ path: "dashboard", component: Layout }]);
-
-    // Navigate to /dashboard to trigger the Layout route
     navigate("/dashboard");
-    const el = h("div", null, h(RouterView));
+    const el = h(
+      "div",
+      null,
+      h(RouterView, { routes: [{ path: "dashboard", component: Layout }] }),
+    );
     expect(el.textContent).toBe("Dashboard");
 
-    // Navigate to /dashboard/users
     navigate("/dashboard/users");
     expect(el.textContent).toBe("Users");
   });

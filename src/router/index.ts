@@ -1,22 +1,4 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
-//
-// Usage:
-//   import { createRouter } from "kiaao/router";
-//
-//   const { RouterView, navigate, Link } = createRouter([
-//     { path: "", component: Home },
-//     { path: "dashboard", component: DashboardLayout },
-//   ]);
-//
-//   function App() {
-//     return h("div", null, h(RouterView));
-//   }
-//
-//   function DashboardLayout() {
-//     return h("main", null,
-//       h(RouterView, { base: "/dashboard", routes: dashboardRoutes })
-//     );
-//   }
 
 import { define } from "../core/runtime.ts";
 import { h } from "../core/h.ts";
@@ -36,8 +18,8 @@ export interface Route {
 export interface RouterViewProps {
   /** 路径前缀，以 / 开头不含尾 /。该 RouterView 只响应 base 内的路径变化。 */
   base?: string;
-  /** 专属路由表，不传则使用 createRouter 的默认路由表。 */
-  routes?: Route[];
+  /** 专属路由表。路由表不能为空。 */
+  routes: Route[];
   /** 无匹配时的后备内容，不传则使用 createRouter 的全局 fallback。 */
   fallback?: RouteComponent;
 }
@@ -57,7 +39,7 @@ export interface RouterOptions {
 
 export interface Router {
   /** View component — renders the matched route */
-  RouterView: (props?: RouterViewProps) => Node;
+  RouterView: (props: RouterViewProps) => Node;
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
@@ -97,7 +79,7 @@ function matchRoute(routes: Route[], segment: string): Route | null {
 
 // ── createRouter ───────────────────────────────────────
 
-export function createRouter(routes: Route[], options: RouterOptions = {}): Router {
+export function createRouter(options: RouterOptions = {}): Router {
   const [currentPath, setPath] = define(window.location.pathname);
 
   window.addEventListener("popstate", () => {
@@ -105,7 +87,6 @@ export function createRouter(routes: Route[], options: RouterOptions = {}): Rout
   });
 
   function navigate(path: string): void {
-    // 只保存 pathname 部分，query string 通过 window.location.search 获取
     const pathname = path.split("?")[0];
     history.pushState(null, "", path);
     setPath(pathname);
@@ -113,12 +94,11 @@ export function createRouter(routes: Route[], options: RouterOptions = {}): Rout
 
   const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
 
-  function RouterView(props?: RouterViewProps): Node {
-    const myRoutes = props?.routes ?? routes;
+  function RouterView(props: RouterViewProps): Node {
+    const myRoutes = props.routes;
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
 
-    // 缓存上一次的段，用于 SKIP_UPDATE 判断
     let prevSegment: string | null = null;
 
     return h(

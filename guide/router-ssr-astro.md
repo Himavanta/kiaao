@@ -6,13 +6,9 @@
 
 ### createRouter
 
-`createRouter(routes, options?)` 创建路由实例，返回 `{ RouterView, navigate, currentPath, currentParams, Link }`。
+`createRouter(options?)` 创建路由实例，返回 `{ RouterView, navigate, currentPath, currentParams, Link }`。
 
 #### 参数
-
-- **`routes`**：路由表数组，每个路由为 `{ path: string; component: RouteComponent }`。
-  - `path` 为**单个路径段**，不能包含 `/`。空字符串 `""` 表示默认子路由。
-  - `component` 为路由组件函数 `(props?) => Node`。
 
 - **`options.fallback`**：无匹配时的后备组件，默认为显示 "404 Not Found"。
 
@@ -45,17 +41,22 @@
 ```tsx
 import { createRouter } from "kiaao/router";
 
-const router = createRouter([
+const router = createRouter();
+
+const appRoutes = [
   { path: "", component: Home },
   { path: "login", component: Login },
   { path: "dashboard", component: DashboardLayout },
+];
+
+const dashboardRoutes = [
   { path: "", component: DashboardHome },
   { path: "users", component: Users },
   { path: "settings", component: Settings },
-]);
+];
 
 function App() {
-  return <RouterView />;
+  return <RouterView routes={appRoutes} />;
 }
 
 function DashboardLayout() {
@@ -63,14 +64,7 @@ function DashboardLayout() {
     <section>
       <Sidebar />
       <main>
-        <RouterView
-          base="/dashboard"
-          routes={[
-            { path: "", component: DashboardHome },
-            { path: "users", component: Users },
-            { path: "settings", component: Settings },
-          ]}
-        />
+        <RouterView base="/dashboard" routes={dashboardRoutes} />
       </main>
     </section>
   );
