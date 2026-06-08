@@ -3,7 +3,7 @@
 // Adapts the React JSX calling convention (children inside props)
 // to kiaao's h(tag, props, ...children).
 
-import { h } from "../dom.ts";
+import { h } from "../core/h.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 

@@ -2,8 +2,8 @@
 
 import { expect, test, describe } from "vite-plus/test";
 import { define, derive, effect } from "../src/index.ts";
-import { h } from "../src/dom.ts";
-import { Teleport, lazy } from "../src/components.ts";
+import { h } from "../src/core/h.ts";
+import { Teleport, lazy } from "../src/core/components.ts";
 import { renderToString } from "../src/server/index.ts";
 
 describe("renderToString — basic elements", () => {

@@ -18,10 +18,9 @@
 //     );
 //   }
 
-import { define } from "../runtime.ts";
-import { h } from "../dom.ts";
-import { SKIP_UPDATE } from "../types.ts";
-import type { Getter } from "../types.ts";
+import { define } from "../core/runtime.ts";
+import { h } from "../core/h.ts";
+import { SKIP_UPDATE, type Getter } from "../core/types.ts";
 
 // ── Types ──────────────────────────────────────────────
 

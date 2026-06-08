@@ -4,7 +4,7 @@ import { SSR_COMPONENT } from "./types.ts";
 
 import { define } from "./runtime.ts";
 
-import { h } from "./dom.ts";
+import { h } from "./h.ts";
 import { onUnmount, disposeNode, triggerMount } from "./lifecycle.ts";
 import { ssr } from "./ssr-helpers.ts";
 
