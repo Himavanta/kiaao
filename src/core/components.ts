@@ -1,6 +1,6 @@
 // kiaao — Built-in components: Teleport, lazy
 
-import { SSR_COMPONENT } from "./types.ts";
+import { SSR_COMPONENT, type ReactiveFunction } from "./types.ts";
 
 import { define } from "./runtime.ts";
 
@@ -10,7 +10,10 @@ import { ssr } from "./ssr-helpers.ts";
 
 // ── Teleport ───────────────────────────────────────────────
 
-export function Teleport(props: { to: string | HTMLElement; children: () => any }): Node {
+export function Teleport(props: {
+  to: string | HTMLElement;
+  children: (() => any) | ReactiveFunction;
+}): Node {
   const target =
     typeof props.to === "string" ? document.querySelector<HTMLElement>(props.to) : props.to;
   if (!target) return document.createComment("teleport-missing-target");

@@ -1,6 +1,12 @@
 // kiaao — when/each directive implementations
 
-import { IS_REACTIVE, SKIP_UPDATE, type Getter, type Setter } from "./types.ts";
+import {
+  IS_REACTIVE,
+  SKIP_UPDATE,
+  type Getter,
+  type Setter,
+  type ReactiveFunction,
+} from "./types.ts";
 import { effect, define } from "./runtime.ts";
 import { triggerMount, disposeNode } from "./lifecycle.ts";
 import { isVoidElement } from "./ssr-helpers.ts";
@@ -31,7 +37,7 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 
 function renderEach(
   container: HTMLElement,
-  eachFn: any,
+  eachFn: (() => any[]) | Getter<any[]>,
   childFn: (item: any, index: number, key: any) => any,
   keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
@@ -146,9 +152,9 @@ export function createWhenElement(
   tag: string,
   props: any,
   children: any[],
-  whenFn: any,
-  eachFn?: any,
-  keyFn?: any,
+  whenFn: (() => any) | ReactiveFunction,
+  eachFn?: (() => any[]) | Getter<any[]>,
+  keyFn?: (item: any, index: number, entryKey: any) => any,
 ): HTMLElement {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
@@ -222,8 +228,8 @@ export function createEachElement(
   tag: string,
   props: any,
   children: any[],
-  eachFn: any,
-  keyFn?: any,
+  eachFn: (() => any[]) | Getter<any[]>,
+  keyFn?: (item: any, index: number, entryKey: any) => any,
 ): HTMLElement {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);

@@ -34,7 +34,12 @@ export const SKIP_UPDATE = Symbol("kiaao.skip_update");
 
 // ── Public API Types ───────────────────────────────────
 
-export interface Getter<T> {
+export interface ReactiveFunction {
+  (): any;
+  [IS_REACTIVE]?: true;
+}
+
+export interface Getter<T> extends ReactiveFunction {
   /** 无选择器：返回当前全量快照（立即求值，同时在 effect 内追踪依赖） */
   (): T;
   /** 传选择器：返回响应式派生函数，延迟求值，精准订阅 */
@@ -44,11 +49,6 @@ export interface Getter<T> {
 export interface Setter<T> {
   (newValue: T): T;
   (updater: (prev: T) => T): T;
-}
-
-export interface ReactiveFunction {
-  (): any;
-  [IS_REACTIVE]?: true;
 }
 
 // ── Lifecycle ──────────────────────────────────────────
