@@ -3,6 +3,13 @@
 import { define } from "../core/runtime.ts";
 import { h } from "../core/h.ts";
 import { SKIP_UPDATE, type Getter } from "../core/types.ts";
+import {
+  addEvent,
+  getPathname,
+  pushState as pushHistory,
+  getSearch,
+  parseSearch,
+} from "../core/dom-utils.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -80,15 +87,15 @@ function matchRoute(routes: Route[], segment: string): Route | null {
 // ── createRouter ───────────────────────────────────────
 
 export function createRouter(options: RouterOptions = {}): Router {
-  const [currentPath, setPath] = define(window.location.pathname);
+  const [currentPath, setPath] = define(getPathname());
 
-  window.addEventListener("popstate", () => {
-    setPath(window.location.pathname);
+  addEvent(window, "popstate", () => {
+    setPath(getPathname());
   });
 
   function navigate(path: string): void {
     const pathname = path.split("?")[0];
-    history.pushState(null, "", path);
+    pushHistory(path);
     setPath(pathname);
   }
 
@@ -150,9 +157,9 @@ export function createRouter(options: RouterOptions = {}): Router {
 
   function currentParams(): Record<string, string> {
     const params: Record<string, string> = {};
-    const search = window.location.search;
+    const search = getSearch();
     if (search) {
-      new URLSearchParams(search).forEach((value, key) => {
+      parseSearch(search).forEach((value, key) => {
         params[key] = value;
       });
     }

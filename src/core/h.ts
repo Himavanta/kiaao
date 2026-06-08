@@ -7,6 +7,7 @@ import { hSSR } from "./ssr-helpers.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
+import { createElement } from "./dom-utils.ts";
 
 export function h<K extends keyof HTMLElementTagNameMap>(
   tag: K | ((props: any) => any),
@@ -50,14 +51,14 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   }
 
   // ── DOM 模式：普通元素 ──
-  const el = document.createElement(tag);
+  const el = createElement(tag);
 
   setProps(el, props && typeof props === "object" && !(props as any)[IS_REACTIVE] ? props : null);
 
   const childNodes = processChildren(children);
 
   for (const node of childNodes) {
-    el.appendChild(node);
+    el.append(node);
   }
 
   return el;

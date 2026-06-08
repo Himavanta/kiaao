@@ -3,6 +3,7 @@
 import { IS_REACTIVE } from "./types.ts";
 import { effect } from "./runtime.ts";
 import { addLocalEffect } from "./local-effect.ts";
+import { addEvent, setClassName, setCssText, removeAttr, setAttr } from "./dom-utils.ts";
 
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
 // 排除 only、onto 等以 on 开头的非事件属性
@@ -13,32 +14,32 @@ export function setProp(el: HTMLElement, key: string, value: any): void {
 
   if (EVENT_RE.test(key)) {
     const eventName = key.slice(2).toLowerCase();
-    el.addEventListener(eventName, value);
+    addEvent(el, eventName, value);
     return;
   }
 
   switch (key) {
     case "class":
     case "className":
-      el.className = value;
+      setClassName(el, value);
       break;
     case "style":
       if (typeof value === "string") {
-        el.style.cssText = value;
+        setCssText(el, value);
       } else if (typeof value === "object" && value !== null) {
-        el.removeAttribute("style");
+        removeAttr(el, "style");
         Object.assign(el.style, value);
       }
       break;
     default:
       if (typeof value === "boolean") {
         if (value) {
-          el.setAttribute(key, "");
+          setAttr(el, key, "");
         } else {
-          el.removeAttribute(key);
+          removeAttr(el, key);
         }
       } else {
-        el.setAttribute(key, String(value));
+        setAttr(el, key, String(value));
       }
       break;
   }

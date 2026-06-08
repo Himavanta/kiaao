@@ -13,6 +13,15 @@ import { isVoidElement } from "./ssr-helpers.ts";
 import { addLocalEffect, removeLocalEffect } from "./local-effect.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
+import {
+  createElement,
+  createComment,
+  createFragment,
+  firstChild,
+  prevSibling,
+  isConnected,
+  nodeType,
+} from "./dom-utils.ts";
 
 // ── Data Source Normalization ──────────────────────────
 
@@ -41,8 +50,8 @@ function renderEach(
   childFn: (item: any, index: number, key: any) => any,
   keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
-  const anchor = document.createComment("each");
-  container.appendChild(anchor);
+  const anchor = createComment("each");
+  container.append(anchor);
 
   const nodeMap = new Map<any, Node>();
   const itemSignalMap = new Map<any, [Getter<any>, Setter<any>]>();
@@ -92,18 +101,18 @@ function renderEach(
         const node = nodeMap.get(identity)!;
         // 仅在节点位置发生变化时才移动，减少不必要的 DOM 重排
         const needsMove =
-          prevNode === null ? container.firstChild !== node : node.previousSibling !== prevNode;
+          prevNode === null ? firstChild(container) !== node : prevSibling(node) !== prevNode;
         if (needsMove) {
-          container.insertBefore(node, anchor);
+          anchor.before(node);
         }
         prevNode = node;
       } else {
         const node = childFn(itemGetter, index, entryKey);
         if (node instanceof Node) {
-          container.insertBefore(node, anchor);
-          if (container.isConnected) triggerMount(node);
+          anchor.before(node);
+          if (isConnected(container)) triggerMount(node);
           // DocumentFragment 插入后会变空，不可复用，跳过 nodeMap 追踪
-          if (node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+          if (nodeType(node) !== Node.DOCUMENT_FRAGMENT_NODE) {
             nodeMap.set(identity, node);
           }
           prevNode = node;
@@ -112,11 +121,11 @@ function renderEach(
     }
 
     // ── 批量清理消失的节点 ──
-    const removedFragment = document.createDocumentFragment();
+    const removedFragment = createFragment();
     for (const [key, node] of nodeMap) {
       if (!newKeys.has(key)) {
         disposeNode(node);
-        removedFragment.appendChild(node);
+        removedFragment.append(node);
         nodeMap.delete(key);
       }
     }
@@ -141,7 +150,7 @@ function renderEach(
 // ── Trigger Mount Helper ───────────────────────────────
 
 function triggerMountIfConnected(host: Node, node: Node): void {
-  if (host.isConnected) {
+  if (isConnected(host)) {
     triggerMount(node);
   }
 }
@@ -160,7 +169,7 @@ export function createWhenElement(
     throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
   }
 
-  const el = document.createElement(tag);
+  const el = createElement(tag);
   setProps(el, props);
 
   const isLazy = eachFn === undefined && children.length === 1 && typeof children[0] === "function";
@@ -180,24 +189,26 @@ export function createWhenElement(
         eachStop = undefined;
       }
       // 批量移除旧节点，减少重排
-      const removed = document.createDocumentFragment();
-      while (el.firstChild) {
-        disposeNode(el.firstChild);
-        removed.appendChild(el.firstChild);
+      const removed = createFragment();
+      let child: Node | null;
+      while ((child = firstChild(el))) {
+        disposeNode(child);
+        removed.append(child);
       }
       if (!show) return;
       if (result instanceof Node) {
-        el.appendChild(result);
+        el.append(result);
         triggerMountIfConnected(el, result);
       }
       return;
     }
 
     // 非惰性路径：批量移除旧节点
-    const removed = document.createDocumentFragment();
-    while (el.firstChild) {
-      disposeNode(el.firstChild);
-      removed.appendChild(el.firstChild);
+    const removed = createFragment();
+    let child: Node | null;
+    while ((child = firstChild(el))) {
+      disposeNode(child);
+      removed.append(child);
     }
     if (eachStop) {
       eachStop();
@@ -212,7 +223,7 @@ export function createWhenElement(
     } else {
       const nodes = processChildren(children);
       for (const node of nodes) {
-        el.appendChild(node);
+        el.append(node);
         triggerMountIfConnected(el, node);
       }
     }
@@ -235,7 +246,7 @@ export function createEachElement(
     throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
   }
 
-  const el = document.createElement(tag);
+  const el = createElement(tag);
   setProps(el, props);
 
   const childFn = children[0];

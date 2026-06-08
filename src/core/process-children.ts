@@ -3,6 +3,7 @@
 import { IS_REACTIVE, type ReactiveFunction } from "./types.ts";
 import { effect } from "./runtime.ts";
 import { addLocalEffect } from "./local-effect.ts";
+import { createTextNode } from "./dom-utils.ts";
 
 export function processChildren(children: any[]): Node[] {
   const result: Node[] = [];
@@ -16,7 +17,7 @@ export function processChildren(children: any[]): Node[] {
     if (child == null || typeof child === "boolean") continue;
 
     if ((child as ReactiveFunction)[IS_REACTIVE]) {
-      const textNode = document.createTextNode("");
+      const textNode = createTextNode("");
       const stop = effect(() => {
         textNode.textContent = String(child());
       });
@@ -30,7 +31,7 @@ export function processChildren(children: any[]): Node[] {
       continue;
     }
 
-    result.push(document.createTextNode(String(child)));
+    result.push(createTextNode(String(child)));
   }
 
   return result;

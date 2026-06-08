@@ -7,6 +7,7 @@ import { define } from "./runtime.ts";
 import { h } from "./h.ts";
 import { onUnmount, disposeNode, triggerMount } from "./lifecycle.ts";
 import { ssr } from "./ssr-helpers.ts";
+import { createComment, qs } from "./dom-utils.ts";
 
 // ── Teleport ───────────────────────────────────────────────
 
@@ -14,26 +15,21 @@ export function Teleport(props: {
   to: string | HTMLElement;
   children: (() => any) | ReactiveFunction;
 }): Node {
-  const target =
-    typeof props.to === "string" ? document.querySelector<HTMLElement>(props.to) : props.to;
-  if (!target) return document.createComment("teleport-missing-target");
+  const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;
+  if (!target) return createComment("teleport-missing-target");
 
   const content = props.children();
   if (content instanceof Node) {
-    target.appendChild(content);
+    target.append(content);
     triggerMount(content);
   }
 
   onUnmount(() => {
-    if (content instanceof Node) {
-      disposeNode(content);
-      if (content.parentNode) {
-        content.parentNode.removeChild(content);
-      }
-    }
+    disposeNode(content);
+    content.remove();
   });
 
-  return document.createComment("teleport");
+  return createComment("teleport");
 }
 
 (Teleport as any)[SSR_COMPONENT] = () => ssr("<!-- teleport placeholder -->");

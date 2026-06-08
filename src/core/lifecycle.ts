@@ -83,14 +83,11 @@ export function disposeNode(node: Node): void {
 // ── mount / unmount ─────────────────────────────────────
 
 export function mount(root: HTMLElement, container: HTMLElement): void {
-  container.appendChild(root);
+  container.append(root);
   triggerMount(root);
 }
 
 export function unmount(root: HTMLElement): void {
   disposeNode(root);
-
-  if (root.parentNode) {
-    root.parentNode.removeChild(root);
-  }
+  root.remove();
 }
