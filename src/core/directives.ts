@@ -45,7 +45,7 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 // ── Shared Each Renderer ───────────────────────────────
 
 function renderEach(
-  container: HTMLElement,
+  container: Element,
   eachFn: (() => any[]) | Getter<any[]>,
   childFn: (item: any, index: number, key: any) => any,
   keyFn?: (item: any, index: number, entryKey: any) => any,
@@ -164,7 +164,7 @@ export function createWhenElement(
   whenFn: (() => any) | ReactiveFunction,
   eachFn?: (() => any[]) | Getter<any[]>,
   keyFn?: (item: any, index: number, entryKey: any) => any,
-): HTMLElement {
+): Element {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
   }
@@ -241,7 +241,7 @@ export function createEachElement(
   children: any[],
   eachFn: (() => any[]) | Getter<any[]>,
   keyFn?: (item: any, index: number, entryKey: any) => any,
-): HTMLElement {
+): Element {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
   }

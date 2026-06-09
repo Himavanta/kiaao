@@ -9,7 +9,7 @@ import { addEvent, setClassName, setCssText, removeAttr, setAttr } from "./dom-u
 // 排除 only、onto 等以 on 开头的非事件属性
 export const EVENT_RE = /^on[A-Z]/;
 
-export function setProp(el: HTMLElement, key: string, value: any): void {
+export function setProp(el: Element, key: string, value: any): void {
   if (value == null) return;
 
   if (EVENT_RE.test(key)) {
@@ -28,7 +28,7 @@ export function setProp(el: HTMLElement, key: string, value: any): void {
         setCssText(el, value);
       } else if (typeof value === "object" && value !== null) {
         removeAttr(el, "style");
-        Object.assign(el.style, value);
+        Object.assign((el as HTMLElement).style, value);
       }
       break;
     default:
@@ -46,7 +46,7 @@ export function setProp(el: HTMLElement, key: string, value: any): void {
 }
 
 /** 在元素上设置一组属性（事件/响应式/静态），effect 注册到 LOCAL_EFFECTS */
-export function setProps(el: HTMLElement, props: Record<string, any> | null | undefined): void {
+export function setProps(el: Element, props: Record<string, any> | null | undefined): void {
   if (!props || typeof props !== "object") return;
 
   for (const key of Object.keys(props)) {

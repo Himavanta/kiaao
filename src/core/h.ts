@@ -9,11 +9,7 @@ import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 import { createElement } from "./dom-utils.ts";
 
-export function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K | ((props: any) => any),
-  props?: any,
-  ...children: any[]
-): HTMLElement {
+export function h(tag: string | ((props: any) => any), props?: any, ...children: any[]): Element {
   // SSR mode: delegate to hSSR
   if (getRenderMode() === "ssr") {
     return hSSR(tag, props, children) as any;
@@ -37,7 +33,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
       (result as any)[DISPOSE_KEY] = createDisposeFn(instance);
     }
 
-    return result as HTMLElement;
+    return result as Element;
   }
 
   // ── DOM 模式：控制流指令 ──

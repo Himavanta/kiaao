@@ -82,12 +82,12 @@ export function disposeNode(node: Node): void {
 
 // ── mount / unmount ─────────────────────────────────────
 
-export function mount(root: HTMLElement, container: HTMLElement): void {
+export function mount(root: Element, container: Element): void {
   container.append(root);
   triggerMount(root);
 }
 
-export function unmount(root: HTMLElement): void {
+export function unmount(root: Element): void {
   disposeNode(root);
   root.remove();
 }
