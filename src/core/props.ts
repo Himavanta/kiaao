@@ -15,13 +15,9 @@ export function setProp(el: Element, rawKey: string, value: any): void {
   // 1. 剥离前缀
   const { prefix, key } = stripPrefix(rawKey);
 
-  // 2. prop: 前缀 → 强制 property（SVG 忽略前缀，回退到 setAttribute）
+  // 2. prop: 前缀 → 强制 property（所有元素，包括 SVG）
   if (prefix === "prop") {
-    if (el instanceof SVGElement) {
-      setAttr(el, key, String(value));
-    } else {
-      (el as any)[key] = value;
-    }
+    (el as any)[key] = value;
     return;
   }
 

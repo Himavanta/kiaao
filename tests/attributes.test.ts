@@ -220,13 +220,6 @@ describe("SVG elements — always setAttribute", () => {
     expect(el.getAttribute("class")).toBe("icon-red");
   });
 
-  test("SVG ignores prop: prefix (always setAttribute)", () => {
-    const el = h("circle", { "prop:cx": "99" } as any);
-    // SVG 忽略前缀，所以 prop: 和 attr: 都走 setAttribute
-    // 但 key 被剥离前缀，所以 'cx' 被 setAttribute
-    expect(el.getAttribute("cx")).toBe("99");
-  });
-
   test("SVG style as string works", () => {
     const el = h("circle", { style: "fill: red; stroke: blue" }) as HTMLElement;
     expect(el.getAttribute("style")).toBe("fill: red; stroke: blue");

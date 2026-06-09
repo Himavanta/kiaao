@@ -291,9 +291,11 @@ if (key.startsWith("aria-") || key.startsWith("data-")) {
 
 ### 5.5 SVG 元素
 
-SVG 元素**忽略前缀**（前缀已被剥离，仅使用裸 key），所有属性一律走 `setAttribute`。这是因为 SVG 的 DOM property 大多是复杂对象（`SVGAnimatedRect`、`SVGAnimatedLength` 等），字符串 property 赋值几乎总是错的。
+SVG 元素默认走 `setAttribute`，这是因为 SVG 的 DOM property 大多是复杂对象（`SVGAnimatedRect`、`SVGAnimatedLength` 等），字符串 property 赋值几乎总是错的。
 
 SVG 分支不需要处理 `style`（style 已被前置拦截），其余属性一律 `setAttribute`：
+
+`prop:cx="50"` 等显式前缀会先被前缀分支拦截，不会进入此分支。开发者需自行承担 SVG 只读 property 的后果。
 
 ```ts
 if (el instanceof SVGElement) {
@@ -302,7 +304,7 @@ if (el instanceof SVGElement) {
 }
 ```
 
-> SVG 上的 `attr:` 和 `prop:` 前缀行为一致——都是 `setAttribute`。如需在 SVG 上执行特殊的 DOM property 操作，应使用原生 DOM API。
+> `attr:` 前缀在 SVG 上走 `setAttribute`，`prop:` 前缀在 SVG 上走 property 赋值。显式前缀先于 SVG 分支处理。
 
 ## 6. 客户端完整决策流程
 
@@ -581,18 +583,18 @@ function serializeSSRAttrs(props: Record<string, any>): string {
 
 ## 9. 边界情况与决策说明
 
-| 场景                           | 处理方式                                                                     | 理由                                          |
-| ------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------- |
-| `value` 不在 FORCE_ATTRIBUTE   | 走 property                                                                  | 受控组件语义                                  |
-| `checked` 不在 FORCE_ATTRIBUTE | 走 property                                                                  | 受控组件语义                                  |
-| `<div hidden>`（无值）         | JSX 编译为 `hidden: true`，走 FORCE_ATTRIBUTE → `setAttribute('hidden', '')` | 与 HTML 语义一致                              |
-| `<div hidden={false}>`         | 走 FORCE_ATTRIBUTE → `removeAttribute('hidden')`                             | 取消隐藏                                      |
-| SVG 中 `className`             | 走 SVG 分支 → `setAttribute('className', value)`                             | 开发者责任，SVG 的 class 应使用 `class`       |
-| SVG 上 `prop:viewBox`          | 被 SVG 分支拦截，等同 `setAttribute('viewBox', ...)`                         | SVG property 是复杂对象，强制赋值几乎总是错的 |
-| 自定义元素 `<x-foo bar={obj}>` | 无前缀 ∉ FORCE_ATTRIBUTE → `el.bar = obj`                                    | 传递对象                                      |
-| `attr:bar={obj}`               | `setAttribute('bar', '[object Object]')`                                     | 显式标记，开发者自行负责序列化                |
-| `el.innerHTML = null`          | 变为 `"null"` 字符串                                                         | 开发者责任，传值前自行保证类型正确            |
-| 组件上使用前缀                 | 前缀作为普通 prop 透传，不处理                                               | 组件只透传，前缀在 DOM 元素的 setProp 中生效  |
+| 场景                              | 处理方式                                                                     | 理由                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `value` 不在 FORCE_ATTRIBUTE      | 走 property                                                                  | 受控组件语义                                                          |
+| `checked` 不在 FORCE_ATTRIBUTE    | 走 property                                                                  | 受控组件语义                                                          |
+| `<div hidden>`（无值）            | JSX 编译为 `hidden: true`，走 FORCE_ATTRIBUTE → `setAttribute('hidden', '')` | 与 HTML 语义一致                                                      |
+| `<div hidden={false}>`            | 走 FORCE_ATTRIBUTE → `removeAttribute('hidden')`                             | 取消隐藏                                                              |
+| SVG 中 `className`                | 走 SVG 分支 → `setAttribute('className', value)`                             | 开发者责任，SVG 的 class 应使用 `class`                               |
+| SVG 上 `prop:viewBox="0 0 24 24"` | 走 `prop:` 前缀分支 → `el.viewBox = "0 0 24 24"`                             | 开发者责任，SVG 的 `viewBox` 是 `SVGAnimatedRect`，字符串赋值可能失败 |
+| 自定义元素 `<x-foo bar={obj}>`    | 无前缀 ∉ FORCE_ATTRIBUTE → `el.bar = obj`                                    | 传递对象                                                              |
+| `attr:bar={obj}`                  | `setAttribute('bar', '[object Object]')`                                     | 显式标记，开发者自行负责序列化                                        |
+| `el.innerHTML = null`             | 变为 `"null"` 字符串                                                         | 开发者责任，传值前自行保证类型正确                                    |
+| 组件上使用前缀                    | 前缀作为普通 prop 透传，不处理                                               | 组件只透传，前缀在 DOM 元素的 setProp 中生效                          |
 
 ## 10. 与常见框架的差异
 
@@ -611,7 +613,7 @@ function serializeSSRAttrs(props: Record<string, any>): string {
 - **`value` 和 `checked` 是受控的**：绑定了这些属性的表单元素在每次框架更新时都会覆盖当前值。非受控场景使用 `defaultValue` 或 `defaultChecked`。
 - **`attr:` 前缀**：强制属性以 HTML attribute 形式存在。在 SSR 中输出，在客户端走 `setAttribute`。
 - **`prop:` 前缀**：强制属性以 DOM property 形式存在。在 SSR 中忽略，在客户端走 `el[key] = value`。
-- **SVG 元素忽略前缀**：SVG 的属性一律走 `setAttribute`。`attr:` 和 `prop:` 在 SVG 上行为一致。
+- **SVG 元素默认走 `setAttribute`**，`attr:` 前缀与默认行为一致。`prop:` 前缀会尝试 property 赋值，开发者需自行承担只读 property 的后果。
 - **组件上的前缀**：前缀作为普通 prop 名传递给组件，组件透传后在 DOM 元素上生效。
 - **不做命名转换**：框架不转换驼峰/短横线，开发者写的 key 是什么就是什么。
 - **无需记忆 FORCE_ATTRIBUTE 列表**：框架内部处理。开发者正常写属性即可，两种写法（`class` vs `className`）都工作。
