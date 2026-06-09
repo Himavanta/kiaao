@@ -1,3 +1,3 @@
 export default function () {
-  return <div class="h-full w-full bg-red-300 flex flex-col">expore</div>;
+  return <div class="h-full w-full flex flex-col">expore</div>;
 }

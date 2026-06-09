@@ -9,7 +9,7 @@ export const appRoutes = [
 ];
 
 export interface MainNavItem extends Route {
-  title: string;
+  title?: string;
   icon?: string;
 }
 
@@ -40,7 +40,11 @@ export const mainNavs: Array<MainNavItem> = [
   },
 ];
 
-export const indexRoutes = [
-  ...mainNavs,
-  { path: "plugins", component: lazy(() => import("./components/expore")) },
-];
+export const mainNavPlugin: MainNavItem = {
+  title: "插件",
+  icon: "mingcute:plugin-2-line",
+  path: "plugins",
+  component: lazy(() => import("./components/expore")),
+};
+
+export const indexRoutes: MainNavItem[] = [...mainNavs, mainNavPlugin];
