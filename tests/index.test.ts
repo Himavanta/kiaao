@@ -1,5 +1,5 @@
 import { expect, test, describe } from "vite-plus/test";
-import { define, effect, derive } from "../src/index.ts";
+import { define, effect, derive, romise } from "../src/index.ts";
 
 describe("define", () => {
   test("getter without selector returns initial value", () => {
@@ -144,5 +144,71 @@ describe("derive", () => {
 
     setUser((prev) => ({ ...prev, name: "jerry" }));
     expect(nameUpper()).toBe("JERRY");
+  });
+});
+
+describe("romise", () => {
+  test("resolves and sets data", async () => {
+    const { data, loading } = romise(() => Promise.resolve("hello"));
+    expect(data()).toBeNull();
+    expect(loading()).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(data()).toBe("hello");
+    expect(loading()).toBe(false);
+  });
+
+  test("rejects and sets error", async () => {
+    const { error, loading } = romise(() => Promise.reject(new Error("boom")));
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(error()!.message).toBe("boom");
+    expect(loading()).toBe(false);
+  });
+
+  test("handles sync return value", async () => {
+    const { data, loading } = romise(() => "sync" as any);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(data()).toBe("sync");
+    expect(loading()).toBe(false);
+  });
+
+  test("latest request wins (race condition)", async () => {
+    const [dep, setDep] = define(0);
+    let callCount = 0;
+    let resolve: ((v: string) => void)[] = [];
+
+    const { data } = romise(() => {
+      const id = ++callCount;
+      dep(); // 追踪依赖
+      return new Promise<string>((r) => {
+        resolve[id] = r;
+      });
+    });
+
+    // 第一次请求
+    await new Promise((r) => setTimeout(r, 0));
+
+    // 触发第二次请求
+    setDep(1);
+
+    // 第二次请求先返回
+    resolve[2]("second");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(data()).toBe("second");
+
+    // 第一次请求后返回，应被丢弃
+    resolve[1]("first");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(data()).toBe("second"); // 仍然是 second
+  });
+
+  test("non-Error rejection is wrapped", async () => {
+    const { error } = romise(() => Promise.reject("string error"));
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(error()!.message).toBe("string error");
+    expect(error()).toBeInstanceOf(Error);
   });
 });
