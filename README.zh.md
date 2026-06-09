@@ -273,7 +273,7 @@ function App() {
         <span>可见</span>
       </section>
 
-      <ul each={() => items()} key={(item) => item}>
+      <ul each={items} key={(item) => item}>
         {(item) => <li>{item}</li>}
       </ul>
     </div>

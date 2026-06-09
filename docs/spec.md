@@ -232,7 +232,7 @@ function h(
 </section>
 
 // 列表渲染（带 key，增量更新）
-<ul each={() => items()} key={item => item.id}>
+<ul each={items} key={item => item.id}>
   {(item) => <li>{item}</li>}
 </ul>
 

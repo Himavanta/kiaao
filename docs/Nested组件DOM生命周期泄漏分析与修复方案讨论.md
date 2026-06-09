@@ -664,7 +664,7 @@ rerender 时清空 childNodes，调用 `disposeNode(oldChild)`。若 `<p>` 内�
 **场景 3：each 数据变化 rerender**
 
 ```tsx
-<ul each={() => items()} key={(i) => i.id}>
+<ul each={items} key={(i) => i.id}>
   {(item) => <li>{item.name}</li>}
 </ul>
 ```
@@ -677,7 +677,7 @@ rerender 时清空 childNodes，调用 `disposeNode(oldChild)`。若 `<p>` 内�
 
 ```tsx
 <section when={showList}>
-  <ul each={() => items()} key={...}>
+  <ul each={items} key={...}>
     {item => <li>{item.name}</li>}
   </ul>
 </section>
