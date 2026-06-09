@@ -2,7 +2,7 @@
 
 import { IS_REACTIVE, SSR_COMPONENT } from "./types.ts";
 import { escapeHtml, escapeAttr } from "./escape.ts";
-import { FORCE_ATTRIBUTE, stripPrefix } from "./dom-utils.ts";
+import { FORCE_ATTRIBUTE, stripPrefix, splitSet } from "./dom-utils.ts";
 
 const SSR_MARKER = Symbol("kiaao.ssr.safe");
 
@@ -19,22 +19,9 @@ export function isSSRSafe(v: any): v is SSRSafe {
   return v && v[SSR_MARKER] === true && typeof v.html === "string";
 }
 
-const VOID_ELEMENTS = new Set([
-  "area",
-  "base",
-  "br",
-  "col",
-  "embed",
-  "hr",
-  "img",
-  "input",
-  "link",
-  "meta",
-  "param",
-  "source",
-  "track",
-  "wbr",
-]);
+const VOID_ELEMENTS = splitSet(
+  "area base br col embed hr img input link meta param source track wbr",
+);
 
 export function isVoidElement(tag: string): boolean {
   return VOID_ELEMENTS.has(tag);
