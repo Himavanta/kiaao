@@ -25,7 +25,8 @@ function fetchIcon(name: string): Promise<IconifyIcon> {
     })
     .then((d) => {
       if (!d.icons?.[icon]) throw new Error(`Icon not found: ${name}`);
-      return d.icons[icon] as IconifyIcon;
+
+      return { width: d.width, height: d.height, ...d.icons[icon] } as IconifyIcon;
     });
 
   cache.set(name, promise);
@@ -35,6 +36,9 @@ function fetchIcon(name: string): Promise<IconifyIcon> {
 // ── Component ──────────────────────────────────────────
 
 export default function Icon(props: Record<string, any>) {
+  // 排除内部使用的 prop
+  const { icon, ...svgProps } = props;
+
   const [data, setData] = define<IconifyIcon | null>(null);
   const [loading, setLoading] = define(true);
 
@@ -42,8 +46,8 @@ export default function Icon(props: Record<string, any>) {
     setLoading(true);
     setData(null);
 
-    if (props.icon) {
-      fetchIcon(props.icon)
+    if (icon()) {
+      fetchIcon(icon())
         .then((d) => {
           setData(d);
           setLoading(false);
@@ -56,21 +60,10 @@ export default function Icon(props: Record<string, any>) {
 
   const body = derive(() => (loading() || !data() ? "" : data()!.body));
 
-  const viewBox = derive(() => {
-    const d = data();
-    return d ? `0 0 ${d.width || 24} ${d.height || 24}` : "0 0 24 24";
-  });
-
-  // 排除内部使用的 prop
-  const { icon: _, children: __, ...svgProps } = props;
-
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={viewBox}
-      width={props.width || "1em"}
-      height={props.height || "1em"}
-      fill={props.fill || "currentColor"}
+      viewBox={data((v) => `0 0 ${v?.width || 24} ${v?.height || 24}`)}
       prop:innerHTML={body}
       {...svgProps}
     />
