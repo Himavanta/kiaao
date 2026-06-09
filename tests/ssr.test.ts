@@ -254,3 +254,134 @@ describe("SSR — effect and derive behavior", () => {
     expect(doubled()).toBe(10);
   });
 });
+
+describe("SSR — FORCE_ATTRIBUTE filtering", () => {
+  test("FORCE_ATTRIBUTE (class, id) outputs in SSR", () => {
+    function Comp() {
+      return h("div", { class: "box", id: "main" }, "content");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div class="box" id="main">content</div>');
+  });
+
+  test("non-FORCE_ATTRIBUTE (value, checked) does NOT output in SSR", () => {
+    function Comp() {
+      return h("input", { value: "secret", checked: true });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<input />");
+    expect(html).not.toContain("value");
+    expect(html).not.toContain("checked");
+  });
+
+  test("innerHTML does NOT output in SSR", () => {
+    function Comp() {
+      return h("div", { innerHTML: "<span>content</span>" });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div></div>");
+  });
+
+  test("disabled FORCE_ATTRIBUTE outputs boolean attribute", () => {
+    function Comp() {
+      return h("button", { disabled: true }, "click");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<button disabled>click</button>");
+  });
+
+  test("disabled false does NOT output", () => {
+    function Comp() {
+      return h("button", { disabled: false }, "click");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<button>click</button>");
+  });
+
+  test("placeholder FORCE_ATTRIBUTE outputs", () => {
+    function Comp() {
+      return h("input", { placeholder: "name" });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<input placeholder="name" />');
+  });
+
+  test("textContent does NOT output in SSR", () => {
+    function Comp() {
+      return h("div", { textContent: "hidden" }, "visible");
+    }
+    const html = renderToString(Comp);
+    // textContent 被忽略，但 children 正常渲染
+    expect(html).toBe("<div>visible</div>");
+    expect(html).not.toContain("hidden");
+  });
+
+  test("aria-* outputs in SSR", () => {
+    function Comp() {
+      return h("div", { "aria-label": "Close", "aria-hidden": "true" }, "X");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div aria-label="Close" aria-hidden="true">X</div>');
+  });
+
+  test("data-* outputs in SSR", () => {
+    function Comp() {
+      return h("div", { "data-id": "123", "data-custom": "val" }, "content");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div data-id="123" data-custom="val">content</div>');
+  });
+});
+
+describe("SSR — attr: / prop: prefix", () => {
+  test("attr:value outputs in SSR (overrides default skip)", () => {
+    function Comp() {
+      return h("input", { "attr:value": "initial" });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<input value="initial" />');
+  });
+
+  test("prop:disabled does NOT output in SSR", () => {
+    function Comp() {
+      return h("button", { "prop:disabled": true }, "click");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<button>click</button>");
+    expect(html).not.toContain("disabled");
+  });
+
+  test("prop:className does NOT output in SSR", () => {
+    function Comp() {
+      return h("div", { "prop:className": "box" }, "content");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div>content</div>");
+    expect(html).not.toContain("className");
+  });
+
+  test("attr:class outputs as class attribute", () => {
+    function Comp() {
+      return h("div", { "attr:class": "box" }, "content");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div class="box">content</div>');
+  });
+
+  test("attr:data-custom outputs", () => {
+    function Comp() {
+      return h("div", { "attr:data-custom": "val" }, "content");
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe('<div data-custom="val">content</div>');
+  });
+
+  test("unprefixed value does NOT output (regression check)", () => {
+    function Comp() {
+      return h("input", { value: "should-not-appear" });
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<input />");
+    expect(html).not.toContain("value");
+  });
+});

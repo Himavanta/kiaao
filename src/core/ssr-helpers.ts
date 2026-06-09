@@ -2,6 +2,7 @@
 
 import { IS_REACTIVE, SSR_COMPONENT } from "./types.ts";
 import { escapeHtml, escapeAttr } from "./escape.ts";
+import { FORCE_ATTRIBUTE, stripPrefix } from "./dom-utils.ts";
 
 const SSR_MARKER = Symbol("kiaao.ssr.safe");
 
@@ -58,17 +59,33 @@ function stripDirectives(props: any): any {
 function serializeAttrs(props: any): string {
   if (!props || typeof props !== "object") return "";
   let html = "";
-  for (const key of Object.keys(props)) {
-    if (key === "children") continue;
+  for (const rawKey of Object.keys(props)) {
+    if (rawKey === "children") continue;
 
-    let val = props[key];
+    let val = props[rawKey];
     if ((val as any)?.[IS_REACTIVE]) val = val();
+    if (val == null || val === false) continue;
 
-    if (key.startsWith("on")) {
+    // 剥离前缀
+    const { prefix, key } = stripPrefix(rawKey);
+
+    // prop: → 跳过
+    if (prefix === "prop") continue;
+
+    // attr: → 输出为 attribute
+    if (prefix === "attr") {
+      if (val === true) {
+        html += ` ${key}`;
+      } else {
+        html += ` ${key}="${escapeAttr(String(val))}"`;
+      }
       continue;
-    } else if (key === "class" || key === "className") {
-      html += ` class="${escapeAttr(val)}"`;
-    } else if (key === "style") {
+    }
+
+    // 无前缀标准流程
+    if (key.startsWith("on")) continue;
+
+    if (key === "style") {
       if (typeof val === "string") {
         html += ` style="${escapeAttr(val)}"`;
       } else if (typeof val === "object" && val !== null) {
@@ -77,9 +94,24 @@ function serializeAttrs(props: any): string {
           .join("; ");
         html += ` style="${escapeAttr(cssText)}"`;
       }
-    } else {
-      html += ` ${key}="${escapeAttr(String(val))}"`;
+      continue;
     }
+
+    if (key.startsWith("aria-") || key.startsWith("data-")) {
+      html += ` ${key}="${escapeAttr(String(val))}"`;
+      continue;
+    }
+
+    if (FORCE_ATTRIBUTE.has(key)) {
+      if (val === true) {
+        html += ` ${key}`;
+      } else {
+        html += ` ${key}="${escapeAttr(String(val))}"`;
+      }
+      continue;
+    }
+
+    // 其余 → 跳过（客户端走 property，SSR 无意义）
   }
   return html;
 }

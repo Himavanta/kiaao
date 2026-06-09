@@ -67,6 +67,114 @@ const SVG_TAGS = new Set([
   "image",
 ]);
 
+/**
+ * 需要在客户端走 setAttribute、在 SSR 中输出的属性集合。
+ * 筛选原则：是否会在纯 HTML 中手写该属性。
+ * 显式排除：value（受控组件）、checked（受控组件）。
+ */
+const FORCE_ATTRIBUTE = new Set([
+  // 全局
+  "class",
+  "id",
+  "lang",
+  "dir",
+  "title",
+  "hidden",
+  "tabindex",
+  "accesskey",
+  "contenteditable",
+  "draggable",
+  "spellcheck",
+  "autocapitalize",
+  "translate",
+  "slot",
+  // 表单
+  "name",
+  "type",
+  "placeholder",
+  "required",
+  "disabled",
+  "readonly",
+  "maxlength",
+  "minlength",
+  "size",
+  "min",
+  "max",
+  "step",
+  "pattern",
+  "autocomplete",
+  "autofocus",
+  "multiple",
+  "accept",
+  "capture",
+  "selected",
+  // 链接
+  "href",
+  "target",
+  "rel",
+  "download",
+  "hreflang",
+  "ping",
+  "referrerpolicy",
+  // 媒体
+  "src",
+  "alt",
+  "width",
+  "height",
+  "srcset",
+  "sizes",
+  "loading",
+  "decoding",
+  "crossorigin",
+  "poster",
+  "preload",
+  "autoplay",
+  "controls",
+  "loop",
+  "muted",
+  "playsinline",
+  // iframe
+  "srcdoc",
+  "sandbox",
+  "allow",
+  "allowfullscreen",
+  "frameborder",
+  // 表格
+  "colspan",
+  "rowspan",
+  "headers",
+  "scope",
+  // script / style / link / meta
+  "async",
+  "defer",
+  "integrity",
+  "media",
+  "charset",
+  "httpEquiv",
+  // 其他
+  "for",
+  "usemap",
+  "ismap",
+  "cite",
+  "datetime",
+  "form",
+  "formaction",
+  "formenctype",
+  "formmethod",
+  "formnovalidate",
+  "formtarget",
+  "novalidate",
+  "nonce",
+]);
+
+export { FORCE_ATTRIBUTE };
+
+/** 剥离 attr: / prop: 前缀，返回前缀类型和裸 key */
+export function stripPrefix(rawKey: string): { prefix: "attr" | "prop" | null; key: string } {
+  const prefix = rawKey.startsWith("attr:") ? "attr" : rawKey.startsWith("prop:") ? "prop" : null;
+  return { prefix, key: prefix ? rawKey.slice(5) : rawKey };
+}
+
 export const createElement = (tag: string): Element => {
   if (SVG_TAGS.has(tag)) {
     return document.createElementNS(SVG_NS, tag);
@@ -88,16 +196,6 @@ export const parentNode = (el: Node): Node | null => el.parentNode;
 export const prevSibling = (el: Node): Node | null => el.previousSibling;
 export const isConnected = (el: Node): boolean => el.isConnected;
 export const nodeType = (el: Node): number => el.nodeType;
-export const setClassName = (el: Element, cls: string) => {
-  if (el.namespaceURI === SVG_NS) {
-    el.setAttribute("class", cls);
-  } else {
-    (el as HTMLElement).className = cls;
-  }
-};
-export const setCssText = (el: Element, css: string) => {
-  (el as HTMLElement).style.cssText = css;
-};
 
 export const getPathname = (): string => window.location.pathname;
 export const getSearch = (): string => window.location.search;
