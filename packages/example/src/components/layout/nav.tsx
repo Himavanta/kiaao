@@ -1,7 +1,7 @@
 import { define, derive, type Getter } from "kiaao";
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
 import Icon from "../icon";
-import Dropdown from "../../ui/dropdown";
+import { UserCard } from "./user";
 
 const [menus] = define<MainNavItem[]>(mainNavs);
 const [navPlugin] = define(mainNavPlugin);
@@ -11,37 +11,9 @@ const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");
 function Logo() {
   return (
     <div class="flex items-center gap-1">
-      <Icon class="text-blue-700 h-8 w-8" icon={() => "lineicons:hashnode"} />
+      <Icon class="text-blue-700 h-8 w-8" icon="lineicons:hashnode" />
       <span class="font-medium">OpenDifyWeb</span>
     </div>
-  );
-}
-
-function UserIcon({ onClick }: { onClick?: () => void }) {
-  return (
-    <div
-      onClick={onClick}
-      class="bg-blue-600 text-white grid place-items-center justify-center w-9 h-9 rounded-full cursor-pointer"
-    >
-      <span>D</span>
-    </div>
-  );
-}
-
-function UserCard() {
-  return (
-    <Dropdown trigger={<UserIcon />}>
-      <div class="z-50 rounded-xl border border-gray-200 bg-white shadow-lg py-3 ">
-        <header class="flex items-center justify-between gap-5 pr-3 pl-4">
-          <div>
-            <div class="font-medium text-sm">Dify</div>
-            <div class="text-xs text-gray-500">demo@demo.com</div>
-          </div>
-          <UserIcon />
-        </header>
-        <nav class="py-1 px-2">hhhh</nav>
-      </div>
-    </Dropdown>
   );
 }
 
