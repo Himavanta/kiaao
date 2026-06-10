@@ -1,6 +1,6 @@
 // kiaao — when/each directive implementations
 
-import { IS_REACTIVE, SKIP_UPDATE, type Getter, type Setter } from "./types.ts";
+import { IS_REACTIVE, type Getter, type Setter } from "./types.ts";
 import { effect, define } from "./runtime.ts";
 import { triggerMount, disposeNode } from "./lifecycle.ts";
 import { isVoidElement, isPlainObject } from "./ssr-helpers.ts";
@@ -224,7 +224,6 @@ export function createWhenElement(options: {
     // ── 布尔模式 ──
     if (isLazy) {
       const result = children[0]();
-      if (result === SKIP_UPDATE) return;
 
       if (eachStop) {
         eachStop();
