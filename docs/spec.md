@@ -1,4 +1,4 @@
-# kiaao 框架规范 v3.3
+# kiaao 框架规范 v3.4
 
 **宣传语**：更少的概念，更少的编译，更多的代码，更高的性能。
 
@@ -128,7 +128,7 @@ stop();
 
 - **事件属性**（`onXxx`，匹配 `/^on[A-Z]/`）：识别并转换为 `addEventListener` 绑定。事件名取 `on` 之后的部分**全小写**（如 `onClick` → `click`，`onMouseOver` → `mouseover`）。值应为函数，在组件初始化时绑定一次。**事件属性不参与响应式绑定**，即使值为响应式函数也直接读取其当前值作为回调注册一次。
 
-- **响应式属性绑定**：除 `children`、事件属性及 `when`/`each` 保留属性外，若属性值为响应式函数（携带 `IS_REACTIVE` 标记），`h()` 会自动创建 `effect` 在值变化时通过 `setProp` 更新该属性。该 effect 挂载到元素节点的 `LOCAL_EFFECTS` 集合中，随元素移除而自动清理。
+- **响应式属性绑定**：除 `children`、事件属性及 `when`/`each`/`else` 保留属性外，若属性值为响应式函数（携带 `IS_REACTIVE` 标记），`h()` 会自动创建 `effect` 在值变化时通过 `setProp` 更新该属性。该 effect 挂载到元素节点的 `LOCAL_EFFECTS` 集合中，随元素移除而自动清理。
 
 - **静态属性**：除上述情况外，若属性值为非响应式普通值，则在初始化时通过 `setProp` 设置一次。
 
@@ -148,15 +148,22 @@ stop();
 
 > **适用范围**：`when` 和 `each` 仅对原生 HTML 元素（`tag` 为字符串）生效，不能在自定义组件上使用。若需在组件中使用条件渲染或列表渲染，应在组件内部返回带对应指令的原生元素，或将数据通过 props 传入，由组件自行处理。
 
-- **`when`**：控制宿主元素**内部子节点**的挂载/卸载。宿主元素始终存在于 DOM 中。`when` 接受响应式函数或普通函数，当其返回值 truthy 时，子节点被插入宿主元素；falsy 时，子节点被递归清理（`disposeNode`）并从宿主元素移除。
+- **`when`**：控制宿主元素**内部子节点**的挂载/卸载。宿主元素始终存在于 DOM 中。`when` 接受响应式函数或普通函数，其返回值决定渲染行为。
+
+  `when` 支持两种模式，由 `children` 的类型自动决定：
+  - **布尔模式**（向后兼容）：`children` 为任意非对象内容（节点、字符串、惰性函数 `() => any` 等）。当 `when` 返回值 truthy 时渲染 `children`；falsy 时，若有 `else` 属性则渲染其返回内容，否则清空子节点。
+  - **映射表模式**：`children` 是一个对象 `{ [key]: () => VNode }`。`when` 返回值作为 key 在映射表中查找，找到则调用对应的惰性函数渲染；未找到则回退到 `else`（若提供），否则清空子节点。
 
   > 如果希望宿主元素不参与布局（仅作为逻辑容器），可对其设置 `style="display: contents"`。该样式使元素自身不生成盒子，子节点直接作为父级子元素参与布局，且不影响生命周期管理。
 
   `when` 在 void 元素（`<br>`、`<input>` 等）上使用会抛出错误（开发模式 `throw`，生产模式静默忽略）。
 
+- **`else`**：可选属性，类型为 `() => any`。当 `when` 的条件不满足或映射表 key 未命中时，调用该函数作为后备内容进行渲染。
+
   **`when` 的 children 形式**：
-  - 若不存在 `each`，`children` 可以是静态内容（任意节点、字符串等），也可以是**惰性求值函数** `() => any`。若传入函数且不存在 `each`，该函数被视为惰性求值函数，仅在 `when` 条件为真时调用以获取内容。惰性求值允许延迟执行昂贵的初始化操作（如动态导入的组件）。
-  - 若同时存在 `each`，则 `children` 必须为 `(item: T, index: number) => any`，惰性函数模式被忽略。
+  - 在布尔模式下，`children` 可以是静态内容或惰性求值函数 `() => any`。
+  - 在映射表模式下，`children` 必须是一个对象，如 `{ loading: () => <Spinner />, error: () => <Error /> }`。
+  - 若同时存在 `each`，则映射表模式优先，`each` 被忽略（开发环境将给出警告），布尔模式下 `when` 与 `each` 共存行为不变（`when` 作为守卫，`each` 在内部管理列表）。
 
 - **`each`**：控制宿主元素内部按集合生成子节点。`each` 接受返回任意数据源的 getter/derive 函数，支持**数组、对象、Map、Set、数字、字符串**等多种类型。内部统一转换为键值条目，并为每个条目自动创建响应式信号。
 
@@ -170,34 +177,33 @@ stop();
 
   `each` 仅在 `tag` 为字符串时生效。在 void 元素上使用同样会抛出错误。
 
-- **`when` + `each` 共存**：`when` 优先。当 `when` 为 falsy 时，不执行 `each`，不渲染任何子节点；当 `when` 为 truthy 时，再根据 `each` 生成子节点。语义等价于 `when` 包裹 `each`。共存时 `key` 同样生效，列表更新策略与单独使用 `each` 一致（基于 key 的增量更新）。
-
 **类型约束**：
 
 ```typescript
-// 字符串标签允许 when/each
+// 字符串标签允许 when/each/else
 function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: HTMLAttributes & {
     when?: (() => any) | ReactiveFunction;
     each?: () => any; // 支持多种数据源
+    else?: () => any; // 可选后备
     key?: (item: any, index: number, entryKey: any) => any;
     [key: string]: any;
   },
   ...children: any[]
 ): HTMLElement;
 
-// 函数组件禁止 when/each
+// 函数组件禁止 when/each/else
 function h(
   tag: (props: any) => any,
-  props?: Record<string, any> & { when?: never; each?: never },
+  props?: Record<string, any> & { when?: never; each?: never; else?: never },
   ...children: any[]
 ): HTMLElement;
 ```
 
 **SSR 中的控制流指令**：
 
-- `when`：条件判断后决定是否序列化子节点，但**宿主元素始终保留**（即使 when 为 false，仍输出空标签，与客户端行为一致）。
+- `when`：布尔模式下条件判断后决定是否序列化子节点，映射表模式下根据 key 选择分支序列化；**宿主元素始终保留**。
 - `each`：宿主元素序列化一次，子节点在内部按数组重复渲染（需要三段式序列化：开标签 → 重复子节点 → 闭标签）。
 
 #### 组件模式（`tag` 为函数）
@@ -226,10 +232,19 @@ function h(
   <span>可见内容</span>
 </section>
 
-// 条件渲染（惰性求值）
-<section when={showDashboard}>
+// 条件渲染（惰性求值，带 else）
+<section when={isLoggedIn} else={() => <LoginButton />}>
   {() => <Dashboard />}
 </section>
+
+// 多分支映射表
+<div when={() => status()} else={() => <div>未知状态</div>}>
+  {{
+    loading: () => <Spinner />,
+    error: () => <ErrorMessage />,
+    success: () => <Content />,
+  }}
+</div>
 
 // 列表渲染（带 key，增量更新）
 <ul each={items} key={item => item.id}>
@@ -237,7 +252,7 @@ function h(
 </ul>
 
 // 对象属性遍历
-<dl each={() => ({ name: 'kiaao', version: '3.3' })}>
+<dl each={() => ({ name: 'kiaao', version: '3.4' })}>
   {(value, index, key) => [
     <dt>{key}</dt>,
     <dd>{value}</dd>
@@ -476,6 +491,8 @@ kiaao 的组件是普通的 JavaScript 函数，返回真实 DOM，无需 `ref` 
 
 kiaao 不提供 `Context`、`provide`、`inject` 等跨层级通信 API。信号的独立性、闭包的原生能力以及模块机制已覆盖所有跨层级共享场景。
 
+---
+
 ## 十、TypeScript 核心类型
 
 ```typescript
@@ -518,47 +535,47 @@ function renderToString(
 
 ---
 
-## 十三、API 总览
+## 十一、API 总览
 
-| API              | 分类     | 用途                                                             |
-| ---------------- | -------- | ---------------------------------------------------------------- |
-| `define`         | 核心     | 创建响应式状态                                                   |
-| `derive`         | 核心     | 派生状态（缓存 + 拦截）                                          |
-| `effect`         | 核心     | 副作用执行，自动追踪依赖，返回停止函数                           |
-| `h`              | 渲染     | 创建真实 DOM 或调用组件，支持属性指令 `when`/`each` 及响应式绑定 |
-| `Teleport`       | 内置组件 | 将内容渲染到指定 DOM 容器                                        |
-| `lazy`           | 内置组件 | 异步组件加载，配合动态导入                                       |
-| `onMount`        | 生命周期 | 挂载后回调                                                       |
-| `onUnmount`      | 生命周期 | 销毁前清理                                                       |
-| `mount`          | 挂载     | 挂载组件树并触发生命周期                                         |
-| `unmount`        | 挂载     | 卸载组件树并清理所有资源                                         |
-| `renderToString` | SSR      | 服务端渲染为 HTML 字符串（详见 `guide/router-ssr-astro.md`）     |
-| `createRouter`   | 路由     | 客户端路由（详见 `guide/router-ssr-astro.md`）                   |
+| API              | 分类     | 用途                                                                    |
+| ---------------- | -------- | ----------------------------------------------------------------------- |
+| `define`         | 核心     | 创建响应式状态                                                          |
+| `derive`         | 核心     | 派生状态（缓存 + 拦截）                                                 |
+| `effect`         | 核心     | 副作用执行，自动追踪依赖，返回停止函数                                  |
+| `h`              | 渲染     | 创建真实 DOM 或调用组件，支持属性指令 `when`/`each`/`else` 及响应式绑定 |
+| `Teleport`       | 内置组件 | 将内容渲染到指定 DOM 容器                                               |
+| `lazy`           | 内置组件 | 异步组件加载，配合动态导入                                              |
+| `onMount`        | 生命周期 | 挂载后回调                                                              |
+| `onUnmount`      | 生命周期 | 销毁前清理                                                              |
+| `mount`          | 挂载     | 挂载组件树并触发生命周期                                                |
+| `unmount`        | 挂载     | 卸载组件树并清理所有资源                                                |
+| `renderToString` | SSR      | 服务端渲染为 HTML 字符串（详见集成指南）                                |
+| `createRouter`   | 路由     | 客户端路由（详见集成指南）                                              |
 
 **核心概念为 4 个（define、derive、effect、h），控制流由 `h()` 的原生属性指令实现，无需额外的 Show/List 组件。**
 
 ---
 
-## 十四、与主流框架差异
+## 十二、与主流框架差异
 
-| 维度            | React         | Vue                    | Solid            | **kiaao**                                      |
-| --------------- | ------------- | ---------------------- | ---------------- | ---------------------------------------------- |
-| 数据纯净度      | 纯净          | 不纯净                 | 纯净（两套）     | **纯净（一套）**                               |
-| 组件运行次数    | 每次重跑      | 外壳一次               | 外壳一次         | **外壳一次**                                   |
-| 虚拟 DOM        | 有            | 有                     | 无               | **无**                                         |
-| 编译器依赖      | 无            | 可选                   | 强依赖           | **无**                                         |
-| 响应式原理      | 无            | Proxy                  | 编译期           | **显式选择器**                                 |
-| 核心概念数      | 10+           | 8+                     | 6+               | **4**                                          |
-| 更新粒度        | 组件级        | 组件/块级              | DOM 节点级       | **选择器结果级**                               |
-| 控制流方式      | 三元/`&&`/map | `v-if`/`v-for`         | `<Show>`/`<For>` | **`when`/`each` 属性指令**                     |
-| Context/Provide | 有            | 有                     | 有               | **无（信号即通道）**                           |
-| 传送门          | 有            | 有                     | 有               | **有 (`<Teleport>`)**                          |
-| 异步组件        | `lazy`        | `defineAsyncComponent` | `lazy`           | **`lazy`**                                     |
-| 路由            | 独立库        | 独立库                 | 独立库           | **独立包（详见 `guide/router-ssr-astro.md`）** |
+| 维度            | React         | Vue                    | Solid            | **kiaao**                  |
+| --------------- | ------------- | ---------------------- | ---------------- | -------------------------- |
+| 数据纯净度      | 纯净          | 不纯净                 | 纯净（两套）     | **纯净（一套）**           |
+| 组件运行次数    | 每次重跑      | 外壳一次               | 外壳一次         | **外壳一次**               |
+| 虚拟 DOM        | 有            | 有                     | 无               | **无**                     |
+| 编译器依赖      | 无            | 可选                   | 强依赖           | **无**                     |
+| 响应式原理      | 无            | Proxy                  | 编译期           | **显式选择器**             |
+| 核心概念数      | 10+           | 8+                     | 6+               | **4**                      |
+| 更新粒度        | 组件级        | 组件/块级              | DOM 节点级       | **选择器结果级**           |
+| 控制流方式      | 三元/`&&`/map | `v-if`/`v-for`         | `<Show>`/`<For>` | **`when`/`each` 属性指令** |
+| Context/Provide | 有            | 有                     | 有               | **无（信号即通道）**       |
+| 传送门          | 有            | 有                     | 有               | **有 (`<Teleport>`)**      |
+| 异步组件        | `lazy`        | `defineAsyncComponent` | `lazy`           | **`lazy`**                 |
+| 路由            | 独立库        | 独立库                 | 独立库           | **独立包（详见集成指南）** |
 
 ---
 
-## 十五、代码量估算
+## 十三、代码量估算
 
 | 模块                                                              | 预计行数          |
 | ----------------------------------------------------------------- | ----------------- |
@@ -577,7 +594,7 @@ function renderToString(
 
 ---
 
-## 十六、待实现（V2+）
+## 十四、待实现（V2+）
 
 - 异步数据原语（`resource`）、微任务批处理调度器
 - `<Suspense>` 完整实现
@@ -587,7 +604,7 @@ function renderToString(
 
 ---
 
-## 十七、禁止事项
+## 十五、禁止事项
 
 - 不使用 Proxy
 - 不引入虚拟 DOM

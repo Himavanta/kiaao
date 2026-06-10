@@ -253,9 +253,7 @@ unmount(root); // 卸载并触发 onUnmount，清理所有 effect
 
 kiaao 通过 `h()` 的原生属性指令 `when` 和 `each` 实现控制流，无需额外的组件。这两个指令只能用于原生 HTML 元素，不能用于自定义组件。
 
-`when` 控制宿主元素内部子节点的显示。当条件为假时，子节点被移除并自动清理。`when` 也支持惰性求值函数，在条件成立时才执行渲染，避免不必要的初始化。
-
-`each` 可遍历多种数据源（数组、对象、Map、Set 等），内部自动为每个条目创建响应式信号。提供 `key` 函数可启用增量 DOM 复用，保留列表项的输入焦点和状态。
+`when` 支持简单的布尔条件，也支持多分支映射表模式。可以使用 `else` 属性指定条件不满足时的后备内容。
 
 ```tsx
 import { define } from "kiaao";
@@ -263,16 +261,32 @@ import { define } from "kiaao";
 function App() {
   const [visible, setVisible] = define(true);
   const [items, setItems] = define(["a", "b", "c"]);
+  const [status, setStatus] = define("loading");
 
   return (
     <div>
       <button onClick={() => setVisible((v) => !v)}>Toggle</button>
 
-      {/* display: contents 可使宿主元素不参与布局，仅作为逻辑容器 */}
+      {/* 简单条件渲染 */}
       <section when={visible} style="display: contents">
         <span>可见</span>
       </section>
 
+      {/* 带 else 的条件 */}
+      <div when={visible} else={() => <p>不可见</p>}>
+        内容
+      </div>
+
+      {/* 多分支映射表 */}
+      <div when={() => status()} else={() => <div>未知状态</div>}>
+        {{
+          loading: () => <Spinner />,
+          error: () => <ErrorMessage />,
+          success: () => <Content />,
+        }}
+      </div>
+
+      {/* 列表渲染 */}
       <ul each={items} key={(item) => item}>
         {(item) => <li>{item}</li>}
       </ul>
@@ -280,6 +294,8 @@ function App() {
   );
 }
 ```
+
+`each` 可遍历多种数据源，并为每个条目自动创建响应式信号，实现高效增量更新。
 
 ### Teleport
 
@@ -322,15 +338,15 @@ const el = h(HeavyProfile, { userId: 42 });
 | define         | 创建响应式状态，返回 [getter, setter]                             |
 | derive         | 创建派生状态，带缓存和脏标记，值不变时不通知下游                  |
 | effect         | 执行副作用，自动追踪依赖，返回 stop 函数                          |
-| h              | 创建真实 DOM 节点，内置 when/each 指令（仅原生元素可用）          |
+| h              | 创建真实 DOM 节点，内置 when/each/else 指令（仅原生元素可用）     |
 | Teleport       | 将内容渲染到指定 DOM 容器，保持生命周期；目标不存在时返回占位注释 |
 | lazy           | 异步组件加载；失败时抛出错误，可被错误边界捕获                    |
 | onMount        | 组件挂载后执行一次                                                |
 | onUnmount      | 组件销毁前执行                                                    |
 | mount          | 将组件树挂载到容器并触发生命周期                                  |
 | unmount        | 卸载组件树并清理所有 effect                                       |
-| renderToString | 服务端渲染为 HTML 字符串（详见 `guide/router-ssr-astro.md`）      |
-| createRouter   | 客户端路由（详见 `guide/router-ssr-astro.md`）                    |
+| renderToString | 服务端渲染为 HTML 字符串（详见集成指南）                          |
+| createRouter   | 客户端路由（详见集成指南）                                        |
 
 ## 许可证
 

@@ -34,7 +34,7 @@ All other APIs are components or utilities built on these four primitives:
 - **mount / unmount** — explicit mounting and unmounting
 - **lazy** — async component loading
 
-> **Note**: The `when` and `each` directives can only be used on native HTML elements (e.g. `<div>`, `<section>`, `<ul>`, etc.), not on custom components. To use them in a component, place the directive on a native element inside the component's root.
+> **Note**: `when` and `each` directives can only be used on native HTML elements (e.g., `<div>`, `<section>`, `<ul>`, etc.), not on custom components. To use them inside a component, place the directive on a native element within the component’s return value.
 
 ## Comparison with Other Frameworks
 
@@ -251,11 +251,9 @@ unmount(root); // unmount, trigger onUnmount, and clean up all effects
 
 ### Conditional and List Rendering
 
-kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components. These directives only work on native HTML elements, not on custom components.
+kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components. These directives can only be used on native HTML elements, not on custom components.
 
-`when` controls the mounting and unmounting of its host element's child nodes. When the condition is falsy, child nodes are removed and properly disposed. It also supports lazy evaluation functions, which execute only when the condition becomes truthy, avoiding unnecessary initialization.
-
-`each` iterates over multiple data sources (arrays, objects, Maps, Sets, etc.), automatically creating a reactive signal for each entry. Providing a `key` function enables incremental DOM reuse, preserving input focus and state of list items.
+`when` supports simple boolean conditions as well as a multi-branch mapping mode. An optional `else` attribute can provide fallback content.
 
 ```tsx
 import { define } from "kiaao";
@@ -263,16 +261,32 @@ import { define } from "kiaao";
 function App() {
   const [visible, setVisible] = define(true);
   const [items, setItems] = define(["a", "b", "c"]);
+  const [status, setStatus] = define("loading");
 
   return (
     <div>
       <button onClick={() => setVisible((v) => !v)}>Toggle</button>
 
-      {/* display: contents 使宿主元素不参与布局，仅作为逻辑容器 */}
+      {/* Simple conditional rendering */}
       <section when={visible} style="display: contents">
         <span>Visible</span>
       </section>
 
+      {/* Condition with else fallback */}
+      <div when={visible} else={() => <p>Not visible</p>}>
+        Content
+      </div>
+
+      {/* Multi-branch mapping table */}
+      <div when={() => status()} else={() => <div>Unknown status</div>}>
+        {{
+          loading: () => <Spinner />,
+          error: () => <ErrorMessage />,
+          success: () => <Content />,
+        }}
+      </div>
+
+      {/* List rendering */}
       <ul each={items} key={(item) => item}>
         {(item) => <li>{item}</li>}
       </ul>
@@ -280,6 +294,8 @@ function App() {
   );
 }
 ```
+
+`each` can iterate over various data sources and automatically creates reactive signals for each item, enabling efficient incremental updates.
 
 ### Teleport
 
@@ -311,24 +327,26 @@ const el = h(HeavyProfile, { userId: 42 });
 
 See [`guide/router-ssr-astro.md`](guide/router-ssr-astro.md).
 
-- **Server-Side Rendering**: Use `renderToString` to render a component to HTML (from `kiaao/server`)
-- **Astro Integration**: Official `kiaao/astro` plugin, supports static and `client:only` components
-- **Routing**: Lightweight client-side router (`kiaao/router`), supports nested layouts
+- **SSR**: Use `renderToString` to render components to HTML (from `kiaao/server`)
+- **Astro**: Official `kiaao/astro` plugin supporting pure static and `client:only` components
+- **Router**: Lightweight client-side router `kiaao/router` with nested layout support
 
-| API            | Purpose                                                                          |
-| -------------- | -------------------------------------------------------------------------------- |
-| define         | Create reactive state, returns [getter, setter]                                  |
-| derive         | Create derived state with caching; does not notify when unchanged                |
-| effect         | Run side effects with automatic dependency tracking; returns stop                |
-| h              | Create real DOM nodes, with built-in when/each directives (native elements only) |
-| Teleport       | Render content into a specified container; fallback to placeholder               |
-| lazy           | Async component loading; throws on failure, can be caught                        |
-| onMount        | Runs once after the component is mounted                                         |
-| onUnmount      | Runs before the component is destroyed                                           |
-| mount          | Mount a component tree and trigger lifecycle                                     |
-| unmount        | Unmount a component tree and clean up all effects                                |
-| renderToString | Render to an HTML string (see `guide/router-ssr-astro.md`)                       |
-| createRouter   | Client-side routing (see `guide/router-ssr-astro.md`)                            |
+## API Reference
+
+| API            | Purpose                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| define         | Create reactive state, returns [getter, setter]                    |
+| derive         | Create derived state with caching; does not notify when unchanged  |
+| effect         | Run side effects with automatic dependency tracking; returns stop  |
+| h              | Create real DOM nodes, with built-in when/each/else directives     |
+| Teleport       | Render content into a specified container; fallback to placeholder |
+| lazy           | Async component loading; throws on failure, can be caught          |
+| onMount        | Runs once after the component is mounted                           |
+| onUnmount      | Runs before the component is destroyed                             |
+| mount          | Mount a component tree and trigger lifecycle                       |
+| unmount        | Unmount a component tree and clean up all effects                  |
+| renderToString | Render to an HTML string (see integration guide)                   |
+| createRouter   | Client-side routing (see integration guide)                        |
 
 ## License
 
