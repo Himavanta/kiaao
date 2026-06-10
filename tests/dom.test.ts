@@ -33,7 +33,7 @@ describe("h — DOM mode", () => {
         clicked = true;
       },
     });
-    el.click();
+    (el as HTMLElement).click();
     expect(clicked).toBe(true);
   });
 
@@ -46,14 +46,14 @@ describe("h — DOM mode", () => {
 
   test("handles style as string", () => {
     const el = h("div", { style: "color: red; font-size: 14px" });
-    expect(el.style.color).toBe("red");
-    expect(el.style.fontSize).toBe("14px");
+    expect((el as HTMLElement).style.color).toBe("red");
+    expect((el as HTMLElement).style.fontSize).toBe("14px");
   });
 
   test("handles style as object", () => {
     const el = h("div", { style: { color: "blue", fontSize: "16px" } });
-    expect(el.style.color).toBe("blue");
-    expect(el.style.fontSize).toBe("16px");
+    expect((el as HTMLElement).style.color).toBe("blue");
+    expect((el as HTMLElement).style.fontSize).toBe("16px");
   });
 
   test("flattens nested children arrays", () => {
@@ -128,19 +128,19 @@ describe("h — reactive attribute bindings", () => {
         v === "dark" ? "color: white; background: black" : "color: black; background: white",
       ),
     });
-    expect(el.style.color).toBe("black");
+    expect((el as HTMLElement).style.color).toBe("black");
 
     setTheme("dark");
-    expect(el.style.color).toBe("white");
+    expect((el as HTMLElement).style.color).toBe("white");
   });
 
   test("reactive style object binding", () => {
     const [color, setColor] = define("red");
     const el = h("div", { style: color((v) => ({ color: v })) });
-    expect(el.style.color).toBe("red");
+    expect((el as HTMLElement).style.color).toBe("red");
 
     setColor("blue");
-    expect(el.style.color).toBe("blue");
+    expect((el as HTMLElement).style.color).toBe("blue");
   });
 
   test("reactive boolean attribute", () => {
@@ -660,5 +660,280 @@ describe("h — each directive", () => {
     setItems(["c"]);
     expect(el.children.length).toBe(1);
     expect(el.children[0].textContent).toBe("c");
+  });
+});
+
+describe("h — when directive with else", () => {
+  test("renders else content when when is falsy", () => {
+    const [visible] = define(false);
+    const el = h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
+      h("p", null, "shown"),
+    );
+    expect(el.textContent).toBe("fallback");
+  });
+
+  test("renders primary when when is truthy", () => {
+    const [visible] = define(true);
+    const el = h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
+      h("p", null, "shown"),
+    );
+    expect(el.textContent).toBe("shown");
+  });
+
+  test("toggles between primary and else", () => {
+    const [visible, setVisible] = define(false);
+    const el = h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
+      h("p", null, "shown"),
+    );
+    expect(el.textContent).toBe("fallback");
+
+    setVisible(true);
+    expect(el.textContent).toBe("shown");
+
+    setVisible(false);
+    expect(el.textContent).toBe("fallback");
+  });
+
+  test("else with non-lazy children", () => {
+    const [visible, setVisible] = define(false);
+    const el = h(
+      "div",
+      { when: visible, else: () => h("span", null, "else") },
+      h("span", null, "primary"),
+    );
+    expect(el.textContent).toBe("else");
+
+    setVisible(true);
+    expect(el.textContent).toBe("primary");
+  });
+
+  test("else mounts dynamic content (onMount fired)", () => {
+    const [visible, setVisible] = define(false);
+    let mountCount = 0;
+
+    function Else() {
+      onMount(() => mountCount++);
+      return h("span", null, "else");
+    }
+
+    const root = h(
+      "div",
+      null,
+      h("div", { when: visible, else: () => h(Else, null) }, () => h("span", null, "main")),
+    );
+
+    mount(root, document.body);
+    expect(mountCount).toBe(1);
+
+    setVisible(true);
+    // else 内容被销毁，main 内容显示
+    expect(root.textContent).toBe("main");
+
+    setVisible(false);
+    // else 内容重新挂载
+    expect(mountCount).toBe(2);
+
+    unmount(root);
+  });
+
+  test("else content cleaned up on unmount (onUnmount fired)", () => {
+    const [visible] = define(false);
+    let unmountCount = 0;
+
+    function Else() {
+      onUnmount(() => unmountCount++);
+      return h("span", null, "else");
+    }
+
+    const root = h(
+      "div",
+      null,
+      h("div", { when: visible, else: () => h(Else, null) }, () => h("span", null, "main")),
+    );
+
+    mount(root, document.body);
+    unmount(root);
+    expect(unmountCount).toBe(1);
+  });
+});
+
+describe("h — when directive mapping table mode", () => {
+  test("renders branch matching the key", () => {
+    const [status] = define("loading");
+    const el = h(
+      "div",
+      { when: () => status() },
+      {
+        loading: () => h("p", null, "加载中"),
+        error: () => h("p", null, "出错了"),
+        success: () => h("p", null, "成功"),
+      },
+    );
+    expect(el.textContent).toBe("加载中");
+  });
+
+  test("switches branch when key changes", () => {
+    const [status, setStatus] = define("loading");
+    const el = h(
+      "div",
+      { when: () => status() },
+      {
+        loading: () => h("p", null, "加载中"),
+        error: () => h("p", null, "出错了"),
+        success: () => h("p", null, "成功"),
+      },
+    );
+    expect(el.textContent).toBe("加载中");
+
+    setStatus("success");
+    expect(el.textContent).toBe("成功");
+
+    setStatus("error");
+    expect(el.textContent).toBe("出错了");
+  });
+
+  test("does not rebuild when key unchanged (SKIP_UPDATE internally)", () => {
+    const [status, setStatus] = define("loading");
+    let buildCount = 0;
+
+    h(
+      "div",
+      { when: () => status() },
+      {
+        loading: () => {
+          buildCount++;
+          return h("p", null, "加载中");
+        },
+        error: () => h("p", null, "出错了"),
+      },
+    );
+    expect(buildCount).toBe(1);
+
+    // 改变到不存在的 key，loading 分支不应重建
+    setStatus("unknown" as any);
+    expect(buildCount).toBe(1);
+
+    // 回到 loading，应重建
+    setStatus("loading");
+    expect(buildCount).toBe(2);
+  });
+
+  test("renders else when key not found in mapping table", () => {
+    const [status] = define("unknown");
+    const el = h(
+      "div",
+      { when: () => status(), else: () => h("p", null, "未知状态") },
+      {
+        loading: () => h("p", null, "加载中"),
+        error: () => h("p", null, "出错了"),
+      },
+    );
+    expect(el.textContent).toBe("未知状态");
+  });
+
+  test("clears children when key not found and no else", () => {
+    const [status] = define("unknown");
+    const el = h(
+      "div",
+      { when: () => status() },
+      {
+        loading: () => h("p", null, "加载中"),
+        error: () => h("p", null, "出错了"),
+      },
+    );
+    expect(el.textContent).toBe("");
+  });
+
+  test("else preserved across key misses", () => {
+    const [status, setStatus] = define("unknown");
+    const el = h(
+      "div",
+      { when: () => status(), else: () => h("p", null, "默认") },
+      {
+        loading: () => h("p", null, "加载中"),
+      },
+    );
+    expect(el.textContent).toBe("默认");
+
+    setStatus("still-unknown" as any);
+    // else 内容保持不变（key 仍是未匹配）
+    expect(el.textContent).toBe("默认");
+  });
+
+  test("branch function called only when key is activated", () => {
+    const [status, setStatus] = define("loading");
+    let errorBuildCount = 0;
+
+    h(
+      "div",
+      { when: () => status() },
+      {
+        loading: () => h("p", null, "加载中"),
+        error: () => {
+          errorBuildCount++;
+          return h("p", null, "出错了");
+        },
+      },
+    );
+    expect(errorBuildCount).toBe(0); // error 分支未被调用
+
+    setStatus("error");
+    expect(errorBuildCount).toBe(1); // 激活 error 分支
+  });
+
+  test("mapping table + with each gives dev warning and each is ignored", () => {
+    const [status] = define("loading");
+    const [items] = define(["a", "b"]);
+
+    const el = h(
+      "div",
+      { when: () => status(), each: () => items() },
+      {
+        loading: () => h("p", null, "加载中"),
+      },
+    );
+    // 映射表模式忽略 each
+    expect(el.textContent).toBe("加载中");
+  });
+
+  test("mounts and unmounts branches correctly", () => {
+    const [status, setStatus] = define("loading");
+    let mountCount = 0;
+    let unmountCount = 0;
+
+    function Loading() {
+      onMount(() => mountCount++);
+      onUnmount(() => unmountCount++);
+      return h("p", null, "加载中");
+    }
+
+    function Success() {
+      onMount(() => mountCount++);
+      onUnmount(() => unmountCount++);
+      return h("p", null, "成功");
+    }
+
+    const root = h(
+      "div",
+      null,
+      h(
+        "div",
+        { when: () => status() },
+        {
+          loading: () => h(Loading, null),
+          success: () => h(Success, null),
+        },
+      ),
+    );
+
+    mount(root, document.body);
+    expect(mountCount).toBe(1); // loading mounted
+
+    setStatus("success");
+    expect(unmountCount).toBe(1); // loading unmounted
+    expect(mountCount).toBe(2); // success mounted
+
+    unmount(root);
+    expect(unmountCount).toBe(2); // success unmounted
   });
 });

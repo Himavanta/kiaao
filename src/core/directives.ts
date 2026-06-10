@@ -1,15 +1,9 @@
 // kiaao — when/each directive implementations
 
-import {
-  IS_REACTIVE,
-  SKIP_UPDATE,
-  type Getter,
-  type Setter,
-  type ReactiveFunction,
-} from "./types.ts";
+import { IS_REACTIVE, SKIP_UPDATE, type Getter, type Setter } from "./types.ts";
 import { effect, define } from "./runtime.ts";
 import { triggerMount, disposeNode } from "./lifecycle.ts";
-import { isVoidElement } from "./ssr-helpers.ts";
+import { isVoidElement, isPlainObject } from "./ssr-helpers.ts";
 import { addLocalEffect, removeLocalEffect } from "./local-effect.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
@@ -157,14 +151,17 @@ function triggerMountIfConnected(host: Node, node: Node): void {
 
 // ── createWhenElement ──────────────────────────────────
 
-export function createWhenElement(
-  tag: string,
-  props: any,
-  children: any[],
-  whenFn: (() => any) | ReactiveFunction,
-  eachFn?: (() => any[]) | Getter<any[]>,
-  keyFn?: (item: any, index: number, entryKey: any) => any,
-): Element {
+export function createWhenElement(options: {
+  tag: string;
+  props: any;
+  children: any[];
+  whenFn: any;
+  eachFn?: any;
+  keyFn?: any;
+  elseFn?: () => any;
+}): Element {
+  const { tag, props, children, whenFn, eachFn, keyFn, elseFn } = options;
+
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
   }
@@ -172,14 +169,59 @@ export function createWhenElement(
   const el = createElement(tag);
   setProps(el, props);
 
-  const isLazy = eachFn === undefined && children.length === 1 && typeof children[0] === "function";
-  const hasEach = eachFn !== undefined;
+  // 检测模式：映射表 > hasEach > 惰性 > 静态
+  // 映射表模式由 children 形状决定，即使有 eachFn 也优先（忽略 each）
+  const isMappingMode = children.length === 1 && isPlainObject(children[0]);
+  const mappingTable: Record<string, () => any> | null = isMappingMode ? children[0] : null;
+  const isLazy =
+    !isMappingMode &&
+    eachFn === undefined &&
+    children.length === 1 &&
+    typeof children[0] === "function";
+  const hasEach = !isMappingMode && eachFn !== undefined;
 
+  if (isMappingMode && eachFn !== undefined && typeof console !== "undefined") {
+    console.warn(`[kiaao] When using mapping table mode on <${tag}>, the 'each' prop is ignored.`);
+  }
+
+  let prevKey: any = undefined;
   let eachStop: (() => void) | undefined;
 
   const stop = effect(() => {
-    const show = Boolean(typeof whenFn === "function" ? whenFn() : whenFn);
+    const showRaw = typeof whenFn === "function" ? whenFn() : whenFn;
+    const show = Boolean(showRaw);
 
+    // ── 映射表模式 ──
+    if (isMappingMode) {
+      if (showRaw === prevKey) return;
+      prevKey = showRaw;
+
+      // 批量移除旧节点（append 到 fragment 会自动从 el 移除）
+      const removed = createFragment();
+      let child: Node | null;
+      while ((child = firstChild(el))) {
+        disposeNode(child);
+        removed.append(child);
+      }
+
+      const branchFn = mappingTable![showRaw];
+      if (branchFn) {
+        const node = branchFn();
+        if (node instanceof Node) {
+          el.append(node);
+          triggerMountIfConnected(el, node);
+        }
+      } else if (elseFn) {
+        const node = elseFn();
+        if (node instanceof Node) {
+          el.append(node);
+          triggerMountIfConnected(el, node);
+        }
+      }
+      return;
+    }
+
+    // ── 布尔模式 ──
     if (isLazy) {
       const result = children[0]();
       if (result === SKIP_UPDATE) return;
@@ -195,7 +237,16 @@ export function createWhenElement(
         disposeNode(child);
         removed.append(child);
       }
-      if (!show) return;
+      if (!show) {
+        if (elseFn) {
+          const node = elseFn();
+          if (node instanceof Node) {
+            el.append(node);
+            triggerMountIfConnected(el, node);
+          }
+        }
+        return;
+      }
       if (result instanceof Node) {
         el.append(result);
         triggerMountIfConnected(el, result);
@@ -214,7 +265,16 @@ export function createWhenElement(
       eachStop();
       eachStop = undefined;
     }
-    if (!show) return;
+    if (!show) {
+      if (elseFn) {
+        const node = elseFn();
+        if (node instanceof Node) {
+          el.append(node);
+          triggerMountIfConnected(el, node);
+        }
+      }
+      return;
+    }
 
     if (hasEach) {
       const childFn = children[0];

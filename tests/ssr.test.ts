@@ -181,6 +181,89 @@ describe("renderToString — when directive", () => {
     const html = renderToString(Comp);
     expect(html).toBe("<div></div>");
   });
+
+  test("renders else when when() is falsy", () => {
+    const [visible] = define(false);
+    function Comp() {
+      return h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
+        h("p", null, "shown"),
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div><p>fallback</p></div>");
+  });
+
+  test("renders primary when when() is truthy with else", () => {
+    const [visible] = define(true);
+    function Comp() {
+      return h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
+        h("p", null, "shown"),
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div><p>shown</p></div>");
+  });
+
+  test("renders non-lazy children with else", () => {
+    const [visible] = define(false);
+    function Comp() {
+      return h(
+        "div",
+        { when: visible, else: () => h("span", null, "fallback") },
+        h("span", null, "primary"),
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div><span>fallback</span></div>");
+  });
+});
+
+describe("renderToString — when directive mapping table mode", () => {
+  test("renders branch matching the key", () => {
+    const [status] = define("loading");
+    function Comp() {
+      return h(
+        "div",
+        { when: () => status() },
+        {
+          loading: () => h("p", null, "加载中"),
+          error: () => h("p", null, "出错了"),
+        },
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div><p>加载中</p></div>");
+  });
+
+  test("renders else when key not found", () => {
+    const [status] = define("unknown");
+    function Comp() {
+      return h(
+        "div",
+        { when: () => status(), else: () => h("p", null, "默认") },
+        {
+          loading: () => h("p", null, "加载中"),
+        },
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div><p>默认</p></div>");
+  });
+
+  test("renders empty when key not found and no else", () => {
+    const [status] = define("unknown");
+    function Comp() {
+      return h(
+        "div",
+        { when: () => status() },
+        {
+          loading: () => h("p", null, "加载中"),
+        },
+      );
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<div></div>");
+  });
 });
 
 describe("renderToString — each directive", () => {

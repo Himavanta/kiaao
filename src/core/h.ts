@@ -38,8 +38,16 @@ export function h(tag: string | ((props: any) => any), props?: any, ...children:
 
   // ── DOM 模式：控制流指令 ──
   if (props?.when !== undefined) {
-    const { when, each, key, ...rest } = props;
-    return createWhenElement(tag, rest, children, when, each, key);
+    const { when, each, key, else: elseFn, ...rest } = props;
+    return createWhenElement({
+      tag,
+      props: rest,
+      children,
+      whenFn: when,
+      eachFn: each,
+      keyFn: key,
+      elseFn,
+    });
   }
   if (props?.each !== undefined) {
     const { each, key, ...rest } = props;

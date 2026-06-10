@@ -19,6 +19,17 @@ export function isSSRSafe(v: any): v is SSRSafe {
   return v && v[SSR_MARKER] === true && typeof v.html === "string";
 }
 
+/** 判断是否为纯对象（用于映射表模式检测） */
+export function isPlainObject(v: any): boolean {
+  return (
+    v !== null &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    !(typeof Node !== "undefined" && v instanceof Node) &&
+    !isSSRSafe(v)
+  );
+}
+
 const VOID_ELEMENTS = splitSet(
   "area base br col embed hr img input link meta param source track wbr",
 );
@@ -39,7 +50,7 @@ export function renderSSRChild(child: any): string {
 
 function stripDirectives(props: any): any {
   if (!props || typeof props !== "object") return props;
-  const { when, each, key, ...rest } = props;
+  const { when: _when, each: _each, key: _key, else: _else, ...rest } = props;
   return rest;
 }
 
@@ -76,7 +87,7 @@ function serializeAttrs(props: any): string {
       if (typeof val === "string") {
         html += ` style="${escapeAttr(val)}"`;
       } else if (typeof val === "object" && val !== null) {
-        const cssText = Object.entries(val)
+        const cssText = Object.entries(val as Record<string, string | number>)
           .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
           .join("; ");
         html += ` style="${escapeAttr(cssText)}"`;
@@ -121,9 +132,44 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
 
   // ── when directive ──
   if (props?.when !== undefined) {
-    const truthy = Boolean(typeof props.when === "function" ? props.when() : props.when);
+    const whenVal = typeof props.when === "function" ? props.when() : props.when;
+    const elseFn = props.else;
+
+    // ── 映射表模式 ──
+    if (children.length === 1 && isPlainObject(children[0])) {
+      const map = children[0];
+      const branchFn = map[whenVal];
+      if (branchFn) {
+        const result = branchFn();
+        const inner = renderSSRChild(result);
+        const attrs = serializeAttrs(stripDirectives(props));
+        if (VOID_ELEMENTS.has(tag)) return ssr(`<${tag}${attrs} />`);
+        return ssr(`<${tag}${attrs}>${inner}</${tag}>`);
+      }
+      // key 未命中 → else 或空
+      if (elseFn) {
+        const result = elseFn();
+        const inner = renderSSRChild(result);
+        const attrs = serializeAttrs(stripDirectives(props));
+        if (VOID_ELEMENTS.has(tag)) return ssr(`<${tag}${attrs} />`);
+        return ssr(`<${tag}${attrs}>${inner}</${tag}>`);
+      }
+      const attrs = serializeAttrs(stripDirectives(props));
+      if (VOID_ELEMENTS.has(tag)) return ssr(`<${tag}${attrs} />`);
+      return ssr(`<${tag}${attrs}></${tag}>`);
+    }
+
+    // ── 布尔模式 ──
+    const truthy = Boolean(whenVal);
+    if (!truthy && elseFn) {
+      // when 为 falsy 且有 else → 渲染 else
+      const result = elseFn();
+      const inner = renderSSRChild(result);
+      const attrs = serializeAttrs(stripDirectives(props));
+      if (VOID_ELEMENTS.has(tag)) return ssr(`<${tag}${attrs} />`);
+      return ssr(`<${tag}${attrs}>${inner}</${tag}>`);
+    }
     if (VOID_ELEMENTS.has(tag)) {
-      // Void element: only render if truthy
       return truthy ? ssr(`<${tag}${serializeAttrs(stripDirectives(props))} />`) : ssr("");
     }
     if (truthy) {

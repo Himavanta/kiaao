@@ -2,7 +2,7 @@
 
 import { define } from "../core/runtime.ts";
 import { h } from "../core/h.ts";
-import { SKIP_UPDATE, type Getter } from "../core/types.ts";
+import { type Getter } from "../core/types.ts";
 import {
   addEvent,
   getPathname,
@@ -78,12 +78,6 @@ function extractSegment(fullPath: string, base?: string): string | null {
   return relative.replace(/^\/+/, "").split("/")[0] || "";
 }
 
-// ── Single-segment Route Matching ──────────────────────
-
-function matchRoute(routes: Route[], segment: string): Route | null {
-  return routes.find((r) => r.path === segment) || null;
-}
-
 // ── createRouter ───────────────────────────────────────
 
 export function createRouter(options: RouterOptions = {}): Router {
@@ -106,31 +100,17 @@ export function createRouter(options: RouterOptions = {}): Router {
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
 
-    let prevSegment: string | null = null;
+    // 将路由表转为映射表（初始化时执行一次）
+    const routeMap = Object.fromEntries(myRoutes.map((r) => [r.path, () => h(r.component, null)]));
 
     return h(
       "div",
       {
-        when: () => (myBase ? currentPath().startsWith(myBase) : true),
+        when: () => extractSegment(currentPath(), myBase),
+        else: () => myFallback(),
         style: { display: "contents" },
       },
-      () => {
-        const raw = currentPath();
-        const segment = extractSegment(raw, myBase);
-
-        // 段为空且不在 base 范围内 → fallback
-        if (segment === null) return myFallback();
-
-        // 段未变 → SKIP_UPDATE，when 指令跳过 DOM 操作
-        if (segment === prevSegment) return SKIP_UPDATE;
-
-        prevSegment = segment;
-
-        const route = matchRoute(myRoutes, segment);
-        if (route) return h(route.component, null);
-
-        return myFallback();
-      },
+      routeMap,
     );
   }
 
