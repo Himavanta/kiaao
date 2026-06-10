@@ -74,7 +74,7 @@ function ThemeItem() {
   ];
 
   return (
-    <div class="relative flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 cursor-pointer group">
+    <div class="relative flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 cursor-pointer group mx-1">
       <Icon icon="lineicons:brush" class="w-4 h-4 text-gray-700 shrink-0" />
       <span class="flex-1 text-sm text-gray-700">主题</span>
       <Icon icon="lineicons:chevron-right" class="w-3 h-3 text-gray-300 shrink-0" />
@@ -87,7 +87,7 @@ function ThemeItem() {
           <div
             class={theme((v) =>
               cn(
-                "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer",
+                "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
                 item().value === v && "text-blue-600 hover:text-blue-600",
               ),
             )}
