@@ -1,6 +1,7 @@
 import { define, derive, type Getter } from "kiaao";
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
 import Icon from "../icon";
+import Dropdown from "../../ui/dropdown";
 
 const [menus] = define<MainNavItem[]>(mainNavs);
 const [navPlugin] = define(mainNavPlugin);
@@ -16,12 +17,32 @@ function Logo() {
   );
 }
 
-function Workspace() {
-  return <div>WORKSPACE</div>;
+function UserIcon({ onClick }: { onClick?: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      class="bg-blue-600 text-white grid place-items-center justify-center w-9 h-9 rounded-full cursor-pointer"
+    >
+      <span>D</span>
+    </div>
+  );
 }
 
 function UserCard() {
-  return <div>USERCARD</div>;
+  return (
+    <Dropdown trigger={<UserIcon />}>
+      <div class="z-50 rounded-xl border border-gray-200 bg-white shadow-lg py-3 ">
+        <header class="flex items-center justify-between gap-5 pr-3 pl-4">
+          <div>
+            <div class="font-medium text-sm">Dify</div>
+            <div class="text-xs text-gray-500">demo@demo.com</div>
+          </div>
+          <UserIcon />
+        </header>
+        <nav class="py-1 px-2">hhhh</nav>
+      </div>
+    </Dropdown>
+  );
 }
 
 function MenuItem({ item }: { item: Getter<MainNavItem> }) {
@@ -52,10 +73,7 @@ function MenuItem({ item }: { item: Getter<MainNavItem> }) {
 export default function () {
   return (
     <nav class="h-14 w-full flex border-b border-gray-200 justify-between items-center px-4">
-      <section class="flex items-center gap-3">
-        <Logo />
-        <Workspace />
-      </section>
+      <Logo />
 
       <section each={menus} key={(v: MainNavItem) => v.path} class="flex items-center gap-4 ">
         {(item: Getter<MainNavItem>) => <MenuItem item={item} />}
