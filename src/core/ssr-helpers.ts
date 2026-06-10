@@ -21,13 +21,7 @@ export function isSSRSafe(v: any): v is SSRSafe {
 
 /** 判断是否为纯对象（用于映射表模式检测） */
 export function isPlainObject(v: any): boolean {
-  return (
-    v !== null &&
-    typeof v === "object" &&
-    !Array.isArray(v) &&
-    !(typeof Node !== "undefined" && v instanceof Node) &&
-    !isSSRSafe(v)
-  );
+  return !!v && v.constructor === Object && !isSSRSafe(v);
 }
 
 const VOID_ELEMENTS = splitSet(
