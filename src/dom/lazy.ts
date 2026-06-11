@@ -19,6 +19,8 @@ export function lazy<T extends (...args: any[]) => any>(
       options?.onError?.(err);
     });
 
+  const [isLoaded] = use(Component, () => Component() !== null);
+
   const LazyComponent = ((props: any) => {
     const err = error();
     if (err) throw err;
@@ -26,7 +28,7 @@ export function lazy<T extends (...args: any[]) => any>(
     return h(
       "div",
       {
-        when: () => Component() !== null,
+        when: isLoaded,
         style: { display: "contents" },
       },
       () => h(Component()!, props),

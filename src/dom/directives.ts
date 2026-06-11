@@ -232,8 +232,6 @@ export function createWhenElement(options: {
 
     // ── 布尔模式 ──
     if (isLazy) {
-      const result = children[0]();
-
       if (eachStop) {
         eachStop();
         eachStop = undefined;
@@ -254,6 +252,7 @@ export function createWhenElement(options: {
         }
         return;
       }
+      const result = children[0]();
       if (result instanceof Node) {
         el.append(result);
         triggerMountIfConnected(el, result);
