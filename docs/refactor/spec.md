@@ -177,6 +177,23 @@ setter 调用不享有“强制通知”的特权。如果用户需要强制通�
 - 若最后一个参数本身是信号（`isUse(v)` 为真），发出警告。
 - 若依赖列表中存在非信号值，发出警告并自动过滤。
 
+#### 内部数据结构
+
+```ts
+interface DerivationNode<T> {
+  deps: Set<SignalNode>; // 此派生依赖的信号
+  cachedValue: T; // 上次计算结果
+  subs: Set<DerivationNode>; // 依赖此派生的其他派生
+  computeFn: (v?: any) => T; // 用户提供的计算函数，接收 setter 传入的值或 undefined
+  set: Setter<T>; // 派生信号的 setter
+  stops: Set<() => void>; // 向各依赖注册的取消订阅函数（每个 stop 对应一个依赖的订阅）
+  stop: () => void; // 统一清理函数：遍历 stops 调用所有函数，将自身从各依赖的 subs 中移除
+}
+```
+
+派生节点的 getter 函数上挂载 `REACTIVE` 标记，其值指向该 `DerivationNode` 实例。
+`state.stop` 是框架内部使用的统一清理入口，开发者无法通过 `use` 的返回值获取它，但框架内部（如 `addLocalEffect` 的调用方）可以通过 `getter[REACTIVE].stop` 访问。
+
 ---
 
 ### 2.3 类型签名
@@ -265,7 +282,7 @@ toVal(42); // 42
 ### 4.1 依赖图结构
 
 每个定义节点维护 `{ value, subs: Set<DerivationNode>, set }`。
-每个派生节点维护 `{ deps: Set<SignalNode>, cachedValue, dirty, subs: Set<DerivationNode>, computeFn, set, stops }`。
+每个派生节点维护 `{ deps: Set<SignalNode>, cachedValue, subs: Set<DerivationNode>, computeFn, set, stops, stop }`。
 
 依赖关系在 `use(...deps, fn)` 调用时一次性建立：
 
@@ -278,17 +295,16 @@ toVal(42); // 42
 
 1. 用户调用 `setter(newValue)`。
 2. 框架将定义节点的 `value` 更新为 `newValue`（若 `newValue !== oldValue`）。
-3. 遍历该定义节点的 `subs`，对每个派生节点标记 `dirty = true`，并触发重新计算。
+3. 遍历该定义节点的 `subs`，对每个派生节点触发重新计算。
 4. 重新计算：执行 `computeFn(undefined)`，得到 `newResult`。
-5. 若 `newResult !== cachedValue`，更新 `cachedValue`，将 `dirty` 置为 `false`，遍历 `subs` 递归触发下游。
-6. 若 `newResult === cachedValue`，仅将 `dirty` 置为 `false`，不通知下游。
+5. 若 `newResult !== cachedValue`，更新 `cachedValue`，遍历 `subs` 递归触发下游。
+6. 若 `newResult === cachedValue`，不通知下游。
 
 **派生 setter 触发的更新**：
 
 1. 用户调用派生信号的 `setter(value)`。
-2. 标记该派生节点 `dirty = true`，触发重新计算。
-3. 执行 `computeFn(value)`，得到 `newResult`。
-4. 后续短路逻辑与上游触发的更新完全一致。
+2. 触发该派生节点重新计算，执行 `computeFn(value)`，得到 `newResult`。
+3. 后续短路逻辑与上游触发的更新完全一致。
 
 ### 4.3 无循环依赖检测
 
@@ -300,7 +316,7 @@ toVal(42); // 42
 
 ### 5.1 派生节点的订阅取消
 
-每个派生节点的 `stops` 集合存储了向每个依赖注册的取消订阅函数。当派生节点需要被销毁时，遍历 `stops` 调用所有函数，将自身从各依赖的 `subs` 中移除。
+每个派生节点的 `stops` 集合存储了向每个依赖注册的取消订阅函数。`state.stop` 是统一清理入口，遍历 `stops` 调用所有函数，将自身从各依赖的 `subs` 中移除。当派生节点需要被销毁时，调用 `state.stop()` 即可。
 
 ### 5.2 清理触发时机
 
@@ -336,8 +352,9 @@ use(someSignal, () => {
 
 若为信号：
 
-- 创建匿名派生来绑定更新。
-- 该匿名派生的 `stop` 注册到对应 DOM 节点的 `LOCAL_EFFECTS` 集合中，随节点销毁而清理。
+- 创建匿名派生来绑定更新：`const [derived] = use(value, () => { /* 更新 DOM */ })`。
+- 通过 `derived[REACTIVE].stop` 获取该匿名派生的统一清理函数，注册到对应 DOM 节点的 `LOCAL_EFFECTS` 集合中。
+- 节点销毁时，`disposeNode` 遍历 `LOCAL_EFFECTS` 调用所有清理函数，自动取消订阅。
 
 ### 6.2 JSX 中的使用
 
