@@ -55,7 +55,7 @@ Only attributes that have meaning in static HTML are serialized. The SSR seriali
 - **`aria-*` / `data-*`** — Output as-is.
 - **`value` and `checked`** — Not output by default. Use `attr:value` or `attr:checked` to include initial values in the static HTML.
 
----
+<br/>
 
 - **`attr:` 前缀** — 作为 HTML 属性输出。`attr:value="init"` 输出为 `value="init"`。
 - **`prop:` 前缀** — 忽略。仅对客户端 DOM property 赋值有意义。

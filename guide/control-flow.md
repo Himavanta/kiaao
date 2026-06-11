@@ -200,10 +200,13 @@ Using a stable key (like a database ID) ensures that DOM nodes are correctly reu
 ## Notes / 注意事项
 
 - `when` and `each` cannot be used on void elements (`<br>`, `<input>`, `<hr>`, etc.). An error is thrown in development mode.
-- `when` 和 `each` 不能在 void 元素（`<br>`、`<input>`、`<hr>` 等）上使用。开发模式下会抛出错误。
 - Both attributes only work on native HTML elements. Using them on a component function has no effect.
-- 这两个属性仅对原生 HTML 元素生效。在组件函数上使用无效。
 - If both `when` and `each` are present on the same element, `when` takes priority. In map mode, `each` is ignored with a warning. In boolean mode, `when` acts as a guard — the list is only rendered when the condition is truthy.
-- 如果同一元素上同时存在 `when` 和 `each`，`when` 优先。映射表模式下，`each` 会被忽略并发出警告。布尔模式下，`when` 作为守卫——列表仅在条件为 truthy 时渲染。
 - To avoid leaving a wrapper element in the DOM, apply `style="display: contents"` on the host element. This makes the element invisible in layout while preserving lifecycle management.
+
+<br/>
+
+- `when` 和 `each` 不能在 void 元素（`<br>`、`<input>`、`<hr>` 等）上使用。开发模式下会抛出错误。
+- 这两个属性仅对原生 HTML 元素生效。在组件函数上使用无效。
+- 如果同一元素上同时存在 `when` 和 `each`，`when` 优先。映射表模式下，`each` 会被忽略并发出警告。布尔模式下，`when` 作为守卫——列表仅在条件为 truthy 时渲染。
 - 为避免在 DOM 中留下包裹元素，可在宿主元素上设置 `style="display: contents"`。这使得该元素在布局中不可见，同时保留生命周期管理。
