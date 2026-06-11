@@ -199,11 +199,9 @@ function Modal() {
     <div>
       <button onClick={() => setOpen((o) => !o)}>Toggle</button>
       <div when={open}>
-        {() => (
-          <Teleport to="#modal-root">
-            <div class="modal">This is rendered inside #modal-root.</div>
-          </Teleport>
-        )}
+        <Teleport to="#modal-root">
+          <div class="modal">This is rendered inside #modal-root.</div>
+        </Teleport>
       </div>
     </div>
   );
