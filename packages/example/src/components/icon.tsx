@@ -1,4 +1,4 @@
-import { use, romise } from "kiaao";
+import { use, toVal, romise } from "kiaao";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export default function Icon(props: Record<string, any>) {
   const { icon, ...svgProps } = props;
 
   const { data } = romise(() => {
-    const name = typeof icon === "function" ? icon() : icon;
+    const name = toVal(icon);
     if (!name) return Promise.resolve(null);
 
     return fetchRaw(name).then((res) => {

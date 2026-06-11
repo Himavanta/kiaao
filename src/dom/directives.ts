@@ -1,7 +1,7 @@
 // kiaao v4 — when/each directive implementations (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
-import { isUse, use } from "../reactive/core.ts";
+import { isUse, use, toVal } from "../reactive/core.ts";
 import { triggerMount, disposeNode } from "./component.ts";
 import { isVoidElement, isPlainObject } from "./ssr-helpers.ts";
 import { addLocalEffect, removeLocalEffect } from "./local-effect.ts";
@@ -51,7 +51,7 @@ function renderEach(
   const itemSignalMap = new Map<any, [() => any, (v: any) => void]>();
 
   const sync = () => {
-    const source = typeof eachFn === "function" ? (eachFn as any)() : eachFn;
+    const source = toVal(eachFn);
     const entries = normalizeEachSource(source);
     const newKeys = new Set<any>();
 
@@ -198,7 +198,7 @@ export function createWhenElement(options: {
 
   // 将渲染逻辑提取为独立函数，由派生回调调用
   const renderBranch = () => {
-    const showRaw = typeof whenFn === "function" ? whenFn() : whenFn;
+    const showRaw = toVal(whenFn);
     const show = Boolean(showRaw);
 
     // ── 映射表模式 ──
