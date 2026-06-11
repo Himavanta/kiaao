@@ -128,7 +128,7 @@ const [boxStyle] = use(height, () => ({
 
 ---
 
-## `attr:` and `prop:` Prefixes / attr: 和 prop: 前缀
+## `attr:` / `prop:`
 
 Two explicit prefixes give you full control when the default behavior doesn't match your needs.
 
