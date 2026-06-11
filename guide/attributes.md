@@ -100,11 +100,12 @@ return <button class={className}>Click</button>;
 
 `style` accepts a string or an object.
 
+- **String** — Set directly as `el.style.cssText`.
+- **Object** — The inline style is first cleared, then all properties from the object are assigned with `Object.assign(el.style, value)`. This means each object update is a full replacement — properties not in the new object are removed.
+
 `style` 接受字符串或对象。
 
-- **String** — Set directly as `el.style.cssText`.
 - **字符串** — 直接设置为 `el.style.cssText`。
-- **Object** — The inline style is first cleared, then all properties from the object are assigned with `Object.assign(el.style, value)`. This means each object update is a full replacement — properties not in the new object are removed.
 - **对象** — 首先清空内联样式，然后用 `Object.assign(el.style, value)` 赋值对象中的所有属性。这意味着每次对象更新都是完全替换——新对象中不存在的属性会被移除。
 
 ```jsx
@@ -131,11 +132,12 @@ const [boxStyle] = use(height, () => ({
 
 Two explicit prefixes give you full control when the default behavior doesn't match your needs.
 
+- **`attr:xxx`** — Force the value to be set as an HTML attribute via `setAttribute`. This is useful for setting initial form values in SSR, triggering `attributeChangedCallback` in Web Components, or preserving attributes that would otherwise be set as properties.
+- **`prop:xxx`** — Force the value to be set as a DOM property. This overrides the FORCE_ATTRIBUTE list and is useful for Web Components with custom property setters.
+
 两个显式前缀让你在默认行为不满足需求时拥有完全的控制权。
 
-- **`attr:xxx`** — Force the value to be set as an HTML attribute via `setAttribute`. This is useful for setting initial form values in SSR, triggering `attributeChangedCallback` in Web Components, or preserving attributes that would otherwise be set as properties.
 - **`attr:xxx`** — 强制通过 `setAttribute` 将值设置为 HTML 属性。适用于在 SSR 中设置表单初始值、触发 Web Components 的 `attributeChangedCallback`，或保留原本会通过 property 设置的属性。
-- **`prop:xxx`** — Force the value to be set as a DOM property. This overrides the FORCE_ATTRIBUTE list and is useful for Web Components with custom property setters.
 - **`prop:xxx`** — 强制通过 DOM property 设置值。这会覆盖 FORCE_ATTRIBUTE 列表，适用于具有自定义 property setter 的 Web Components。
 
 ```jsx

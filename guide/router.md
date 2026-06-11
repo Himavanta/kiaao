@@ -40,15 +40,15 @@ const { RouterView, Link, navigate, currentPath, currentParams } = createRouter(
 | Property / 属性 | Type / 类型                      | Description / 说明                                  |
 | --------------- | -------------------------------- | --------------------------------------------------- |
 | `RouterView`    | Component                        | The route view. Renders the matched component.      |
-| `RouterView`    | 组件                             | 路由视图。渲染匹配的组件。                          |
+|                 | 组件                             | 路由视图。渲染匹配的组件。                          |
 | `Link`          | Component                        | Declarative navigation link.                        |
-| `Link`          | 组件                             | 声明式导航链接。                                    |
+|                 | 组件                             | 声明式导航链接。                                    |
 | `navigate`      | `(path: string) => void`         | Programmatic navigation. Receives an absolute path. |
-| `navigate`      | `(path: string) => void`         | 编程式导航。接收完整绝对路径。                      |
+|                 | `(path: string) => void`         | 编程式导航。接收完整绝对路径。                      |
 | `currentPath`   | `Getter<string>`                 | A signal holding the current pathname.              |
-| `currentPath`   | `Getter<string>`                 | 保存当前路径名的信号。                              |
+|                 | `Getter<string>`                 | 保存当前路径名的信号。                              |
 | `currentParams` | `Getter<Record<string, string>>` | A signal holding the current URL query parameters.  |
-| `currentParams` | `Getter<Record<string, string>>` | 保存当前 URL 查询参数的信号。                       |
+|                 | `Getter<Record<string, string>>` | 保存当前 URL 查询参数的信号。                       |
 
 ---
 
@@ -63,11 +63,11 @@ const { RouterView, Link, navigate, currentPath, currentParams } = createRouter(
 | Prop / 属性 | Type / 类型 | Description / 说明                                                                               |
 | ----------- | ----------- | ------------------------------------------------------------------------------------------------ |
 | `routes`    | `Route[]`   | Array of route definitions.                                                                      |
-| `routes`    | `Route[]`   | 路由定义数组。                                                                                   |
+|             | `Route[]`   | 路由定义数组。                                                                                   |
 | `base`      | `string`    | Path prefix. The RouterView only responds to path changes within this base. Must start with `/`. |
-| `base`      | `string`    | 路径前缀。该 RouterView 只响应 base 内的路径变化。必须以 `/` 开头。                              |
+|             | `string`    | 路径前缀。该 RouterView 只响应 base 内的路径变化。必须以 `/` 开头。                              |
 | `fallback`  | Component   | Fallback when no route matches. Overrides the instance-level fallback.                           |
-| `fallback`  | 组件        | 无匹配时的后备内容。覆盖实例级 fallback。                                                        |
+|             | 组件        | 无匹配时的后备内容。覆盖实例级 fallback。                                                        |
 
 ### Route Definition / 路由定义
 

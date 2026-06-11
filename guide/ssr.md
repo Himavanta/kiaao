@@ -26,11 +26,11 @@ The first argument is the component function. The second argument is the props o
 
 During SSR, some framework behaviors differ from client-side execution. This is because there is no DOM to interact with and no ongoing reactivity after the render completes.
 
-**Derivations / 派生**：Each `use(...deps, fn)` derivation executes its compute function once at creation time to produce the initial cached value. The value is then embedded in the HTML output. Derivations do not re-run after the render.
+**Derivations**：Each `use(...deps, fn)` derivation executes its compute function once at creation time to produce the initial cached value. The value is then embedded in the HTML output. Derivations do not re-run after the render.
 
-**Lifecycle / 生命周期**：`onMount` and `onUnmount` callbacks are not invoked during SSR. They only run when the component is mounted or unmounted on the client.
+**Lifecycle**：`onMount` and `onUnmount` callbacks are not invoked during SSR. They only run when the component is mounted or unmounted on the client.
 
-**Control flow / 控制流**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
+**Control flow**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
 
 SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 DOM 可供交互，且渲染完成后不再有持续的响应式更新。
 
@@ -46,8 +46,6 @@ SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 
 
 Only attributes that have meaning in static HTML are serialized. The SSR serialization follows the same attribute handling rules as the client, with some differences:
 
-只有对静态 HTML 有意义的属性才会被序列化。SSR 序列化遵循与客户端相同的属性处理规则，但存在一些差异：
-
 - **`attr:` prefix** — Output as HTML attributes. `attr:value="init"` becomes `value="init"`.
 - **`prop:` prefix** — Ignored. These are only meaningful for client-side DOM property assignment.
 - **Event handlers** — Ignored. `onClick`, `onInput`, etc. are not serialized.
@@ -55,7 +53,7 @@ Only attributes that have meaning in static HTML are serialized. The SSR seriali
 - **`aria-*` / `data-*`** — Output as-is.
 - **`value` and `checked`** — Not output by default. Use `attr:value` or `attr:checked` to include initial values in the static HTML.
 
-<br/>
+只有对静态 HTML 有意义的属性才会被序列化。SSR 序列化遵循与客户端相同的属性处理规则，但存在一些差异：
 
 - **`attr:` 前缀** — 作为 HTML 属性输出。`attr:value="init"` 输出为 `value="init"`。
 - **`prop:` 前缀** — 忽略。仅对客户端 DOM property 赋值有意义。

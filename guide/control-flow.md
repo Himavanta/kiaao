@@ -106,13 +106,13 @@ const [status, setStatus] = use('idle')
 
 The `each` attribute renders a list of items inside its host element. It accepts a signal that returns any iterable data source: arrays, objects, Maps, Sets, numbers, and strings.
 
-`each` 属性在其宿主元素内部渲染列表。它接受一个返回任意可迭代数据源的信号：数组、对象、Map、Set、数字和字符串。
-
 The `children` of an `each` element must be a render function with the signature `(item, index, key) => Node`.
 
 - `item` — A signal getter for the current item. You can call `item()` to read the value, or pass it to another `use` derivation.
 - `index` — The numeric position.
 - `key` — The key of the entry in the original data source (array index, object property name, etc.).
+
+`each` 属性在其宿主元素内部渲染列表。它接受一个返回任意可迭代数据源的信号：数组、对象、Map、Set、数字和字符串。
 
 `each` 元素的 `children` 必须是一个渲染函数，签名为 `(item, index, key) => Node`。
 

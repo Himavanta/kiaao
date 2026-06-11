@@ -106,9 +106,9 @@ You do not need to manually stop any derivation. The framework tracks ownership 
 
 A derivation is owned by the component or DOM subtree where it was created. When that component unmounts or that DOM subtree is removed (for example, by `when` switching to a different branch or `each` removing list items), the derivation stops reacting to its dependencies and removes itself from their subscriber lists.
 
-派生由其创建时所在的组件或 DOM 子树拥有。当该组件卸载或该 DOM 子树被移除时（例如 `when` 切换到另一个分支，或 `each` 移除列表项），派生停止响应其依赖，并将自身从依赖的订阅者列表中移除。
-
 This means you can freely create derivations anywhere without worrying about memory leaks — as long as they are created inside a component or a DOM element managed by `when`/`each`.
+
+派生由其创建时所在的组件或 DOM 子树拥有。当该组件卸载或该 DOM 子树被移除时（例如 `when` 切换到另一个分支，或 `each` 移除列表项），派生停止响应其依赖，并将自身从依赖的订阅者列表中移除。
 
 这意味着你可以在任何地方自由创建派生，无需担心内存泄漏——只要它们是在组件内或由 `when`/`each` 管理的 DOM 元素内创建的。
 
