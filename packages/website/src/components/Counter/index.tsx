@@ -1,8 +1,8 @@
-import { define } from "kiaao";
+import { use } from "kiaao";
 import style from "./style.module.css";
 
 export default function Counter() {
-  const [count, setCount] = define(0);
+  const [count, setCount] = use(0);
 
   return (
     <div class={style.counter_card}>

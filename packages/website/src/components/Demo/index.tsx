@@ -1,21 +1,22 @@
-import { define, derive } from "kiaao";
+import { use } from "kiaao";
 import style from "./style.module.css";
 
 export default function () {
-  const [active, setActive] = define(false);
+  const [active, setActive] = use(false);
 
   // only render once
   console.log("render");
 
-  const background = active((v) => (v ? "blue" : "red"));
-  const currentClass = derive(() => style[background()]);
-  const currentStyle = active((v) => (v ? { color: "white" } : { color: "black" }));
+  const [background] = use(active, () => (active() ? "blue" : "red"));
+  const [currentClass] = use(background, () => style[background()]);
+  const [currentStyle] = use(active, () => (active() ? { color: "white" } : { color: "black" }));
+  const [color] = use(currentStyle, () => currentStyle().color);
 
   return (
     <div class={currentClass} style={currentStyle} onClick={() => setActive((v) => !v)}>
       click to change style
       <div>current background: {background}</div>
-      <div>current color: {derive(() => currentStyle().color)}</div>
+      <div>current color: {color}</div>
     </div>
   );
 }

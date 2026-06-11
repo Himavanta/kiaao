@@ -1,10 +1,10 @@
-import { define, derive, type Getter } from "kiaao";
+import { use, type Getter } from "kiaao";
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
 import Icon from "../icon";
 import { UserCard } from "./user";
 
-const [menus] = define<MainNavItem[]>(mainNavs);
-const [navPlugin] = define(mainNavPlugin);
+const [menus] = use<MainNavItem[]>(mainNavs);
+const [navPlugin] = use(mainNavPlugin);
 
 const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");
 
@@ -18,26 +18,26 @@ function Logo() {
 }
 
 function MenuItem({ item }: { item: Getter<MainNavItem> }) {
+  const [itemPath] = use(item, () => `/i/${item().path}`);
+  const [linkClass] = use(currentPath, item, () =>
+    cn(
+      "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
+      currentPath() === `/i/${item().path}` && "bg-white shadow-md text-blue-700 hover:bg-white",
+    ),
+  );
+  const [iconClass] = use(currentPath, item, () =>
+    cn("h-4 w-4", currentPath() === `/i/${item().path}` && " text-blue-700"),
+  );
+  const [itemIcon] = use(item, () => item().icon);
+  const [spanClass] = use(currentPath, item, () =>
+    cn(currentPath() === `/i/${item().path}` && " text-blue-700"),
+  );
+  const [itemTitle] = use(item, () => item().title);
+
   return (
-    <Link
-      to={item((v) => `/i/${v.path}`)}
-      class={derive(() =>
-        cn(
-          "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
-          currentPath() === `/i/${item().path}` &&
-            "bg-white shadow-md text-blue-700 hover:bg-white",
-        ),
-      )}
-    >
-      <Icon
-        class={derive(() =>
-          cn("h-4 w-4", currentPath() === `/i/${item().path}` && " text-blue-700"),
-        )}
-        icon={item((v) => v.icon)}
-      />
-      <span class={derive(() => cn(currentPath() === `/i/${item().path}` && " text-blue-700"))}>
-        {item((v) => v.title)}
-      </span>
+    <Link to={itemPath} class={linkClass}>
+      <Icon class={iconClass} icon={itemIcon} />
+      <span class={spanClass}>{itemTitle}</span>
     </Link>
   );
 }

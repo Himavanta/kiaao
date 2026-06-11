@@ -1,4 +1,4 @@
-import { derive, romise } from "kiaao";
+import { use, romise } from "kiaao";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -51,8 +51,8 @@ export default function Icon(props: Record<string, any>) {
     });
   });
 
-  const body = derive(() => data()?.body ?? "");
-  const viewBox = derive(() => {
+  const [body] = use(data, () => data()?.body ?? "");
+  const [viewBox] = use(data, () => {
     const d = data();
     return `0 0 ${d?.width || 24} ${d?.height || 24}`;
   });

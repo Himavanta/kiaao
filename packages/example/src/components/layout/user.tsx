@@ -1,4 +1,4 @@
-import { define, type Getter } from "kiaao";
+import { use, type Getter } from "kiaao";
 import { Link } from "/src/router";
 import Icon from "../icon";
 import Dropdown from "../../ui/dropdown";
@@ -60,7 +60,7 @@ function MenuSeparator() {
 // ── 主题悬浮子菜单 ────────────────────────────────────
 
 function ThemeItem() {
-  const [theme, setTheme] = define("light");
+  const [theme, setTheme] = use("light");
 
   type ThemeItem = {
     label: string;
@@ -83,20 +83,23 @@ function ThemeItem() {
         each={themes}
         class="absolute right-full top-0 ml-2 min-w-32 rounded-lg border border-gray-200 bg-white py-1 shadow-lg hidden group-hover:block"
       >
-        {(item: Getter<ThemeItem>) => (
-          <div
-            class={theme((v) =>
-              cn(
-                "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
-                item().value === v && "text-blue-600 hover:text-blue-600",
-              ),
-            )}
-            onClick={() => setTheme(item().value)}
-          >
-            <Icon icon={item((v) => v.icon)} class="w-4 h-4" />
-            <span>{item((v) => v.label)}</span>
-          </div>
-        )}
+        {(item: Getter<ThemeItem>) => {
+          const [rowClass] = use(theme, () =>
+            cn(
+              "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
+              item().value === theme() && "text-blue-600 hover:text-blue-600",
+            ),
+          );
+          const [itemIcon] = use(item, () => item().icon);
+          const [itemLabel] = use(item, () => item().label);
+
+          return (
+            <div class={rowClass} onClick={() => setTheme(item().value)}>
+              <Icon icon={itemIcon} class="w-4 h-4" />
+              <span>{itemLabel}</span>
+            </div>
+          );
+        }}
       </div>
     </div>
   );
