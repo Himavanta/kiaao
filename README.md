@@ -1,353 +1,119 @@
-[中文](README.zh.md) | **English**
-
 # kiaao
 
-A pure-runtime, zero-virtual-DOM reactive UI framework. No Proxy, no compiler dependency, every update is a precise DOM operation.
+[GitHub](https://github.com/Himavanta/kiaao)
 
-## Design Principles
+---
 
-kiaao is built upon reflection on mainstream frameworks. If you’ve felt uneasy about Vue’s Proxy magic, tired of React’s re-renders and caching rules, or confused by Solid’s compiler requirement and split primitives, kiaao might be the answer you’ve been looking for.
+A framework is for expressing ideas, not hiding them.
 
-- **No virtual DOM** — updates are direct `textNode.textContent = newValue` or attribute assignments, without tree-diffing.
-- **No Proxy interception** — state is plain JavaScript objects. What you see in the debugger is the real value, with no hidden reactive shells.
-- **Explicit selector reactivity** — developers declare dependencies via `getter(selector)`, rather than relying on Proxy traps or compiler inference.
-- **Components run once** — no re-rendering, no `useMemo`/`useCallback` mental overhead, only precise DOM updates.
-- **No compiler plugin required** — pure `h()` calls or standard JSX transformation is all you need.
-- **No Context / provide-inject** — signals are standalone value containers that can be created and shared at module level, without extra cross-level communication mechanisms.
-- **Update granularity at selector-result level** — when a signal changes, only effects whose selected value has actually changed are triggered; unrelated components never re-run.
+kiaao is a pure-runtime reactive UI framework. It does not proxy your data, does not collect dependencies for you, and does not re-run your component functions. It does exactly one thing: precisely update the DOM after you explicitly declare your dependencies.
 
-Since the getter itself is a function carrying the `IS_REACTIVE` marker, `{count}` and `{count(v => v)}` behave the same in JSX—both are recognized by the framework and establish dynamic bindings. The former subscribes to the whole value, the latter subscribes to a slice via the selector.
+All state is created by `use`. Every signal is a `[getter, setter]` tuple. There is no distinction between "writable" and "readonly" signals — you always get both, and you never need to check. There is no concept of "side effects" — a derivation that returns nothing is simply a derived signal whose value is `undefined`.
 
-## Core Concepts
+If you have ever felt out of control because of your framework's "smartness", if you want transparency, predictability, and full control, kiaao is for you.
 
-kiaao has only 4 core APIs that form the entire reactive system:
+---
 
-- **define** — create reactive state, returns a getter/setter pair
-- **derive** — create derived state with caching and a dirty flag; downstream is not notified when the computed result hasn’t changed
-- **effect** — run side effects, automatically tracking dependencies; returns a stop function
-- **h** — create real DOM nodes, with built-in `when` and `each` attribute directives for control flow
+框架是用来表达思想的，不是用来隐藏它的。
 
-All other APIs are components or utilities built on these four primitives:
+kiaao 是一个纯运行时的响应式 UI 框架。它不代理你的数据，不替你收集依赖，不反复运行你的组件函数。它只做一件事：在你明确声明依赖关系之后，精确地更新 DOM。
 
-- **Teleport** — portal component
-- **onMount / onUnmount** — lifecycle hooks
-- **mount / unmount** — explicit mounting and unmounting
-- **lazy** — async component loading
+所有状态都由 `use` 创建。每一个信号都是 `[getter, setter]` 元组。不存在"可写"和"只读"信号的区别——你总是同时获得两个，永远不需要检查。没有"副作用"的概念——不返回值的派生，就是一个值为 `undefined` 的派生信号。
 
-> **Note**: `when` and `each` directives can only be used on native HTML elements (e.g., `<div>`, `<section>`, `<ul>`, etc.), not on custom components. To use them inside a component, place the directive on a native element within the component’s return value.
+如果你曾因框架的"智能"而感到失控，如果你想要的是透明、可预测和完全的掌控，kiaao 是为你准备的。
 
-## Comparison with Other Frameworks
+---
 
-| Aspect             | React     | Vue             | Solid      | kiaao                    |
-| ------------------ | --------- | --------------- | ---------- | ------------------------ |
-| Data purity        | pure      | impure (Proxy)  | pure (two) | pure (one)               |
-| Component runs     | re-runs   | shell once      | shell once | shell once               |
-| Virtual DOM        | yes       | yes             | no         | no                       |
-| Compiler needed    | no        | optional        | required   | no                       |
-| Reactivity         | none      | Proxy           | compile    | explicit selectors       |
-| Control flow       | ternary   | v-if/v-for      | Show/For   | when/each directives     |
-| Update granularity | component | component/block | node       | selector result          |
-| Context/Provide    | yes       | yes             | yes        | no (signals are channel) |
-
-## Installation and JSX Configuration
+## Quick Start / 快速开始
 
 ```bash
 npm install kiaao
 ```
 
-**tsconfig.json:**
+[JSX/TSX setup — 配置 JSX/TSX](./guide/jsx-setup.md)
 
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "kiaao"
-  }
-}
-```
+```jsx
+import { use, mount } from "kiaao";
 
-**vite.config.ts (using oxc):**
+// Definition mode — a writable signal
+// 定义模式 — 可写信号
+const [count, setCount] = use(0);
 
-```ts
-import { defineConfig } from "vite";
+// Derivation mode — a computed signal
+// 派生模式 — 计算信号
+const [double, setDouble] = use(count, () => count() * 2);
 
-export default defineConfig({
-  oxc: {
-    jsx: {
-      importSource: "kiaao",
-    },
-  },
-});
-```
-
-If using esbuild as the compiler, configure `vite.config.ts` as:
-
-```ts
-export default defineConfig({
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "kiaao",
-  },
-});
-```
-
-After configuration, you can write components directly in `.tsx` files. The compiled output will automatically be converted to `h()` calls. If you prefer not to use JSX, you can use the `h()` function directly.
-
-## Quick Start
-
-### Creating Reactive State
-
-```tsx
-import { define } from "kiaao";
-
-const [count, setCount] = define(0);
-
-console.log(count()); // 0
-setCount(42);
-console.log(count()); // 42
-
-// supports functional updates
-setCount((prev) => prev + 1);
-```
-
-### Selector Subscriptions
-
-The getter accepts a selector function for precise subscriptions. The selector returns a derived function; dependent effects are only triggered when the selected value actually changes.
-
-```tsx
-import { define, effect } from "kiaao";
-
-const [user, setUser] = define({ name: "tom", age: 18 });
-
-const name = user((v) => v.name);
-
-effect(() => {
-  console.log("name:", name());
-});
-// immediately prints: name: tom
-
-setUser((prev) => ({ ...prev, age: 19 }));
-// age changed, but name did not — nothing printed
-
-setUser((prev) => ({ ...prev, name: "jerry" }));
-// prints: name: jerry
-```
-
-### Side Effects
-
-```tsx
-import { define, effect } from "kiaao";
-
-const [count, setCount] = define(0);
-
-const stop = effect(() => {
+// Derivation without return — a "side effect" that is just a derived signal with value undefined
+// 无返回值的派生 — 值永远为 undefined 的派生信号，即传统意义上的"副作用"
+use(count, () => {
   console.log("count is", count());
 });
-// immediately prints: count is 0
 
-setCount(1); // prints: count is 1
-stop();
-setCount(2); // nothing printed
-```
-
-### Derived State
-
-`derive` caches its computed result and re-evaluates when upstream changes. If the new result is the same as the cached value, downstream is not notified, avoiding unnecessary updates. Unlike the plain derived function returned by `getter(selector)` (which has no caching), `derive` is suitable for expensive computations or values shared across multiple places.
-
-```tsx
-import { define, derive, effect } from "kiaao";
-
-const [count, setCount] = define(5);
-const double = derive(() => count() * 2);
-
-effect(() => {
-  console.log("double:", double());
-});
-// immediately prints: double: 10
-
-setCount(10); // prints: double: 20
-setCount(10); // same value, double does not notify downstream, nothing printed
-```
-
-### Components
-
-A component is simply a function that returns JSX. It runs only once. When state changes, the component function does not re-run—only the DOM nodes bound by reactive functions update in place.
-
-```tsx
-import { define } from "kiaao";
-
+// Component — a function that returns JSX, runs exactly once
+// 组件 — 返回 JSX 的函数，只执行一次
 function Counter() {
-  const [count, setCount] = define(0);
-
   return (
     <div>
       <p>Count: {count}</p>
-      <button onClick={() => setCount((p) => p + 1)}>+1</button>
+      <p>Double: {double}</p>
+      <button onClick={() => setCount((c) => c + 1)}>+1</button>
     </div>
   );
 }
 
-// Using the component
-const el = h(Counter, null);
+mount(<Counter />, document.getElementById("app"));
 ```
 
-### Props
+---
 
-Components receive props via function parameters, just like regular functions.
+A signal can be written regardless of how it was created. For a definition signal, the setter replaces the value. For a derivation signal, the setter triggers re-execution of the compute function. The API is the same.
 
-```tsx
-function Greet(props: { name: string }) {
-  return <p>Hello, {props.name}!</p>;
-}
+信号无论怎样创建都可以被写入。定义信号的 setter 直接替换值。派生信号的 setter 触发计算函数重新执行。API 完全一致。
 
-const el = h(Greet, { name: "kiaao" });
+```js
+const [count, setCount] = use(1);
+const [nextCount, setNextCount] = use(count, (v) => count() + 1);
+
+console.log(nextCount()); // 2
+
+setCount(5);
+console.log(nextCount()); // 6
+
+setNextCount(100); // triggers recomputation, v is 100 / 触发重算，v 为 100
+console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，短路)
 ```
 
-### Dynamic Attributes and Events
+---
 
-All attributes in JSX support reactive bindings by passing a reactive function, including `class`, `style`, and any data attributes. Events use the standard `onXxx` camelCase syntax.
+## Comparison / 与其他框架的对比
 
-```tsx
-import { define } from "kiaao";
+|                          | React                 | Vue                | Solid               | **kiaao**                        |
+| ------------------------ | --------------------- | ------------------ | ------------------- | -------------------------------- |
+| Data transparency        | clean                 | opaque (Proxy)     | clean (two systems) | **clean (one system)**           |
+| Component runs           | every update          | once               | once                | **once**                         |
+| Virtual DOM              | yes                   | yes                | no                  | **no**                           |
+| Compiler dependency      | none                  | optional           | required            | **none**                         |
+| Reactivity model         | none (full re-render) | Proxy auto-collect | compile-time expand | **explicit declaration**         |
+| Core concept count       | 10+                   | 8+                 | 6+                  | **3**                            |
+| Update granularity       | component             | component/block    | DOM node            | **derived signal**               |
+| Control flow             | ternary / map         | v-if / v-for       | `<Show>` / `<For>`  | **`when` / `each` attrs**        |
+| Context / provide-inject | yes                   | yes                | yes                 | **no (signals are the channel)** |
 
-function App() {
-  const [isActive, setActive] = define(false);
+---
 
-  return (
-    <div
-      class={isActive((v) => (v ? "active" : "inactive"))}
-      data-state={isActive}
-      onClick={() => setActive((v) => !v)}
-    >
-      Click to toggle
-    </div>
-  );
-}
-```
+## Documentation / 文档
 
-### Lifecycle
+- [Reactivity / 响应式系统](./guide/reactivity.md)
+- [Components / 组件](./guide/components.md)
+- [Attributes / 属性处理](./guide/attributes.md)
+- [Control Flow / 控制流](./guide/control-flow.md)
+- [Lifecycle / 生命周期](./guide/lifecycle.md)
+- [SSR / 服务端渲染](./guide/ssr.md)
+- [Router / 路由](./guide/router.md)
+- [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
 
-Components register lifecycle callbacks via `onMount` and `onUnmount`, which must be called synchronously at the top level of the component function. `onMount` fires only after the component is mounted into the container via `mount`.
+---
 
-```tsx
-import { define, onMount, onUnmount, mount, unmount } from "kiaao";
-
-function Timer() {
-  const [time, setTime] = define(new Date());
-
-  onMount(() => console.log("Timer mounted"));
-
-  const timer = setInterval(() => setTime(new Date()), 1000);
-  onUnmount(() => clearInterval(timer));
-
-  return <div>{time((v) => v.toLocaleTimeString())}</div>;
-}
-
-const root = h(Timer, null);
-mount(root, document.body); // mount and trigger onMount
-// ...
-unmount(root); // unmount, trigger onUnmount, and clean up all effects
-```
-
-### Conditional and List Rendering
-
-kiaao handles control flow via native `when` and `each` attribute directives on `h()`, eliminating the need for separate components. These directives can only be used on native HTML elements, not on custom components.
-
-`when` supports simple boolean conditions as well as a multi-branch mapping mode. An optional `else` attribute can provide fallback content.
-
-```tsx
-import { define } from "kiaao";
-
-function App() {
-  const [visible, setVisible] = define(true);
-  const [items, setItems] = define(["a", "b", "c"]);
-  const [status, setStatus] = define("loading");
-
-  return (
-    <div>
-      <button onClick={() => setVisible((v) => !v)}>Toggle</button>
-
-      {/* Simple conditional rendering */}
-      <section when={visible} style="display: contents">
-        <span>Visible</span>
-      </section>
-
-      {/* Condition with else fallback */}
-      <div when={visible} else={() => <p>Not visible</p>}>
-        Content
-      </div>
-
-      {/* Multi-branch mapping table */}
-      <div when={() => status()} else={() => <div>Unknown status</div>}>
-        {{
-          loading: () => <Spinner />,
-          error: () => <ErrorMessage />,
-          success: () => <Content />,
-        }}
-      </div>
-
-      {/* List rendering */}
-      <ul each={items} key={(item) => item}>
-        {(item) => <li>{item}</li>}
-      </ul>
-    </div>
-  );
-}
-```
-
-`each` can iterate over various data sources and automatically creates reactive signals for each item, enabling efficient incremental updates.
-
-### Teleport
-
-Render content into a specified DOM container while logically remaining inside the current component tree. Content is automatically removed from the target when the component unmounts. If the target container does not exist, Teleport returns a placeholder comment node and no content is rendered.
-
-```tsx
-import { Teleport } from "kiaao";
-
-function Modal() {
-  return (
-    <Teleport to="#modal-root">
-      <div class="modal">Teleported content</div>
-    </Teleport>
-  );
-}
-```
-
-### Async Components (lazy)
-
-Combine with dynamic imports for code splitting. Shows a placeholder comment while loading, then automatically swaps in the real component once loaded. If loading fails, the error is thrown and can be caught by an error boundary.
-
-```tsx
-import { lazy } from "kiaao";
-const HeavyProfile = lazy(() => import("./HeavyProfile.tsx"));
-const el = h(HeavyProfile, { userId: 42 });
-```
-
-## Server-Side Rendering, Astro Integration, and Routing
-
-See [`guide/router-ssr-astro.md`](guide/router-ssr-astro.md).
-
-- **SSR**: Use `renderToString` to render components to HTML (from `kiaao/server`)
-- **Astro**: Official `kiaao/astro` plugin supporting pure static and `client:only` components
-- **Router**: Lightweight client-side router `kiaao/router` with nested layout support
-
-## API Reference
-
-| API            | Purpose                                                            |
-| -------------- | ------------------------------------------------------------------ |
-| define         | Create reactive state, returns [getter, setter]                    |
-| derive         | Create derived state with caching; does not notify when unchanged  |
-| effect         | Run side effects with automatic dependency tracking; returns stop  |
-| h              | Create real DOM nodes, with built-in when/each/else directives     |
-| Teleport       | Render content into a specified container; fallback to placeholder |
-| lazy           | Async component loading; throws on failure, can be caught          |
-| onMount        | Runs once after the component is mounted                           |
-| onUnmount      | Runs before the component is destroyed                             |
-| mount          | Mount a component tree and trigger lifecycle                       |
-| unmount        | Unmount a component tree and clean up all effects                  |
-| renderToString | Render to an HTML string (see integration guide)                   |
-| createRouter   | Client-side routing (see integration guide)                        |
-
-## License
+## License / 许可证
 
 MIT
