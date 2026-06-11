@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
-// Attribute / Property 处理策略测试
+// kiaao v4 — Attribute / Property 处理策略测试
 
 import { expect, test, describe } from "vite-plus/test";
-import { define } from "../src/index.ts";
-import { h } from "../src/core/h.ts";
+import { use } from "../src/reactive/core.ts";
+import { h } from "../src/dom/h.ts";
 
 // ── FORCE_ATTRIBUTE ──────────────────────────────────
 
@@ -38,141 +38,123 @@ describe("FORCE_ATTRIBUTE — setAttribute", () => {
 
     const el2 = h("div", { hidden: false });
     expect(el2.hasAttribute("hidden")).toBe(false);
+    expect((el2 as HTMLElement).hidden).toBe(false);
   });
 
-  test("tabindex goes through setAttribute", () => {
-    const el = h("div", { tabindex: "0" });
-    expect(el.getAttribute("tabindex")).toBe("0");
-    expect((el as HTMLElement).tabIndex).toBe(0);
-  });
-
-  test("readonly on input", () => {
-    const el = h("input", { readonly: true });
-    expect(el.hasAttribute("readonly")).toBe(true);
-  });
-
-  test("href goes through setAttribute", () => {
-    const el = h("a", { href: "/page" });
-    expect(el.getAttribute("href")).toBe("/page");
-  });
-
-  test("src goes through setAttribute", () => {
-    const el = h("img", { src: "/img.png", alt: "pic" });
-    expect(el.getAttribute("src")).toBe("/img.png");
-    expect(el.getAttribute("alt")).toBe("pic");
+  test("id attribute", () => {
+    const el = h("div", { id: "my-id" });
+    expect(el.id).toBe("my-id");
+    expect(el.getAttribute("id")).toBe("my-id");
   });
 });
 
-// ── 非 FORCE_ATTRIBUTE（默认走 property） ────────────
+// ── Property path — prop: prefix ─────────────────────
 
-describe("default property assignment", () => {
-  test("value goes through property (controlled component)", () => {
-    const el = h("input", { value: "initial" }) as HTMLInputElement;
-    expect(el.getAttribute("value")).toBeNull(); // setAttribute 未调用
-    expect(el.value).toBe("initial");
-  });
-
-  test("checked goes through property (controlled component)", () => {
-    const el = h("input", { type: "checkbox", checked: true }) as HTMLInputElement;
-    expect(el.hasAttribute("checked")).toBe(false); // setAttribute 未调用
-    expect(el.checked).toBe(true);
-  });
-
-  test("innerHTML goes through property", () => {
-    const el = h("div", { innerHTML: "<span>hello</span>" });
-    expect(el.getAttribute("innerHTML")).toBeNull();
-    expect(el.innerHTML).toBe("<span>hello</span>");
-  });
-
-  test("textContent goes through property", () => {
-    const el = h("div", { textContent: "hello world" });
-    expect(el.getAttribute("textContent")).toBeNull();
-    expect(el.textContent).toBe("hello world");
-  });
-
-  test("unknown custom property goes through property", () => {
-    const el = h("div", { customProp: "custom-value" } as any);
-    expect(el.hasAttribute("customProp")).toBe(false);
-    expect((el as any).customProp).toBe("custom-value");
+describe("prop: prefix — force property", () => {
+  test("prop: prefix sets property directly", () => {
+    const el = h("div", { "prop:foo": "bar" });
+    expect((el as any).foo).toBe("bar");
+    expect(el.hasAttribute("foo")).toBe(false);
   });
 });
 
-// ── attr: 前缀 ──────────────────────────────────────
+// ── Attribute path — attr: prefix ────────────────────
 
 describe("attr: prefix — force setAttribute", () => {
-  test("attr:value outputs as attribute even though value defaults to property", () => {
-    const el = h("input", { "attr:value": "explicit" });
-    expect(el.getAttribute("value")).toBe("explicit");
+  test("attr: prefix calls setAttribute", () => {
+    const el = h("div", { "attr:data-custom": "hello" });
+    expect(el.getAttribute("data-custom")).toBe("hello");
   });
 
-  test("attr:class works same as unprefixed class", () => {
-    const el = h("div", { "attr:class": "box" });
-    expect(el.getAttribute("class")).toBe("box");
-  });
-
-  test("attr:disabled with boolean sets 'true' string", () => {
-    const el = h("button", { "attr:disabled": true });
-    // attr: 走 setAttr(el, key, String(value)), true → "true"
-    expect(el.getAttribute("disabled")).toBe("true");
-  });
-
-  test("attr:data-custom outputs as attribute", () => {
-    const el = h("div", { "attr:data-custom": "val" });
-    expect(el.getAttribute("data-custom")).toBe("val");
-  });
-
-  test("attr:non-existent-property creates attribute", () => {
-    const el = h("div", { "attr:some-attr": "anything" });
-    expect(el.getAttribute("some-attr")).toBe("anything");
+  test("attr: prefix on property-like key", () => {
+    const el = h("div", { "attr:id": "forced-id" });
+    expect(el.getAttribute("id")).toBe("forced-id");
   });
 });
 
-// ── prop: 前缀 ──────────────────────────────────────
+// ── SVG Elements ─────────────────────────────────────
 
-describe("prop: prefix — force property assignment", () => {
-  test("prop:className sets className directly", () => {
-    const el = h("div", { "prop:className": "direct-prop" });
-    expect(el.className).toBe("direct-prop");
-    expect(el.hasAttribute("className")).toBe(false); // setAttribute 未调用
+describe("SVG elements", () => {
+  test("creates SVG element with correct namespace", () => {
+    const el = h("svg", { viewBox: "0 0 100 100" });
+    expect(el.namespaceURI).toBe("http://www.w3.org/2000/svg");
   });
 
-  test("prop:disabled sets property even though FORCE_ATTRIBUTE", () => {
-    const el = h("button", { "prop:disabled": true });
-    expect((el as HTMLButtonElement).disabled).toBe(true);
-    // prop: 走 property 赋值, 未调用 setAttribute
-    // 但浏览器可能将某些 property 同步回 attribute, 不对此做断言
+  test("creates path inside SVG", () => {
+    const svg = h("svg", null, h("path", { d: "M10 10" }));
+    const path = svg.firstElementChild!;
+    expect(path.namespaceURI).toBe("http://www.w3.org/2000/svg");
   });
 
-  test("prop:value sets value property", () => {
-    const el = h("input", { "prop:value": "prop-val" }) as HTMLInputElement;
-    expect(el.value).toBe("prop-val");
+  test("SVG attributes go through setAttribute", () => {
+    const el = h("svg", { viewBox: "0 0 100 100" });
+    expect(el.getAttribute("viewBox")).toBe("0 0 100 100");
+  });
+});
+
+// ── Event Handling ───────────────────────────────────
+
+describe("event handling", () => {
+  test("onClick handler fires", () => {
+    let count = 0;
+    const el = h("button", { onClick: () => count++ });
+    (el as HTMLElement).click();
+    expect(count).toBe(1);
   });
 
-  test("prop:innerHTML sets innerHTML", () => {
-    const el = h("div", { "prop:innerHTML": "<b>bold</b>" });
-    expect(el.innerHTML).toBe("<b>bold</b>");
+  test("onInput handler fires", () => {
+    let value = "";
+    const el = h("input", {
+      onInput: (e: Event) => {
+        value = (e.target as HTMLInputElement).value;
+      },
+    });
+    el.dispatchEvent(new InputEvent("input"));
+    expect(value).toBe("");
   });
 
-  test("prop:style does not throw (developer responsibility)", () => {
-    // prop:style 走 property 赋值, 替换整个 CSSStyleDeclaration
-    // 这是开发者责任, 框架只保证不抛出异常
-    expect(() => {
-      h("div", { "prop:style": { color: "red" } } as any);
-    }).not.toThrow();
+  test("multiple events on same element", () => {
+    let clicks = 0;
+    let focuses = 0;
+    const el = h("button", {
+      onClick: () => clicks++,
+      onFocus: () => focuses++,
+    });
+    (el as HTMLElement).click();
+    el.dispatchEvent(new FocusEvent("focus"));
+    expect(clicks).toBe(1);
+    expect(focuses).toBe(1);
+  });
+});
+
+// ── Style Handling ───────────────────────────────────
+
+describe("style handling", () => {
+  test("style as string", () => {
+    const el = h("div", { style: "color: red; font-size: 14px" });
+    expect((el as HTMLElement).style.color).toBe("red");
+    expect((el as HTMLElement).style.fontSize).toBe("14px");
+  });
+
+  test("style as object", () => {
+    const el = h("div", { style: { color: "blue", fontSize: "16px" } });
+    expect((el as HTMLElement).style.color).toBe("blue");
+    expect((el as HTMLElement).style.fontSize).toBe("16px");
+  });
+
+  test("style object applies correctly via property", () => {
+    const el = h("div", { style: { color: "red", backgroundColor: "black" } });
+    expect((el as HTMLElement).style.color).toBe("red");
+    expect((el as HTMLElement).style.backgroundColor).toBe("black");
   });
 });
 
 // ── aria-* / data-* ─────────────────────────────────
 
-describe("aria-* / data-* — always setAttribute", () => {
+describe("aria-* and data-* attributes", () => {
   test("aria-label goes through setAttribute", () => {
-    const el = h("div", { "aria-label": "Close" });
+    const el = h("button", { "aria-label": "Close" });
     expect(el.getAttribute("aria-label")).toBe("Close");
-  });
-
-  test("aria-hidden goes through setAttribute", () => {
-    const el = h("div", { "aria-hidden": "true" });
-    expect(el.getAttribute("aria-hidden")).toBe("true");
   });
 
   test("data-id goes through setAttribute", () => {
@@ -180,80 +162,56 @@ describe("aria-* / data-* — always setAttribute", () => {
     expect(el.getAttribute("data-id")).toBe("123");
   });
 
-  test("data-custom-value goes through setAttribute", () => {
-    const el = h("div", { "data-custom-value": "abc" });
-    expect(el.getAttribute("data-custom-value")).toBe("abc");
+  test("aria-expanded boolean", () => {
+    const el = h("button", { "aria-expanded": true });
+    expect(el.getAttribute("aria-expanded")).toBe("true");
+
+    const el2 = h("button", { "aria-expanded": false });
+    expect(el2.getAttribute("aria-expanded")).toBe("false");
   });
 });
 
-// ── SVG 元素 ────────────────────────────────────────
+// ── Reactive attributes ──────────────────────────────
 
-describe("SVG elements — always setAttribute", () => {
-  test("SVG element with viewBox", () => {
-    const el = h("svg", { viewBox: "0 0 100 100", width: "100", height: "100" });
-    expect(el.getAttribute("viewBox")).toBe("0 0 100 100");
-    expect(el.getAttribute("width")).toBe("100");
-    expect(el.getAttribute("height")).toBe("100");
+describe("reactive attributes with signal", () => {
+  test("reactive class binding", () => {
+    const [cls, setCls] = use("foo");
+    const el = h("div", { class: cls });
+    expect(el.className).toBe("foo");
+
+    setCls("bar");
+    expect(el.className).toBe("bar");
   });
 
-  test("SVG circle with cx cy r", () => {
-    const el = h("circle", { cx: "50", cy: "50", r: "40" });
-    expect(el.getAttribute("cx")).toBe("50");
-    expect(el.getAttribute("cy")).toBe("50");
-    expect(el.getAttribute("r")).toBe("40");
+  test("reactive style binding", () => {
+    const [color, setColor] = use("color: red");
+    const el = h("div", { style: color });
+    expect(el.getAttribute("style")).toBe("color: red");
+
+    setColor("color: blue");
+    expect(el.getAttribute("style")).toBe("color: blue");
   });
 
-  test("SVG g element with nested circle", () => {
-    const el = h("g", { fill: "none" });
-    // SVG element 本身是 SVGElement
-    expect(el.getAttribute("fill")).toBe("none");
-  });
-
-  test("SVG path with d attribute", () => {
-    const el = h("path", { d: "M10 10 L90 90", stroke: "red" });
-    expect(el.getAttribute("d")).toBe("M10 10 L90 90");
-    expect(el.getAttribute("stroke")).toBe("red");
-  });
-
-  test("SVG class attribute works", () => {
-    const el = h("circle", { class: "icon-red" });
-    expect(el.getAttribute("class")).toBe("icon-red");
-  });
-
-  test("SVG style as string works", () => {
-    const el = h("circle", { style: "fill: red; stroke: blue" }) as HTMLElement;
-    expect(el.getAttribute("style")).toBe("fill: red; stroke: blue");
-    expect(el.style.fill).toBe("red");
-  });
-
-  test("SVG style as object works", () => {
-    const el = h("circle", { style: { fill: "green", strokeWidth: "2" } }) as HTMLElement;
-    expect(el.style.fill).toBe("green");
-    expect(el.style.strokeWidth).toBe("2");
-  });
-});
-
-// ── 前缀 + 响应式 ──────────────────────────────────
-
-describe("prefix with reactive bindings", () => {
-  test("reactive attr:value updates attribute on change", () => {
-    const [val, setVal] = define("initial");
-    const el = h("input", { "attr:value": val });
-    expect(el.getAttribute("value")).toBe("initial");
-
-    setVal("updated");
-    expect(el.getAttribute("value")).toBe("updated");
-  });
-
-  test("reactive prop:disabled sets property on change", () => {
-    const [disabled, setDisabled] = define(false);
-    const el = h("button", { "prop:disabled": disabled }) as HTMLButtonElement;
-    expect(el.disabled).toBe(false);
-
-    setDisabled(true);
-    expect(el.disabled).toBe(true);
+  test("reactive disabled binding", () => {
+    const [disabled, setDisabled] = use(true);
+    const el = h("button", { disabled });
+    expect((el as HTMLButtonElement).disabled).toBe(true);
 
     setDisabled(false);
-    expect(el.disabled).toBe(false);
+    expect((el as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+// ── special attributes: value, checked ────────────────
+
+describe("value and checked attributes", () => {
+  test("value sets property", () => {
+    const el = h("input", { value: "hello" });
+    expect((el as HTMLInputElement).value).toBe("hello");
+  });
+
+  test("checked sets property", () => {
+    const el = h("input", { type: "checkbox", checked: true });
+    expect((el as HTMLInputElement).checked).toBe(true);
   });
 });

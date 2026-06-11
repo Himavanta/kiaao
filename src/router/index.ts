@@ -100,13 +100,17 @@ export function createRouter(options: RouterOptions = {}): Router {
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
 
+    // v4.0: 显式创建派生信号替代自动依赖收集
+    // 当 currentPath 变化时，extractSegment 自动重新计算
+    const [segment] = use(currentPath, () => extractSegment(currentPath(), myBase));
+
     // 将路由表转为映射表（初始化时执行一次）
     const routeMap = Object.fromEntries(myRoutes.map((r) => [r.path, () => h(r.component, null)]));
 
     return h(
       "div",
       {
-        when: () => extractSegment(currentPath(), myBase),
+        when: segment,
         else: () => myFallback(),
         style: { display: "contents" },
       },

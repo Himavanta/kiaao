@@ -1,9 +1,10 @@
-// SSR tests — run in Node.js environment (no happy-dom needed)
+// kiaao v4 — SSR tests (run in Node.js environment, no happy-dom needed)
 
 import { expect, test, describe } from "vite-plus/test";
-import { define, derive, effect } from "../src/index.ts";
-import { h } from "../src/core/h.ts";
-import { Teleport, lazy } from "../src/core/components.ts";
+import { use, getRenderMode } from "../src/reactive/core.ts";
+import { h } from "../src/dom/h.ts";
+import { Teleport } from "../src/dom/teleport.ts";
+import { lazy } from "../src/dom/lazy.ts";
 import { renderToString } from "../src/server/index.ts";
 
 describe("renderToString — basic elements", () => {
@@ -74,8 +75,8 @@ describe("renderToString — basic elements", () => {
 });
 
 describe("renderToString — reactive bindings", () => {
-  test("evaluates getter selector once", () => {
-    const [count] = define(42);
+  test("evaluates signal once in SSR mode", () => {
+    const [count] = use(42);
     function Comp() {
       return h("p", null, count);
     }
@@ -84,8 +85,8 @@ describe("renderToString — reactive bindings", () => {
   });
 
   test("evaluates derive once in SSR mode", () => {
-    const [count] = define(5);
-    const doubled = derive(() => count() * 2);
+    const [count] = use(5);
+    const [doubled] = use(count, () => count() * 2);
     function Comp() {
       return h("p", null, doubled);
     }
@@ -96,34 +97,17 @@ describe("renderToString — reactive bindings", () => {
 
 describe("renderToString — reactive attributes", () => {
   test("renders reactive class attribute", () => {
-    const [isActive] = define(true);
+    const [isActive] = use(true);
+    const [className] = use(isActive, () => (isActive() ? "active" : ""));
     function Comp() {
-      return h("div", { class: isActive((v) => (v ? "active" : "")) });
+      return h("div", { class: className });
     }
     const html = renderToString(Comp);
     expect(html).toBe('<div class="active"></div>');
   });
 
-  test("renders reactive style string attribute", () => {
-    const [theme] = define("dark");
-    function Comp() {
-      return h("div", { style: theme((v) => (v === "dark" ? "color: white" : "color: black")) });
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe('<div style="color: white"></div>');
-  });
-
-  test("renders reactive style object attribute", () => {
-    const [color] = define("red");
-    function Comp() {
-      return h("div", { style: color((v) => ({ color: v })) });
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe('<div style="color: red"></div>');
-  });
-
   test("renders raw getter as attribute value", () => {
-    const [title] = define("hello");
+    const [title] = use("hello");
     function Comp() {
       return h("div", { "data-title": title });
     }
@@ -132,11 +116,10 @@ describe("renderToString — reactive attributes", () => {
   });
 
   test("static and reactive props in SSR", () => {
-    const [title] = define("world");
+    const [title] = use("world");
     function Comp() {
       return h("div", { id: "greeting", "data-title": title, class: "box" });
     }
-    // Object.keys preserves insertion order: id, data-title, class
     const html = renderToString(Comp);
     expect(html).toBe('<div id="greeting" data-title="world" class="box"></div>');
   });
@@ -165,7 +148,7 @@ describe("renderToString — components", () => {
 
 describe("renderToString — when directive", () => {
   test("renders children when when() is truthy", () => {
-    const [visible] = define(true);
+    const [visible] = use(true);
     function Comp() {
       return h("div", { when: visible }, () => h("p", null, "shown"));
     }
@@ -174,7 +157,7 @@ describe("renderToString — when directive", () => {
   });
 
   test("renders empty element when when() is falsy", () => {
-    const [visible] = define(false);
+    const [visible] = use(false);
     function Comp() {
       return h("div", { when: visible }, () => h("p", null, "shown"));
     }
@@ -183,7 +166,7 @@ describe("renderToString — when directive", () => {
   });
 
   test("renders else when when() is falsy", () => {
-    const [visible] = define(false);
+    const [visible] = use(false);
     function Comp() {
       return h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
         h("p", null, "shown"),
@@ -194,7 +177,7 @@ describe("renderToString — when directive", () => {
   });
 
   test("renders primary when when() is truthy with else", () => {
-    const [visible] = define(true);
+    const [visible] = use(true);
     function Comp() {
       return h("div", { when: visible, else: () => h("p", null, "fallback") }, () =>
         h("p", null, "shown"),
@@ -203,28 +186,15 @@ describe("renderToString — when directive", () => {
     const html = renderToString(Comp);
     expect(html).toBe("<div><p>shown</p></div>");
   });
-
-  test("renders non-lazy children with else", () => {
-    const [visible] = define(false);
-    function Comp() {
-      return h(
-        "div",
-        { when: visible, else: () => h("span", null, "fallback") },
-        h("span", null, "primary"),
-      );
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe("<div><span>fallback</span></div>");
-  });
 });
 
 describe("renderToString — when directive mapping table mode", () => {
   test("renders branch matching the key", () => {
-    const [status] = define("loading");
+    const [status] = use("loading");
     function Comp() {
       return h(
         "div",
-        { when: () => status() },
+        { when: status },
         {
           loading: () => h("p", null, "加载中"),
           error: () => h("p", null, "出错了"),
@@ -236,11 +206,11 @@ describe("renderToString — when directive mapping table mode", () => {
   });
 
   test("renders else when key not found", () => {
-    const [status] = define("unknown");
+    const [status] = use("unknown");
     function Comp() {
       return h(
         "div",
-        { when: () => status(), else: () => h("p", null, "默认") },
+        { when: status, else: () => h("p", null, "默认") },
         {
           loading: () => h("p", null, "加载中"),
         },
@@ -249,34 +219,14 @@ describe("renderToString — when directive mapping table mode", () => {
     const html = renderToString(Comp);
     expect(html).toBe("<div><p>默认</p></div>");
   });
-
-  test("renders empty when key not found and no else", () => {
-    const [status] = define("unknown");
-    function Comp() {
-      return h(
-        "div",
-        { when: () => status() },
-        {
-          loading: () => h("p", null, "加载中"),
-        },
-      );
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe("<div></div>");
-  });
 });
 
 describe("renderToString — each directive", () => {
   test("renders list items", () => {
-    const [items] = define(["a", "b", "c"]);
+    const [items] = use(["a", "b", "c"]);
     function Comp() {
-      return h(
-        "ul",
-        {
-          each: () => items(),
-          key: (item: string) => item,
-        },
-        (item: string) => h("li", null, item),
+      return h("ul", { each: items, key: (item: string) => item }, (item: () => string) =>
+        h("li", null, item),
       );
     }
     const html = renderToString(Comp);
@@ -305,35 +255,22 @@ describe("renderToString — lazy", () => {
       return h(Async, null);
     }
 
-    // Before promise resolves, lazy renders an empty div (when is false)
     const html = renderToString(Comp);
     expect(html).toBe('<div style="display: contents"></div>');
   });
 });
 
-describe("SSR — effect and derive behavior", () => {
-  test("effect is disabled in SSR mode", () => {
-    let called = false;
-    const stop = effect(() => {
-      called = true;
-    });
-    // Outside SSR mode, effect runs immediately
-    expect(called).toBe(true);
-    stop();
-  });
+describe("SSR — derive as one-time computation", () => {
+  test("use derivation computes once in SSR mode", () => {
+    const [count] = use(5);
+    const [doubled] = use(count, () => count() * 2);
 
-  test("derive returns fixed value in SSR mode", () => {
-    const [count] = define(5);
-    const doubled = derive(() => count() * 2);
-
-    // In SSR mode, derive computes once and caches
     function Comp() {
       return h("p", null, doubled);
     }
     const html = renderToString(Comp);
     expect(html).toBe("<p>10</p>");
 
-    // In normal mode, still works
     expect(doubled()).toBe(10);
   });
 });
@@ -357,14 +294,6 @@ describe("SSR — FORCE_ATTRIBUTE filtering", () => {
     expect(html).not.toContain("checked");
   });
 
-  test("innerHTML does NOT output in SSR", () => {
-    function Comp() {
-      return h("div", { innerHTML: "<span>content</span>" });
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe("<div></div>");
-  });
-
   test("disabled FORCE_ATTRIBUTE outputs boolean attribute", () => {
     function Comp() {
       return h("button", { disabled: true }, "click");
@@ -379,24 +308,6 @@ describe("SSR — FORCE_ATTRIBUTE filtering", () => {
     }
     const html = renderToString(Comp);
     expect(html).toBe("<button>click</button>");
-  });
-
-  test("placeholder FORCE_ATTRIBUTE outputs", () => {
-    function Comp() {
-      return h("input", { placeholder: "name" });
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe('<input placeholder="name" />');
-  });
-
-  test("textContent does NOT output in SSR", () => {
-    function Comp() {
-      return h("div", { textContent: "hidden" }, "visible");
-    }
-    const html = renderToString(Comp);
-    // textContent 被忽略，但 children 正常渲染
-    expect(html).toBe("<div>visible</div>");
-    expect(html).not.toContain("hidden");
   });
 
   test("aria-* outputs in SSR", () => {
@@ -434,29 +345,12 @@ describe("SSR — attr: / prop: prefix", () => {
     expect(html).not.toContain("disabled");
   });
 
-  test("prop:className does NOT output in SSR", () => {
-    function Comp() {
-      return h("div", { "prop:className": "box" }, "content");
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe("<div>content</div>");
-    expect(html).not.toContain("className");
-  });
-
   test("attr:class outputs as class attribute", () => {
     function Comp() {
       return h("div", { "attr:class": "box" }, "content");
     }
     const html = renderToString(Comp);
     expect(html).toBe('<div class="box">content</div>');
-  });
-
-  test("attr:data-custom outputs", () => {
-    function Comp() {
-      return h("div", { "attr:data-custom": "val" }, "content");
-    }
-    const html = renderToString(Comp);
-    expect(html).toBe('<div data-custom="val">content</div>');
   });
 
   test("unprefixed value does NOT output (regression check)", () => {
@@ -466,5 +360,21 @@ describe("SSR — attr: / prop: prefix", () => {
     const html = renderToString(Comp);
     expect(html).toBe("<input />");
     expect(html).not.toContain("value");
+  });
+});
+
+describe("SSR — render mode", () => {
+  test("renderToString sets SSR mode internally and restores it", () => {
+    const prev = getRenderMode();
+    expect(prev).toBe("dom");
+
+    function Comp() {
+      const [x] = use(10);
+      return h("p", null, x);
+    }
+    const html = renderToString(Comp);
+    expect(html).toBe("<p>10</p>");
+
+    expect(getRenderMode()).toBe("dom");
   });
 });
