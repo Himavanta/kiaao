@@ -4,6 +4,7 @@
 // to kiaao's h(tag, props, ...children).
 
 import { h } from "../dom/h.ts";
+import { Fragment } from "../dom/fragment.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 
@@ -36,6 +37,7 @@ function createJsxElement(type: any, props: Record<string, any> | null, _key?: a
 
 // ── Exports for automatic JSX runtime ──────────────────
 
+export { Fragment };
 export { createJsxElement as jsx };
 export { createJsxElement as jsxs };
 export { createJsxElement as jsxDEV };

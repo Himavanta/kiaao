@@ -10,6 +10,7 @@ export { h } from "./dom/h.ts";
 export { onMount, onUnmount, mount, unmount } from "./dom/component.ts";
 
 // Components
+export { Fragment } from "./dom/fragment.ts";
 export { Teleport } from "./dom/teleport.ts";
 export { lazy } from "./dom/lazy.ts";
 
