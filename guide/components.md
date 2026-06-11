@@ -181,10 +181,6 @@ JSX 的 `<></>` 语法在 kiaao 中会被渲染为一个 `<div style="display: c
 
 ---
 
-好的。先补充 Components 文档的 Teleport 和 lazy 两节，然后给出属性处理引导文档的完整内容。
-
----
-
 ## Teleport / 传送门
 
 `Teleport` renders its children into a different location in the DOM, while keeping them logically inside the current component tree. The children remain connected to the component's signals, lifecycle, and cleanup. When the component unmounts, the teleported content is automatically removed from the target.
