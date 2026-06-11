@@ -13,12 +13,17 @@ import { hSSR } from "./ssr-helpers.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
-import { createElement } from "./dom-utils.ts";
+import { createElement, createComment } from "./dom-utils.ts";
 
 export function h(tag: string | ((props: any) => any), props?: any, ...children: any[]): Element {
   // SSR mode: delegate to hSSR
   if (getRenderMode() === "ssr") {
     return hSSR(tag, props, children) as any;
+  }
+
+  // 无效 tag（非 string、非 function）→ 注释占位节点
+  if (typeof tag !== "string" && typeof tag !== "function") {
+    return createComment("") as any;
   }
 
   // Component mode

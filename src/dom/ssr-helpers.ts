@@ -103,6 +103,9 @@ function serializeAttrs(props: any): string {
 }
 
 export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
+  if (typeof tag !== "string" && typeof tag !== "function") {
+    return ssr("");
+  }
   if (typeof tag === "function") {
     const ssrVariant = (tag as any)[SSR_COMPONENT];
     if (ssrVariant) {
