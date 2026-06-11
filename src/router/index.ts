@@ -1,15 +1,15 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
-import { define } from "../core/runtime.ts";
-import { h } from "../core/h.ts";
-import { type Getter } from "../core/types.ts";
+import { use } from "../reactive/core.ts";
+import { type Getter } from "../reactive/types.ts";
+import { h } from "../dom/h.ts";
 import {
   addEvent,
   getPathname,
   pushState as pushHistory,
   getSearch,
   parseSearch,
-} from "../core/dom-utils.ts";
+} from "../dom/dom-utils.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ function extractSegment(fullPath: string, base?: string): string | null {
 // ── createRouter ───────────────────────────────────────
 
 export function createRouter(options: RouterOptions = {}): Router {
-  const [currentPath, setPath] = define(getPathname());
+  const [currentPath, setPath] = use(getPathname());
 
   addEvent(window, "popstate", () => {
     setPath(getPathname());
