@@ -14,15 +14,22 @@ export function Teleport(
   const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;
   if (!target) return createComment("teleport-missing-target");
 
-  const content = typeof props.children === "function" ? props.children() : props.children;
-  if (content instanceof Node) {
-    target.append(content);
-    triggerMount(content);
+  const nodes = Array.isArray(props.children) ? props.children : [props.children];
+
+  for (const node of nodes) {
+    if (node instanceof Node) {
+      target.append(node);
+      triggerMount(node);
+    }
   }
 
   onUnmount(() => {
-    disposeNode(content);
-    content.remove();
+    for (const node of nodes) {
+      if (node instanceof Node) {
+        disposeNode(node);
+        (node as ChildNode).remove();
+      }
+    }
   });
 
   return createComment("teleport");

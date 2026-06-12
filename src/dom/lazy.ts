@@ -8,11 +8,11 @@ import { h } from "./h.ts";
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
 ): T {
-  const LazyComponent: ComponentFunction<any> = (_props, _context) => {
+  const LazyComponent: ComponentFunction<any> = (props) => {
     return loader()
       .then((mod) => {
         const Comp = (mod as any).default || mod;
-        return h(Comp, _props);
+        return h(Comp, props);
       })
       .catch((err: Error) => {
         console.error("[kiaao] lazy loading error:", err);

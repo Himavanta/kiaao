@@ -21,7 +21,7 @@ afterEach(() => {
 describe("Teleport — basic", () => {
   test("Teleport renders content into target", () => {
     function Comp() {
-      return h(Teleport, { to: "#teleport-target", children: () => h("span", null, "teleported") });
+      return h(Teleport, { to: "#teleport-target", children: h("span", null, "teleported") });
     }
     h(Comp);
     expect(target.textContent).toBe("teleported");
@@ -29,7 +29,7 @@ describe("Teleport — basic", () => {
 
   test("Teleport returns comment node as root", () => {
     function Comp() {
-      return h(Teleport, { to: "#teleport-target", children: () => h("span") });
+      return h(Teleport, { to: "#teleport-target", children: h("span") });
     }
     const el = h(Comp);
     expect(el.nodeType).toBe(Node.COMMENT_NODE);
@@ -37,7 +37,7 @@ describe("Teleport — basic", () => {
 
   test("target as element reference works", () => {
     function Comp() {
-      return h(Teleport, { to: target, children: () => h("span", null, "direct") });
+      return h(Teleport, { to: target, children: h("span", null, "direct") });
     }
     h(Comp);
     expect(target.textContent).toBe("direct");
@@ -47,7 +47,7 @@ describe("Teleport — basic", () => {
 describe("Teleport — missing target", () => {
   test("non-existent selector returns placeholder comment", () => {
     function Comp() {
-      return h(Teleport, { to: "#does-not-exist", children: () => h("span") });
+      return h(Teleport, { to: "#does-not-exist", children: h("span") });
     }
     const el = h(Comp);
     expect(el.nodeType).toBe(Node.COMMENT_NODE);
@@ -55,7 +55,7 @@ describe("Teleport — missing target", () => {
 
   test("null target does not crash", () => {
     function Comp() {
-      return h(Teleport, { to: null as any, children: () => h("span") });
+      return h(Teleport, { to: null as any, children: h("span") });
     }
     expect(() => h(Comp)).not.toThrow();
   });
@@ -79,14 +79,14 @@ import { Teleport } from "../../src/dom/teleport.ts";
 
 describe("Teleport — direct instance", () => {
   test("appends content to target", () => {
-    const el = h(Teleport, { to: target, children: () => h("span", null, "direct-test") });
+    const el = h(Teleport, { to: target, children: h("span", null, "direct-test") });
     expect(el.nodeType).toBe(Node.COMMENT_NODE);
     expect(target.textContent).toBe("direct-test");
   });
 
   test("multiple teleports to same target", () => {
-    h(Teleport, { to: target, children: () => h("span", null, "first") });
-    h(Teleport, { to: target, children: () => h("span", null, "second") });
+    h(Teleport, { to: target, children: h("span", null, "first") });
+    h(Teleport, { to: target, children: h("span", null, "second") });
     expect(target.textContent).toContain("first");
     expect(target.textContent).toContain("second");
   });
@@ -95,7 +95,7 @@ describe("Teleport — direct instance", () => {
 describe("Teleport — cleanup after fix", () => {
   test("content removed when component unmounts", () => {
     function Comp() {
-      return h(Teleport, { to: "#teleport-target", children: () => h("span", null, "cleanup") });
+      return h(Teleport, { to: "#teleport-target", children: h("span", null, "cleanup") });
     }
     const el = h(Comp);
     expect(target.textContent).toBe("cleanup");
@@ -108,7 +108,7 @@ describe("Teleport — cleanup after fix", () => {
     target.textContent = "existing";
 
     function Comp() {
-      return h(Teleport, { to: "#teleport-target", children: () => h("span", null, "added") });
+      return h(Teleport, { to: "#teleport-target", children: h("span", null, "added") });
     }
     const el = h(Comp);
     expect(target.textContent).toContain("existing");
