@@ -114,7 +114,12 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
       if (typeof result === "string") return ssr(result);
       return ssr("");
     }
-    const result = tag(props || {});
+    // SSR 下传入空 context，生命周期不触发
+    const context = { onMount: () => {}, onUnmount: () => {} };
+    const result = tag(props || {}, context);
+    if (result instanceof Promise) {
+      throw new Error("[kiaao] Async components are not supported in SSR.");
+    }
     if (isSSRSafe(result)) return result;
     if (typeof result === "string") return ssr(result);
     if (result && typeof result === "object" && "html" in result) return ssr(result.html);

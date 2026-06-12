@@ -248,16 +248,14 @@ describe("renderToString — Teleport", () => {
 });
 
 describe("renderToString — lazy", () => {
-  test("renders empty placeholder before resolve", async () => {
+  test("throws in SSR mode", async () => {
     const Async = lazy(() => Promise.resolve({ default: () => h("p", null, "loaded") }));
 
     function Comp() {
       return h(Async, null);
     }
 
-    const html = renderToString(Comp);
-    // SSR 模式下 lazy 返回 Promise，hSSR 无法等待，回退为空
-    expect(html).toBe("");
+    expect(() => renderToString(Comp)).toThrow("Async components are not supported in SSR");
   });
 });
 

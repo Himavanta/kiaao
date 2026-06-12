@@ -19,7 +19,6 @@ export function createComponentInstance(): ComponentInstance {
     id: nextComponentId++,
     mountCallbacks: [],
     unmountCallbacks: [],
-    effectStops: new Set(),
   };
 }
 
@@ -46,10 +45,6 @@ export function createDisposeFn(instance: ComponentInstance): () => void {
 
     for (const cb of instance.unmountCallbacks) {
       safeCall(cb, "onUnmount");
-    }
-
-    for (const stop of instance.effectStops) {
-      stop();
     }
   };
 }

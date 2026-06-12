@@ -21,9 +21,10 @@ export function renderToString(
     mergedProps = { ...mergedProps, children: options.slots.default };
   }
 
-  const result = h(component, mergedProps);
-
-  setRenderMode(prevMode);
-
-  return isSSRSafe(result) ? result.html : typeof result === "string" ? result : "";
+  try {
+    const result = h(component, mergedProps);
+    return isSSRSafe(result) ? result.html : typeof result === "string" ? result : "";
+  } finally {
+    setRenderMode(prevMode);
+  }
 }

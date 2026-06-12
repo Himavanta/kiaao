@@ -77,5 +77,4 @@ export interface ComponentInstance {
   id: number;
   mountCallbacks: (() => void)[];
   unmountCallbacks: (() => void)[];
-  effectStops: Set<() => void>;
 }

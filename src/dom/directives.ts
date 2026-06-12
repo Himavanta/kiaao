@@ -186,7 +186,8 @@ export function createWhenElement(options: {
     !isMappingMode &&
     eachFn === undefined &&
     children.length === 1 &&
-    typeof children[0] === "function";
+    typeof children[0] === "function" &&
+    !isUse(children[0]);
   const hasEach = !isMappingMode && eachFn !== undefined;
 
   if (isMappingMode && eachFn !== undefined && typeof console !== "undefined") {
