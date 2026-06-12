@@ -21,3 +21,5 @@ export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
 
 // Types
 export type { Getter, Setter } from "./reactive/types.ts";
+export type { UseFunction } from "./reactive/core.ts";
+export type { Context } from "./dom/h.ts";

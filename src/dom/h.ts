@@ -3,6 +3,7 @@
 
 import { getRenderMode, isUse, use as globalUse } from "../reactive/core.ts";
 import { REACTIVE, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
+import type { UseFunction } from "../reactive/core.ts";
 import type { ComponentInstance } from "../reactive/types.ts";
 import {
   createComponentInstance,
@@ -17,18 +18,15 @@ import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 import { createElement, createComment } from "./dom-utils.ts";
 
-// ── ComponentContext ───────────────────────────────────
+// ── Context ───────────────────────────────────
 
-export interface ComponentContext {
+export interface Context {
   onMount: (fn: () => void | Promise<void>) => void;
   onUnmount: (fn: () => void | Promise<void>) => void;
-  use: typeof globalUse;
+  use: UseFunction;
 }
 
-export type ComponentFunction<P = any> = (
-  props: P,
-  context: ComponentContext,
-) => Node | Promise<Node>;
+export type ComponentFunction<P = any> = (props: P, context: Context) => Node | Promise<Node>;
 
 // ── Safe Signal ───────────────────────────────────────
 // 组件已销毁后返回的无操作信号
@@ -41,7 +39,7 @@ function createSafeSignal(): [() => undefined, (v?: any) => void] {
 
 // ── Context Creator ─────────────────────────────────
 
-function createComponentContext(instance: ComponentInstance): ComponentContext {
+function createContext(instance: ComponentInstance): Context {
   const contextUse = (...args: any[]): any => {
     if ((instance as any)[DISPOSED_KEY]) {
       if (process.env.NODE_ENV !== "production") {
@@ -118,7 +116,7 @@ export function h(
   // ── 组件模式 ──
   if (typeof tag === "function") {
     const instance = createComponentInstance();
-    const context = createComponentContext(instance);
+    const context = createContext(instance);
 
     let compProps = props ?? {};
     if (children.length > 0) {

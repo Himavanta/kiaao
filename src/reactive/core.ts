@@ -67,14 +67,15 @@ export function toValue(v: any): any {
 
 // ── 类型重载 ──
 
-export function use<T>(signal: Getter<T>): [Getter<T>, Setter<T>];
-export function use<T>(initialValue: T): [Getter<T>, Setter<T>];
-export function use<T>(...deps: [...Getter<any>[], (v?: any) => T]): [Getter<T>, Setter<T>];
-export function use(...args: any[]): any {
-  // 一元调用：可能是创建新信号，也可能是收到一个已有信号
+export type UseFunction = {
+  <T>(signal: Getter<T>): [Getter<T>, Setter<T>];
+  <T>(initialValue: T): [Getter<T>, Setter<T>];
+  <T>(...deps: [...Getter<any>[], (v?: any) => T]): [Getter<T>, Setter<T>];
+};
+
+export const use: UseFunction = (...args: any[]): any => {
   if (args.length === 1) {
     const val = args[0];
-    // 如果是信号，直接返回（吸收 toUse）
     if (isUse(val)) {
       const state = (val as any)[REACTIVE] as { set: Setter<any> };
       return [val, state.set];
@@ -82,7 +83,7 @@ export function use(...args: any[]): any {
     return definitionMode(val);
   }
   return derivationMode(...args);
-}
+};
 
 // ── Signal Creator ─────────────────────────────────────
 // 创建 getter/setter 元组，挂载 REACTIVE 标记
