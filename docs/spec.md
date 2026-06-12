@@ -1,10 +1,8 @@
-# kiaao 框架规范 v4.1
+# kiaao 框架规范 v4.2
 
 **宣传语**：更少的概念，更少的编译，更多的控制，更高的性能。
 
 **设计哲学**：把响应式的本质从框架的隐性机制变成开发者的显性声明。所有状态通过单一 API 创建，所有信号在 API 层面完全同构。组件只运行一次，DOM 更新精确到节点。
-
----
 
 ## 零、架构原则
 
@@ -18,7 +16,7 @@
 
 ### API 完全同构
 
-`use` 在任何情况下都返回 `[getter, setter]` 元组。无论是一元调用还是多元调用，无论 `computeFn` 是否有返回值，返回值结构永远不变。
+`use` 在任何情况下都返回 `[getter, setter]` 元组。无论是一元调用还是多元调用，无论 `computeFn` 是否有返回值，返回值结构永远不变。`use` 接收信号时直接返回该信号的 `[getter, setter]`，接收普通值时创建新信号——行为统一，语义一致。
 
 ### 依赖显式声明
 
@@ -34,17 +32,23 @@
 
 ### 显式上下文
 
-组件实例上下文通过函数参数显式传递，而非依赖全局栈。生命周期 API 是组件实例的方法，不是从框架导入的全局函数。这从根本上消除了异步执行导致的上下文归属问题。
-
----
+组件实例上下文通过函数参数显式传递，而非依赖全局栈。生命周期 API 和组件级 `use` 是 `context` 对象的方法，不是从框架导入的全局函数。这从根本上消除了异步执行导致的上下文归属问题。
 
 ## 一、核心 API：`use`
 
-`use` 是创建响应式信号的唯一入口。根据参数个数自动进入两种模式，**始终返回 `[getter, setter]`**。
+`use` 是创建响应式信号的唯一入口。根据参数个数和类型自动进入不同模式，**始终返回 `[getter, setter]`**。
 
-### 1.1 定义模式：`use(initialValue)`
+### 1.1 参数解析规则
 
-**参数**：恰好一个参数，任意类型。
+1. **一元调用 + 信号** → 直接返回 `[信号, 信号[REACTIVE].set]`（不创建新资源）
+2. **一元调用 + 非信号** → 定义模式：创建新信号
+3. **多元调用** → 派生模式：最后一个参数为计算函数，其余为依赖信号
+
+这保证了信号不会被误判为计算函数。
+
+### 1.2 定义模式：`use(initialValue)`
+
+**触发条件**：恰好一个参数，且不是信号。
 
 **返回值**：`[getter, setter]` 元组。
 
@@ -67,13 +71,35 @@ const [promiseVal, setPromiseVal] = use(somePromise); // Promise 本身作为值
 - `setter(newValue)` 直接替换内部值。
 - `setter(updaterFn)` 调用 `updaterFn(当前值)`，用返回值替换。
 
-**内部状态**：定义信号内部状态对象包含 `value`、`subs`（订阅该信号的下游派生）、`set`（setter 引用），挂载于 `getter[REACTIVE]`。
+**内部状态**：
 
----
+```ts
+interface DefinitionState<T> {
+  value: T;
+  subs: Set<DerivationState<any>>;
+  set: Setter<T>;
+  stop: () => void; // 空操作：定义模式无上游依赖
+}
+```
 
-### 1.2 派生模式：`use(...deps, computeFn)`
+挂载于 `getter[REACTIVE]`。
 
-**参数**：两个或更多参数。最后一个必须是普通函数（非信号），其余为依赖信号。
+### 1.3 引用已有信号：`use(existingSignal)`
+
+**触发条件**：恰好一个参数，且是信号（`isUse(val)` 为 true）。
+
+**返回值**：`[val, val[REACTIVE].set]`，即已有信号的 getter 和 setter。不创建新资源。
+
+```js
+const [count, setCount] = use(0);
+const [sameCount, sameSetCount] = use(count); // sameCount === count
+```
+
+这一行为吸收了 `toUse` 的能力，使 `use` 成为统一的"规范化入口"。
+
+### 1.4 派生模式：`use(...deps, computeFn)`
+
+**触发条件**：两个或更多参数。最后一个必须是普通函数（非信号），其余为依赖信号。
 
 **返回值**：`[getter, setter]` 元组。
 
@@ -101,53 +127,43 @@ const [_, trigger] = use(count, () => {
 const [count, setCount] = use(1);
 
 const [nextCount, setNextCount] = use(count, (v) => {
-  return count() + 1; // v 来自 setNextCount 的参数，此处未使用
+  return count() + 1;
 });
-// 创建时立即执行一次，v 为 undefined
 console.log(nextCount()); // 2
 
 setCount(2);
-// 上游变化触发重算，v 为 undefined → 重算返回 3
 console.log(nextCount()); // 3
 
 setNextCount(100);
-// setter 触发重算，v 为 100 → 重算返回 count() + 1 = 3
-// 值未变，短路，不通知下游
-console.log(nextCount()); // 3
+console.log(nextCount()); // 3（值未变，短路）
 ```
 
 **`computeFn` 签名自由**：可定义任意参数、默认值。
-
-```js
-const [derived, setDerived] = use(base, (multiplier = 2) => {
-  return base() * multiplier;
-});
-```
 
 **立即求值**：派生信号在创建时立即执行一次 `computeFn`，参数为 `undefined`，结果作为初始缓存。
 
 **内部数据结构**：
 
 ```ts
-interface DerivationNode<T> {
-  deps: Set<SignalNode>; // 此派生依赖的信号
-  cachedValue: T; // 上次计算结果
-  subs: Set<DerivationNode>; // 依赖此派生的其他派生
-  computeFn: (v?: any) => T; // 用户提供的计算函数，参数为 setter 传入的值或 undefined
-  set: Setter<T>; // 派生信号的 setter
-  stops: Set<() => void>; // 向各依赖注册的单个取消订阅函数（每个依赖一个 stop）
-  stop: () => void; // 统一清理入口：遍历 stops，并从所有依赖的 subs 中移除自身
+interface DerivationState<T> {
+  deps: Set<SignalState<any>>;
+  cachedValue: T;
+  subs: Set<DerivationState<any>>;
+  computeFn: (v?: any) => T;
+  set: Setter<T>;
+  stops: Set<() => void>;
+  stop: () => void; // 从所有 deps 的 subs 中移除自身并清空 stops
 }
 ```
 
-- `getter[REACTIVE]` 指向该 `DerivationNode` 实例。
-- `state.stop` 是框架内部的统一清理函数，外部不可见（`use` 的返回值不包含它），但框架内部（如 `disposeNode`、`addLocalEffect` 等）可通过 `getter[REACTIVE].stop` 直接调用。
+挂载于 `getter[REACTIVE]`。`state.stop` 是框架内部的统一清理函数，外部不可见。
 
----
-
-### 1.3 类型签名
+### 1.5 类型签名
 
 ```ts
+// 接收信号：直接返回 [getter, setter]
+function use<T>(signal: Getter<T>): [Getter<T>, Setter<T>];
+
 // 定义模式
 function use<T>(initialValue: T): [Getter<T>, Setter<T>];
 
@@ -158,35 +174,20 @@ function use<T>(...deps: [...Signal[], (setValue?: any) => T]): [Getter<T>, Sett
 function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, Setter<void>];
 ```
 
----
-
 ## 二、辅助工具函数
 
 ### `isUse(v: any): boolean`
 
-判断一个值是否是信号（`use` 创建的 getter）。所有信号均挂载 `REACTIVE` 标记，`isUse` 检查 `v?.[REACTIVE] !== undefined`。
-
-### `toUse(v: any): [Getter, Setter]`
-
-将任意值规范化为可读写的信号元组。
-
-- 若 `v` 已经是信号，直接返回 `[v, v[REACTIVE].set]` ——所有信号都有 setter，此分支永远安全。
-- 否则等价于 `use(v)`，返回新创建的 `[getter, setter]`。
-
-使用场景：组件适配外部参数，使内部逻辑统一。
-
-```js
-function Slider(props, { onMount, onUnmount }) {
-  const [value, setValue] = toUse(props.value);
-  // 内部统一使用 value() 读取，setValue() 更新
-}
-```
+判断一个值是否是信号（`use` 创建的 getter）。检查 `v?.[REACTIVE] !== undefined`。
 
 ### `toValue(v: any): any`
 
 若 `v` 是信号则返回 `v()`（当前值），否则返回 `v` 本身。
 
----
+### 已移除
+
+- `toUse`：功能被 `use` 吸收。`use(signal)` 直接返回已有信号的 `[getter, setter]`。
+- `toVal`：重命名为 `toValue`。
 
 ## 三、`h(tag, props?, ...children)`
 
@@ -196,33 +197,28 @@ function Slider(props, { onMount, onUnmount }) {
 
 创建真实 DOM 元素，对 `children` 递归扁平化。
 
-**无效 Tag 兜底**：  
-当 `tag` 既非字符串也非函数时（如 `null`、`undefined`、`0`、`false`），`h()` 返回一个空白注释节点 `createComment("")`，防止创建非法 DOM 元素。此为防御性兜底，正常 JSX 使用不会触达此路径。
+**无效 Tag 兜底**：当 `tag` 既非字符串也非函数时，返回空白注释节点 `createComment("")`。
 
-**Fragment**：  
-JSX 的 `<>...</>` 语法由编译器解析为 `Fragment` 组件（`h(Fragment, null, ...children)`）。`Fragment` 渲染为一个 `<div style="display: contents">` 容器，其 `children` 在内部正常处理。该容器存在于 DOM 中，无额外布局影响，但与原生 Fragment 存在差异（CSS 选择器、DOM 遍历等场景需注意容器节点的存在）。`h()` 的无效 tag 兜底与 Fragment 无关——`<>...</>` 走的是 Fragment 组件路径，不会落入无效 tag 兜底逻辑。
+**Fragment**：JSX 的 `<>...</>` 语法渲染为 `<div style="display: contents">` 容器，与原生 Fragment 存在差异。
 
-**Children 中的无效值**：  
-子节点数组中的 `null`、`undefined`、布尔值在 `processChildren` 中被静默跳过，嵌套数组被递归拍平。
+**Children 中的无效值**：`null`、`undefined`、布尔值被静默跳过，嵌套数组被递归拍平。
 
 **子节点处理**：
 
-- 若子节点为信号（`isUse` 为真）：创建文本占位，通过匿名派生绑定动态更新。该派生的停止函数注册到文本节点的 `LOCAL_EFFECTS` 集合。
+- 若子节点为信号：创建文本占位，通过匿名派生绑定动态更新。该派生的停止函数注册到文本节点的 `LOCAL_EFFECTS` 集合。
 - 若为 DOM 节点：直接附加。
 - 其他值：转为字符串创建静态文本节点。
 
 #### 属性处理（`setProp` 流程）
 
-属性处理遵循已建立的策略，确保可预测性。详细规则参见《属性处理策略》文档，核心要点：
-
-- **事件属性**（`onXxx`）：转换为 `addEventListener` 绑定，不参与响应式绑定。
-- **`style`**：接受字符串或对象。字符串设 `cssText`，对象清空内联样式后 `Object.assign`。
-- **前缀**：`attr:` 强制走 `setAttribute`，`prop:` 强制走 DOM property 赋值。
-- **SVG 元素**：默认所有属性走 `setAttribute`（除 `style` 和显式 `prop:` 外）。
-- **FORCE_ATTRIBUTE 列表**：包含标准 HTML 属性（`class`、`id`、`disabled` 等），这些属性走 `setAttribute`；不在列表中的属性（如 `value`、`checked`、自定义 property）走 `el[key] = value`。
+- **事件属性**（`onXxx`）：转换为 `addEventListener` 绑定。
+- **`style`**：接受字符串或对象。
+- **前缀**：`attr:` 强制 `setAttribute`，`prop:` 强制 DOM property 赋值。
+- **SVG 元素**：默认所有属性走 `setAttribute`。
+- **FORCE_ATTRIBUTE 列表**：标准 HTML 属性走 `setAttribute`；不在列表中的走 property 赋值。
 - **`aria-*` / `data-*`**：无条件走 `setAttribute`。
-- **布尔属性**：`true` 时设空字符串，`false` 时移除。
-- 无前缀的响应式属性值（信号）会自动创建匿名派生进行更新，派生挂载到元素的 `LOCAL_EFFECTS`。
+- **布尔属性**：`true` 设空字符串，`false` 移除。
+- 响应式属性值（信号）自动创建匿名派生进行更新，挂载到元素的 `LOCAL_EFFECTS`。
 
 #### 控制流指令
 
@@ -230,213 +226,191 @@ JSX 的 `<>...</>` 语法由编译器解析为 `Fragment` 组件（`h(Fragment, 
 
 ##### `when` 指令
 
-控制宿主元素内部子节点的挂载/卸载。宿主元素始终存在于 DOM 中。接受任意值（通常为信号或函数），根据返回值决定渲染行为。
+控制宿主元素内部子节点的挂载/卸载。宿主元素始终存在于 DOM 中。
 
 **两种模式**：
 
-- **布尔模式**：`children` 为非对象内容。`when` 返回值 truthy 时渲染 `children`；falsy 时若有 `else` 属性则渲染其返回内容，否则清空。
-- **映射表模式**：`children` 为纯对象 `{ [key]: () => VNode }`。`when` 返回值作为 key 查找，找到则调用对应惰性函数渲染；未找到回退 `else`，无 `else` 清空。
+- **布尔模式**：`children` 为非对象内容。truthy 渲染 `children`；falsy 回退 `else`，否则清空。
+- **映射表模式**：`children` 为 `{ [key]: () => VNode }`。key 匹配渲染对应分支，未匹配回退 `else`。
 
-**`else` 属性**：可选，值为 `() => any`，作为条件不满足时的后备内容。
+**`else` 属性**：可选，`() => any`，作为后备内容。
 
 ##### `each` 指令
 
-控制宿主元素内部按集合生成子节点。接受返回任意数据源的信号（数组、对象、Map、Set、数字、字符串等）。
+控制宿主元素内部按集合生成子节点。支持数组、对象、Map、Set、数字、字符串等数据源。
 
-`children` 渲染函数签名为 `(item: Signal, index: number, key: any) => Node`。框架为每个条目自动创建定义信号，实现同 key 增量更新：同 identity 复用 DOM，仅移动位置；新增/删除分别创建/销毁节点。
+`children` 渲染函数签名为 `(item: Signal, index: number, key: any) => Node`。框架为每个条目自动创建定义信号，实现同 key 增量更新。
 
-**`key` 属性**：可选函数 `(item, index, entryKey) => any`，用于自定义列表项的身份标识，实现高效复用。
-
----
+**`key` 属性**：可选函数 `(item, index, entryKey) => any`，自定义身份标识。
 
 ### 3.2 组件模式（`tag` 为函数）
 
-组件函数签名从 `(props)` 变更为 `(props, context)`。
+组件函数签名：`(props, context)`。
 
-#### 3.2.1 组件函数签名
+#### 3.2.1 `context` 接口
 
 ```ts
 interface ComponentContext {
+  use: typeof use; // 组件级信号创建（卸载时自动清理）
   onMount(fn: () => void | Promise<void>): void;
   onUnmount(fn: () => void | Promise<void>): void;
 }
-
-type ComponentFunction<P = any> = (
-  props: P,
-  context: ComponentContext,
-) => HTMLElement | Promise<HTMLElement>;
 ```
 
 #### 3.2.2 同步组件
 
-当组件函数返回 `Node` 实例时，为同步组件。流程：
+流程：
 
-1. 创建组件实例，构建 `context` 对象。
-2. 调用 `tag(props, context)`，同步获取返回的 DOM 节点。
-3. 若返回值为 `Node`，在结果节点上挂载 `INSTANCE_KEY` 和 `DISPOSE_KEY`。
-4. 若返回值非 `Node`，创建注释节点作为占位，并挂载实例关联（防御性兜底）。
-5. 返回 DOM 节点。
+1. 创建组件实例，构建 `context` 对象
+2. 调用 `tag(props, context)`，同步获取返回的 DOM 节点
+3. 通过 `attachInstance` 在返回值节点上追加实例关联（`INSTANCE_KEY` 和 `DISPOSE_KEY` 均为 Set）
+4. 若返回值非 `Node`，创建注释节点作为占位（防御性兜底）
 
 #### 3.2.3 异步组件
 
 当组件函数返回 `Promise` 时，为异步组件。流程：
 
-1. 创建组件实例，构建 `context` 对象。
-2. 调用 `tag(props, context)`，获取返回的 Promise。
-3. 创建 wrapper 元素（`<div style="display: contents">`），挂载 `DISPOSE_KEY`。
-4. 注册 `disposed` 标志位，防止卸载后 Promise resolve 继续操作。
+1. 创建组件实例，构建 `context` 对象
+2. 调用 `tag(props, context)`，获取返回的 Promise
+3. 创建 wrapper 元素（`<div style="display: contents">`），挂载 `DISPOSE_KEY` Set
+4. 注册 `disposed` 标志位
 5. 等待 Promise resolve：
-   - 检查 `disposed`，若已卸载则跳过。
-   - 检查 `realDOM instanceof Node`，非法值降级为注释节点。
-   - 将 `realDOM` 作为子节点插入 wrapper。
-   - 调用 `triggerMount(realDOM)` 递归触发子树中所有同步子组件的挂载回调。
-   - 手动触发当前异步组件自身的 `mountCallbacks`。
-6. Promise reject 时打印错误，生产模式保留空 wrapper。
-7. 返回 wrapper。
+   - 检查 `disposed`
+   - 检查 `realDOM instanceof Node`，非法值降级为注释节点
+   - 将 `realDOM` 作为子节点插入 wrapper
+   - 调用 `triggerMount(realDOM)` 递归触发子树
+   - 手动触发当前异步组件自身的 `mountCallbacks`
+6. Promise reject 时打印错误
 
-wrapper 不设置 `INSTANCE_KEY`，因此 `triggerMount(wrapper)` 递归不会提前触发异步组件的挂载回调。wrapper 从创建到卸载始终是组件的根节点，持有 `DISPOSE_KEY`。`realDOM` 仅作为普通子节点插入，不接管组件级别的元数据。
+wrapper 不设置 `INSTANCE_KEY`。wrapper 从创建到卸载始终是组件的根节点。
 
----
+### 3.3 多实例共享 DOM 节点
 
-## 四、生命周期
-
-生命周期 API 通过 `context` 参数传入组件函数，不再从框架中导入。
-
-### 4.1 `onMount(fn)`
-
-注册组件挂载完成后的回调。可在任何位置调用，只要组件实例尚未销毁。
-
-**执行时机**：
-
-| 调用时组件状态 | 行为                                                      |
-| -------------- | --------------------------------------------------------- |
-| 尚未挂载       | `fn` 被推入 `mountCallbacks` 队列，等待挂载完成后统一触发 |
-| 已挂载         | `fn` 立即同步执行                                         |
-
-- **同步组件**："挂载完成"指 `triggerMount` 递归遍历到该组件根节点时，DOM 已插入文档。
-- **异步组件**："挂载完成"指 Promise resolve 且真实 DOM 插入 wrapper 后，`triggerMount(realDOM)` 递归触发子树完毕，再手动触发当前组件自身的 `mountCallbacks`。此时真实内容已就位，子树中已就位的同步子孙组件均已挂载完毕。
-- `fn` 可以是同步函数或 async 函数。框架不等待其完成。内部错误由 `safeCall` 捕获并打印。
-- 若在组件已挂载后调用 `onMount`，`fn` 立即执行。
-- 若在组件已销毁后调用，开发模式警告并忽略，生产模式静默忽略。
-
-**异步组件与同步组件的 `onMount` 触发顺序**：
-
-- **同步组件**：`triggerMount` 深度优先前序遍历，父组件先于子组件触发 `onMount`。
-- **异步组件**：resolve 后先 `triggerMount(realDOM)` 递归触发子树中的所有同步子组件，再触发当前异步组件自身的 `mountCallbacks`。子组件先于父异步组件触发 `onMount`。
-
-两者的机制不同，但保证一个不变量：**父组件的 `onMount` 回调执行时，所有已就位的子组件的 `onMount` 都已经触发完毕。**
-
-嵌套异步子组件尚未 resolve 时，其 `onMount` 尚未触发——这是异步并发模型的自然结果，并非框架缺陷。
-
-### 4.2 `onUnmount(fn)`
-
-注册组件销毁前的清理回调。可在任何位置调用，只要组件实例尚未销毁。
-
-**执行时机**：组件卸载时，`createDisposeFn` 使用 `safeCall` 执行所有已注册的 `onUnmount` 回调。此时组件的 DOM 仍存在于文档中，所有响应式绑定仍有效。
-
-- `fn` 可以是同步函数或 async 函数。框架不等待其完成。内部错误由 `safeCall` 捕获并打印。
-- 若在组件已销毁后调用，开发模式警告并忽略，生产模式静默忽略。
-
-### 4.3 `mount(root, container)` / `unmount(root)`
-
-显式挂载/卸载组件树。
-
-- `mount(root, container)`：将 `root` 添加到 `container`，调用 `triggerMount(root)` 递归触发所有 `onMount` 回调。
-- `unmount(root)`：调用 `disposeNode(root)` 递归清理所有资源（`LOCAL_EFFECTS`、`DISPOSE_KEY`），然后从 DOM 中移除 `root`。
-
-### 4.4 模块级工具函数 `safeCall`
-
-`safeCall(fn, label)` 是模块级工具函数，用于统一执行生命周期回调，捕获同步错误和异步 rejection。
+`INSTANCE_KEY` 和 `DISPOSE_KEY` 从单值改为 `Set`，允许多个组件实例在同一个 DOM 节点上共存。
 
 ```ts
-export function safeCall(fn: () => void | Promise<void>, label: string): void {
-  try {
-    const result = fn();
-    if (result instanceof Promise) {
-      result.catch((err) => console.error(`[kiaao] ${label}:`, err));
-    }
-  } catch (err) {
-    console.error(`[kiaao] ${label}:`, err);
+function attachInstance(node, instance) {
+  if (!node[INSTANCE_KEY]) {
+    node[INSTANCE_KEY] = new Set();
+    node[DISPOSE_KEY] = new Set();
   }
+  node[INSTANCE_KEY].add(instance);
+  node[DISPOSE_KEY].add(createDisposeFn(instance));
 }
 ```
 
-用于 `createDisposeFn` 执行 `unmountCallbacks` 和 `h()` 执行 `mountCallbacks`。
+`triggerMount` 遍历 Set 中所有实例。`disposeNode` 遍历 Set 执行所有清理函数后清空两个 Set。
 
----
+## 四、生命周期
+
+生命周期 API 通过 `context` 参数传入，不再从框架中导入。
+
+### 4.1 `onMount(fn)`
+
+注册组件挂载完成后的回调。可在任何位置调用。
+
+| 调用时组件状态 | 行为                       |
+| -------------- | -------------------------- |
+| 尚未挂载       | 推入 `mountCallbacks` 队列 |
+| 已挂载         | 立即同步执行               |
+
+- **同步组件**：`triggerMount` 递归遍历时触发
+- **异步组件**：Promise resolve 后，先递归 `triggerMount(realDOM)`，再触发自身
+- `fn` 可以是同步或 async 函数。错误由 `safeCall` 捕获并打印
+- 已销毁后调用：开发模式警告，生产模式静默忽略
+
+### 4.2 `onUnmount(fn)`
+
+注册组件销毁前的清理回调。可在任何位置调用。
+
+- `fn` 可以是同步或 async 函数。错误由 `safeCall` 捕获并打印
+- 已销毁后调用：开发模式警告，生产模式静默忽略
+
+### 4.3 `context.use`
+
+组件级信号创建。语法与模块级 `use` 完全一致。创建的信号在组件卸载时自动清理。
+
+- 接收信号时直接返回引用（不创建新资源，不注册清理）
+- 接收普通值时创建新信号（注册清理）
+- 多元调用创建派生（注册清理）
+- 已销毁后调用：返回安全占位 `[noop, noop]`
+
+### 4.4 `mount(root, container)` / `unmount(root)`
+
+显式挂载/卸载组件树。
+
+### 4.5 `safeCall(fn, label)`
+
+模块级工具函数，统一执行生命周期回调，捕获同步错误和异步 rejection。
 
 ## 五、内置组件
 
 ### `<Teleport to={...}>`
 
-将子内容渲染到指定 DOM 容器（CSS 选择器或元素），逻辑上仍属于当前组件树，卸载时自动清除。需从 `context` 参数中解构生命周期 API。
+将子内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树。
 
 ### `lazy(loader)`
 
-`lazy(loader)` 是一个薄包装，将动态 `import()` 转换为组件。内部返回一个异步组件——`loader()` 返回的 Promise 由异步组件机制统一处理。加载失败时返回错误文本节点。`lazy` 是代码拆分的语法糖。
+将动态 `import()` 转换为组件。内部返回一个异步组件——`loader()` 返回的 Promise 由异步组件机制统一处理。加载失败时显示错误文本节点。
 
 ### `Fragment`
 
-渲染为 `<div style="display: contents">`，其 `children` 正常处理。JSX 的 `<>...</>` 语法经编译器转换后调用此组件。
-
----
+渲染为 `<div style="display: contents">`。
 
 ## 六、更新传播与清理
 
 ### 依赖图与更新
 
-- 定义信号：`state.value` 变更 → 遍历 `subs`，立即执行每个派生节点的 `computeFn`（参数 `undefined`）→ 对比缓存 → 更新或短路。
-- 派生 setter：标记自身，执行 `computeFn(value)`，结果对比缓存，传播规则同上。
+- 定义信号：`state.value` 变更 → 遍历 `subs`，立即执行每个派生节点的 `computeFn` → 对比缓存 → 更新或短路
+- 派生 setter：执行 `computeFn(value)`，结果对比缓存，传播规则同上
 
 ### 清理机制
 
-- 每个派生节点维护 `stops` 集合，存放向每个依赖注册的单个取消订阅函数。
-- 派生节点同时提供一个 **`stop()` 方法**，一次性调用 `stops` 中的所有函数，并将自身从所有依赖的 `subs` 中移除。
-- 当派生节点需要被销毁时（组件卸载、`when`/`each` 分支切换、对应 DOM 节点被移除），框架内部通过 `getter[REACTIVE].stop()` 触发统一清理，无需关心具体依赖数量。
-- 开发者无法直接访问 `stop`，清理完全由框架的所有权机制（`LOCAL_EFFECTS`、`DISPOSE_KEY` 回调、`disposeNode` 递归）自动管理。
-
----
+- 每个派生节点维护 `stops` 集合，存放向每个依赖注册的取消订阅函数
+- 派生节点提供 `stop()` 方法，一次性调用 `stops` 并清理反向引用
+- 定义信号提供空 `stop()` 方法（无上游依赖，无需实际清理）
+- 销毁时通过 `getter[REACTIVE].stop()` 统一清理
+- 清理由框架的所有权机制自动管理：
+  - `context.use` 创建的信号/派生 → `unmountCallbacks`
+  - DOM 绑定产生的匿名派生 → `LOCAL_EFFECTS`
+  - 组件销毁 → `DISPOSE_KEY` Set
 
 ## 七、内部标记
 
-| Symbol                             | 挂载位置               | 用途                                                       |
-| ---------------------------------- | ---------------------- | ---------------------------------------------------------- |
-| `REACTIVE`                         | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set` 等） |
-| `LOCAL_EFFECTS`                    | DOM 节点               | 存储该节点上的匿名派生停止函数集合                         |
-| `DISPOSE_KEY`                      | DOM 节点（组件根节点） | 存储组件销毁回调（含 `onUnmount` 队列、组件级派生停止等）  |
-| `INSTANCE_KEY`                     | DOM 节点               | 存储组件实例引用                                           |
-| `INITIALIZED_KEY` / `DISPOSED_KEY` | 组件实例               | 标记初始化/已销毁状态                                      |
-
----
+| Symbol            | 挂载位置               | 用途                                                              |
+| ----------------- | ---------------------- | ----------------------------------------------------------------- |
+| `REACTIVE`        | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set`/`stop` 等） |
+| `LOCAL_EFFECTS`   | DOM 节点               | 存储该节点上的匿名派生停止函数集合                                |
+| `DISPOSE_KEY`     | DOM 节点               | 存储 `Set<() => void>`（组件销毁回调集合）                        |
+| `INSTANCE_KEY`    | DOM 节点               | 存储 `Set<ComponentInstance>`（关联的组件实例集合）               |
+| `INITIALIZED_KEY` | 组件实例               | 标记挂载已完成                                                    |
+| `DISPOSED_KEY`    | 组件实例               | 标记已销毁                                                        |
 
 ## 八、与 v3.4 的差异对照
 
-| 维度          | v3.4                                            | v4.1                                            |
-| ------------- | ----------------------------------------------- | ----------------------------------------------- |
-| 创建可写信号  | `define(init)` → `[get, set]`                   | `use(init)` → `[get, set]`                      |
-| 创建派生信号  | `derive(fn)` → `getter`                         | `use(...deps, fn)` → `[get, set]`               |
-| 副作用        | `effect(fn)` → `stop`                           | 派生模式（不接收返回值），返回 `[get, set]`     |
-| 细粒度订阅    | `getter(selector)`                              | `use(signal, fn)`                               |
-| 生命周期注册  | `import { onMount, onUnmount } from 'kiaao'`    | 通过 `context` 参数解构                         |
-| 组件函数签名  | `(props)`                                       | `(props, context)`                              |
-| 异步组件      | 不支持                                          | 返回 Promise 即为异步组件                       |
-| 返回值结构    | 不一致（定义/派生/副作用/生命周期各不同）       | 完全一致（均为元组），生命周期通过 context 方法 |
-| 核心概念数量  | 4 (define/derive/effect/h) + 生命周期           | 3 (use/h 及辅助) + context                      |
-| Fragment 处理 | 不支持，`<>...</>` 编译为 null tag 后无特殊处理 | `Fragment` 组件渲染为 `display: contents` 容器  |
-
----
+| 维度           | v3.4                            | v4.2                                           |
+| -------------- | ------------------------------- | ---------------------------------------------- |
+| 创建可写信号   | `define(init)` → `[get, set]`   | `use(init)` → `[get, set]`                     |
+| 创建派生信号   | `derive(fn)` → `getter`         | `use(...deps, fn)` → `[get, set]`              |
+| 副作用         | `effect(fn)` → `stop`           | 派生模式（不接收返回值），返回 `[get, set]`    |
+| 细粒度订阅     | `getter(selector)`              | `use(signal, fn)`                              |
+| 规范化值       | `toUse(v)` → `[get, set]`       | `use(v)`（信号直接返回引用，非信号创建新信号） |
+| 提取值         | `toVal(v)`                      | `toValue(v)`                                   |
+| 生命周期注册   | `import { onMount, onUnmount }` | `context` 参数解构                             |
+| 组件级信号     | 不支持（需手动管理）            | `context.use`（自动清理）                      |
+| 组件函数签名   | `(props)`                       | `(props, context)`                             |
+| 异步组件       | 不支持                          | 返回 Promise 即为异步组件                      |
+| 多实例共享节点 | 覆盖（导致清理丢失）            | 追加到 Set（共存）                             |
+| Fragment       | 不支持                          | `Fragment` 组件渲染为 `display: contents` 容器 |
 
 ## 九、附录：属性处理策略摘要
 
-参阅《属性处理策略》完整文档，以下是关键点：
+- **FORCE_ATTRIBUTE**：标准 HTML 属性走 `setAttribute`；`value`、`checked` 等走 property 赋值
+- **前缀机制**：`attr:` 强制 setAttribute，`prop:` 强制 property
+- **SVG 元素**：默认所有属性走 setAttribute
+- **事件**：`onXxx` 转为 `addEventListener`
+- **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性
 
-- **FORCE_ATTRIBUTE**：包含 `class`、`id`、`disabled`、`src`、`href` 等标准 HTML 属性，统一走 `setAttribute`；`value`、`checked` 等不在列表中，走 property 赋值。
-- **前缀机制**：`attr:xxx` 强制 setAttribute，`prop:xxx` 强制 property，覆盖默认行为。
-- **SVG 元素**：默认所有属性走 setAttribute，`style` 正常处理，`prop:` 前缀可强制 property（注意只读属性风险）。
-- **事件**：`onXxx` 转为 `addEventListener`。
-- **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性；`prop:` 前缀、事件、不在列表中的属性不输出。
-
----
-
-**文档版本**：v4.1  
-**状态**：定稿，依据已实现的代码库撰写
+**文档版本**：v4.2
+**撰写日期**：2026年6月12日
+**状态**：定稿
