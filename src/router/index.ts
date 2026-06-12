@@ -85,12 +85,14 @@ export function createRouter(options: RouterOptions = {}): Router {
 
   addEvent(window, "popstate", () => {
     setPath(getPathname());
+    updateParams();
   });
 
   function navigate(path: string): void {
     const pathname = path.split("?")[0];
     pushHistory(path);
     setPath(pathname);
+    updateParams();
   }
 
   const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
@@ -139,7 +141,9 @@ export function createRouter(options: RouterOptions = {}): Router {
     );
   }
 
-  const [currentParams] = use(currentPath, () => {
+  const [currentParams, setCurrentParams] = use<Record<string, string>>({});
+
+  function updateParams(): void {
     const params: Record<string, string> = {};
     const search = getSearch();
     if (search) {
@@ -147,8 +151,11 @@ export function createRouter(options: RouterOptions = {}): Router {
         params[key] = value;
       });
     }
-    return params;
-  });
+    setCurrentParams(params);
+  }
+
+  // 初始化参数
+  updateParams();
 
   return { RouterView, navigate, currentPath, currentParams, Link };
 }
