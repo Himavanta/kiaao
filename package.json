@@ -1,6 +1,6 @@
 {
   "name": "kiaao",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A pure-runtime, zero-virtual-DOM reactive UI framework. No Proxy, no compiler dependency, every update is a precise DOM operation.",
   "keywords": [
     "framework",
