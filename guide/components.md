@@ -232,9 +232,9 @@ The `to` prop accepts a CSS selector string or a DOM element. If the target does
 
 ## `lazy` / 代码拆分
 
-`lazy(fn)` wraps a dynamically imported component for code splitting. It returns a proxy component that renders a placeholder comment node until the module loads, then replaces it with the real component. `lazy` itself is a synchronous component — the asynchronous loading happens outside the component function.
+`lazy(loader)` is a thin wrapper that turns a dynamic `import()` into a component. Under the hood, it returns an async component — the Promise from `loader()` is handled by the same async component infrastructure. `lazy` is syntax sugar for the common pattern of importing a component module and rendering it.
 
-`lazy(fn)` 包装动态导入的组件以实现代码拆分。它返回一个代理组件，在模块加载期间渲染占位注释节点，完成后替换为真实组件。`lazy` 本身是同步组件——异步加载发生在组件函数外部。
+`lazy(loader)` 是一个薄包装，将动态 `import()` 转换为组件。本质上，它返回一个异步组件——`loader()` 返回的 Promise 由异步组件机制统一处理。`lazy` 只是"导入组件模块并渲染"这一常见模式的语法糖。
 
 ```jsx
 import { lazy } from "kiaao";
@@ -246,17 +246,39 @@ function App() {
 }
 ```
 
-For components that need to `await` data before rendering, see Async Components. `lazy` is specifically for code splitting — it does not support `await` inside the component function.
+What `lazy` does internally is equivalent to:
 
-对于需要在渲染前 `await` 数据的组件，参见异步组件。`lazy` 专门用于代码拆分——它不支持在组件函数内部使用 `await`。
+`lazy` 的内部实现等价于：
+
+```jsx
+function LazyComponent(props, context) {
+  return import("./HeavyProfile")
+    .then((mod) => {
+      const Comp = mod.default || mod;
+      return h(Comp, props);
+    })
+    .catch((err) => {
+      console.error("[kiaao] lazy loading error:", err);
+      return document.createTextNode(String(err));
+    });
+}
+```
+
+Because `LazyComponent` returns a Promise, the framework treats it as an async component: a `<div style="display: contents">` wrapper is created immediately, and the real DOM is injected when the Promise resolves. Error handling is built in — if the loader rejects, an error message is shown.
+
+由于 `LazyComponent` 返回 Promise，框架将其视为异步组件：立即创建 `<div style="display: contents">` wrapper，Promise resolve 后注入真实 DOM。错误处理已内置——如果 loader 被拒绝，将显示错误信息。
+
+`lazy` exists only to save you from writing this boilerplate every time. If you need to combine code splitting with data fetching, write an async component directly — the async component pattern covers both. `lazy` is not a separate mechanism, just a shortcut.
+
+`lazy` 的存在只是为了省去每次写这段样板代码。如果你需要将代码拆分和数据获取结合起来，直接编写异步组件——异步组件模式涵盖了这两种场景。`lazy` 不是一个独立的机制，只是一个快捷方式。
 
 ---
 
 ## Async Components / 异步组件
 
-A component function that returns a Promise is an async component. The framework automatically wraps it in a transparent container and defers `onMount` until the promise resolves. This is a first-class feature, not a wrapper API — just return a Promise from your component.
+A component function that returns a Promise is an async component. The framework automatically wraps it in a transparent container and defers `onMount` until the promise resolves. This covers data fetching, code splitting, or any other async work — all within a single, unified pattern.
 
-返回 Promise 的组件函数即为异步组件。框架自动将其包裹在透明容器中，并将 `onMount` 延迟到 Promise resolve 之后。这是一等公民特性，而非包装 API——直接从组件中返回 Promise 即可。
+返回 Promise 的组件函数即为异步组件。框架自动将其包裹在透明容器中，并将 `onMount` 延迟到 Promise resolve 之后。这涵盖了数据获取、代码拆分或任何其他异步工作——全部在一个统一的模式内完成。
 
 ```jsx
 async function DataLoader(props, { onMount }) {

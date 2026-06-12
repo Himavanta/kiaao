@@ -59,13 +59,9 @@ wrapper 具有 `display: contents`，因此在布局中不可见。其子节点�
 
 ```jsx
 async function DelayedGreeting(props, { onMount }) {
-  // This runs during component creation, before mount
-  // 这在组件创建期间运行，挂载之前
   const [message, setMessage] = use("Loading...");
 
   onMount(() => {
-    // This runs after the Promise resolves and DOM is appended
-    // 这在 Promise resolve 且 DOM 追加后运行
     console.log("Ready!");
   });
 
@@ -96,6 +92,80 @@ async function DataStream(props, { onMount, onUnmount }) {
   const data = await fetchInitialData();
   return <div>{data}</div>;
 }
+```
+
+---
+
+## Error Handling / 错误处理
+
+Async components have two layers of error handling: developer-handled and framework-caught. They complement each other and can be used together.
+
+异步组件有两层错误处理：开发者自行处理和框架捕获。两者互补，可以一起使用。
+
+### Developer-Handled Errors / 开发者自行处理
+
+Attach `.catch()` to the Promise before returning it. The caught error becomes a fallback UI — the framework sees a resolved Promise with a DOM node, and renders it normally. This is the recommended pattern for component-level error boundaries.
+
+在返回 Promise 之前附加 `.catch()`。捕获的错误变成一个降级 UI——框架看到的是一个 resolve 为 DOM 节点的 Promise，并正常渲染。这是组件级错误边界的推荐模式。
+
+```jsx
+function SafeComponent(props) {
+  return fetch("/api/data")
+    .then((res) => res.json())
+    .then((data) => <Dashboard data={data} />)
+    .catch((err) => {
+      console.error("Failed to load:", err);
+      return <div class="error">Something went wrong. Please try again.</div>;
+    });
+}
+```
+
+You can also use `async/await` with `try/catch`:
+
+也可以使用 `async/await` 配合 `try/catch`：
+
+```jsx
+async function SafeComponent(props) {
+  try {
+    const data = await fetch("/api/data").then((r) => r.json());
+    return <Dashboard data={data} />;
+  } catch (err) {
+    return <div class="error">Something went wrong. Please try again.</div>;
+  }
+}
+```
+
+In both cases, the framework receives a resolved Promise. The error never reaches the framework's catch handler. This gives you full control over what the user sees when something fails.
+
+两种情况下，框架收到的都是一个已 resolve 的 Promise。错误永远不会到达框架的 catch 处理器。这让你完全控制出错时用户看到的内容。
+
+### Framework-Caught Errors / 框架捕获
+
+If a Promise rejects and there is no `.catch()` attached by the developer, the framework catches it. It logs the error to the console and leaves the wrapper empty. The rest of the application continues to work — no crash, no white screen.
+
+如果 Promise 被拒绝且开发者没有附加 `.catch()`，框架会捕获它。框架将错误打印到控制台，并保留空的 wrapper。应用程序的其余部分继续工作——不会崩溃，不会白屏。
+
+```jsx
+async function BrokenComponent() {
+  throw new Error("Something went wrong");
+  return <div>Never rendered</div>;
+}
+// Console: [kiaao] async component error: Error: Something went wrong
+// DOM: <div style="display: contents"></div>
+```
+
+### Non-Node Resolution / 非 Node 值
+
+If the Promise resolves with a non-Node value, it is downgraded to a comment node with a warning in development mode.
+
+如果 Promise resolve 为非 Node 值，则在开发模式下发出警告并降级为注释节点。
+
+```jsx
+async function WrongReturn() {
+  return "not a node";
+}
+// Dev console: [kiaao] async component resolved with non-Node value: "not a node"
+// DOM: <div style="display: contents"><!-- async component resolved with invalid value --></div>
 ```
 
 ---
@@ -163,35 +233,6 @@ The parent's `disposeNode` recursion naturally reaches the wrapper and handles i
 
 ---
 
-## Error Handling / 错误处理
-
-If the Promise rejects, the framework logs the error to the console and leaves the wrapper empty. No error is thrown — the rest of the application continues to work.
-
-如果 Promise 被拒绝，框架将错误打印到控制台，并保留空的 wrapper。不会抛出错误——应用程序的其余部分继续工作。
-
-```jsx
-async function BrokenComponent() {
-  throw new Error("Something went wrong");
-  return <div>Never rendered</div>;
-}
-// Console: [kiaao] async component error: Error: Something went wrong
-// DOM: <div style="display: contents"></div>
-```
-
-If the Promise resolves with a non-Node value, it is downgraded to a comment node with a warning in development mode.
-
-如果 Promise resolve 为非 Node 值，则在开发模式下发出警告并降级为注释节点。
-
-```jsx
-async function WrongReturn() {
-  return "not a node";
-}
-// Dev console: [kiaao] async component resolved with non-Node value: "not a node"
-// DOM: <div style="display: contents"><!-- async component resolved with invalid value --></div>
-```
-
----
-
 ## SSR / 服务端渲染
 
 Async components are **not supported in SSR**. `renderToString` is synchronous and cannot wait for Promises. If an async component is encountered during SSR, the framework throws an error.
@@ -210,29 +251,19 @@ For data-fetching scenarios in SSR, fetch the data outside the component and pas
 
 ## Comparison with `lazy` / 与 lazy 的对比
 
-|                                 | `lazy`                                                    | Async Component                                                                       |
-| ------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Purpose / 用途                  | Code splitting / 代码拆分                                 | Data fetching / 数据获取                                                              |
-| What loads / 加载什么           | The component's JS module / 组件的 JS 模块                | Data needed for rendering / 渲染所需的数据                                            |
-| Component function / 组件函数   | Synchronous / 同步                                        | Async (`async function` or returns Promise) / 异步（`async function` 或返回 Promise） |
-| During loading / 加载期间       | Comment placeholder / 注释占位符                          | Transparent wrapper `<div style="display: contents">` / 透明 wrapper                  |
-| `onMount` timing / onMount 时机 | Fires when the real component mounts / 真实组件挂载时触发 | Fires after Promise resolves and DOM is appended / Promise resolve 且 DOM 追加后触发  |
-| SSR                             | Supported (renders placeholder) / 支持（渲染占位符）      | Not supported / 不支持                                                                |
+|                                 | `lazy`                                                                    | Async Component / 异步组件                                                           |
+| ------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Purpose / 用途                  | Code splitting shortcut / 代码拆分快捷方式                                | Data fetching, code splitting, any async work / 数据获取、代码拆分、任何异步工作     |
+| Mechanism / 机制                | Returns an async component internally / 内部返回异步组件                  | Returns a Promise directly / 直接返回 Promise                                        |
+| Component function / 组件函数   | Synchronous wrapper (returns Promise) / 同步包装函数（返回 Promise）      | `async function` or returns Promise / `async function` 或返回 Promise                |
+| During loading / 加载期间       | Transparent wrapper `<div style="display: contents">` / 透明 wrapper      | Transparent wrapper `<div style="display: contents">` / 透明 wrapper                 |
+| Error handling / 错误处理       | Shows error text / 显示错误文本                                           | Developer `.catch()` or framework catch / 开发者 `.catch()` 或框架捕获               |
+| `onMount` timing / onMount 时机 | Fires when the real component mounts / 真实组件挂载时触发                 | Fires after Promise resolves and DOM is appended / Promise resolve 且 DOM 追加后触发 |
+| SSR                             | Not supported (async component under the hood) / 不支持（底层为异步组件） | Not supported / 不支持                                                               |
 
-They can be combined: a `lazy`-loaded module can export an async component. The `lazy` proxy handles the code loading, and when the real component runs, the framework handles the async rendering.
+`lazy` is syntax sugar. Internally, it creates an async component that loads the module and renders it. Use `lazy` for simple code splitting, or write an async component directly when you need more control. There is no functional difference — `lazy` is just less typing.
 
-它们可以组合使用：`lazy` 加载的模块可以导出一个异步组件。`lazy` 代理处理代码加载，当真实组件运行时，框架处理异步渲染。
-
-```jsx
-const Dashboard = lazy(() => import("./Dashboard"));
-
-// Dashboard.tsx
-export default async function Dashboard(props, { onMount }) {
-  const stats = await fetch("/api/stats").then((r) => r.json());
-  onMount(() => console.log("Dashboard ready"));
-  return <StatsPanel data={stats} />;
-}
-```
+`lazy` 是语法糖。内部创建了一个异步组件来加载模块并渲染。简单的代码拆分用 `lazy`，需要更多控制时直接写异步组件。功能上没有区别——`lazy` 只是少打几个字。
 
 ---
 
