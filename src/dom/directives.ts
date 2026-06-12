@@ -52,6 +52,13 @@ function renderEach(
 
   const sync = () => {
     const source = toVal(eachFn);
+    if (process.env.NODE_ENV !== "production") {
+      if (source == null) {
+        console.warn(new Error("[kiaao] each source is null or undefined."));
+      } else if (!Array.isArray(source) && typeof source !== "object") {
+        console.warn(new Error("[kiaao] each source should be an array or iterable object."));
+      }
+    }
     const entries = normalizeEachSource(source);
     const newKeys = new Set<any>();
 
@@ -99,7 +106,13 @@ function renderEach(
         }
         prevNode = node;
       } else {
-        const node = childFn(itemGetter, i, entryKey);
+        let node: any;
+        try {
+          node = childFn(itemGetter, i, entryKey);
+        } catch (err) {
+          console.error("[kiaao] each item render error:", err);
+          continue;
+        }
         if (node instanceof Node) {
           anchor.before(node);
           if (isConnected(container)) triggerMount(node);

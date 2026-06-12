@@ -88,11 +88,25 @@ export function disposeNode(node: Node): void {
 // ── mount / unmount ─────────────────────────────────────
 
 export function mount(root: Element, container: Element): void {
+  if (process.env.NODE_ENV !== "production") {
+    if (container.children.length > 0) {
+      console.warn(
+        new Error(
+          `[kiaao] mount target already has ${container.children.length} child node(s). Existing content will be preserved.`,
+        ),
+      );
+    }
+  }
   container.append(root);
   triggerMount(root);
 }
 
 export function unmount(root: Element): void {
+  if (process.env.NODE_ENV !== "production") {
+    if (!root.isConnected) {
+      console.warn(new Error("[kiaao] unmount called on already disconnected node."));
+    }
+  }
   disposeNode(root);
   root.remove();
 }

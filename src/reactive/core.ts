@@ -188,7 +188,12 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
   };
 
   // ── 初始计算 ──
-  state.cachedValue = state.computeFn(undefined);
+  try {
+    state.cachedValue = state.computeFn(undefined);
+  } catch (err) {
+    console.error("[kiaao] derive error during initial computation:", err);
+    state.cachedValue = undefined as any;
+  }
 
   // ── getter ──
   const getter = (() => state.cachedValue) as Getter<T>;
@@ -226,7 +231,13 @@ function triggerDerivations<T>(state: DefinitionState<T>): void {
  * @param setterValue 由 setter 传入的值（上游变化触发时为 undefined）
  */
 function recomputeDerivation(state: DerivationState<any>, setterValue?: any): void {
-  const newResult = state.computeFn(setterValue);
+  let newResult: any;
+  try {
+    newResult = state.computeFn(setterValue);
+  } catch (err) {
+    console.error("[kiaao] derive error during recomputation:", err);
+    return;
+  }
 
   if (newResult !== state.cachedValue) {
     state.cachedValue = newResult;

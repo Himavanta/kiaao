@@ -37,6 +37,11 @@ export function h(
 
   // 无效 tag → 注释占位节点
   if (typeof tag !== "string" && typeof tag !== "function") {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        new Error(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`),
+      );
+    }
     return createComment("") as unknown as Element;
   }
 
