@@ -4,13 +4,13 @@
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";
 import { h } from "../../src/dom/h.ts";
-import { mount, unmount, onMount, onUnmount } from "../../src/dom/component.ts";
+import { mount, unmount } from "../../src/dom/component.ts";
 
 describe("mount / unmount", () => {
   test("mount appends root to container and triggers onMount", () => {
     let mounted = false;
 
-    function Comp() {
+    function Comp(_: any, { onMount }: any) {
       onMount(() => {
         mounted = true;
       });
@@ -18,18 +18,18 @@ describe("mount / unmount", () => {
     }
 
     const el = h(Comp);
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
 
-    expect(document.body.contains(el)).toBe(true);
+    expect(document.body.contains(el as Node)).toBe(true);
     expect(mounted).toBe(true);
 
-    el.remove();
+    (el as Element).remove();
   });
 
   test("unmount removes root and triggers onUnmount", () => {
     let unmounted = false;
 
-    function Comp() {
+    function Comp(_: any, { onUnmount }: any) {
       onUnmount(() => {
         unmounted = true;
       });
@@ -37,12 +37,12 @@ describe("mount / unmount", () => {
     }
 
     const el = h(Comp);
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
     expect(unmounted).toBe(false);
 
-    unmount(el);
+    unmount(el as HTMLElement);
     expect(unmounted).toBe(true);
-    expect(document.body.contains(el)).toBe(false);
+    expect(document.body.contains(el as Node)).toBe(false);
   });
 });
 
@@ -57,10 +57,8 @@ describe("effect cleanup on unmount", () => {
     setCount(1);
     expect(el.textContent).toBe("1");
 
-    // Unmount
-    unmount(el);
+    unmount(el as HTMLElement);
 
-    // After unmount, the signal still updates but DOM should not change
     setCount(2);
     expect(el.textContent).toBe("1");
   });
@@ -70,44 +68,41 @@ describe("nested component lifecycle", () => {
   test("child component mount order", () => {
     const order: number[] = [];
 
-    function Child() {
+    function Child(_: any, { onMount }: any) {
       onMount(() => order.push(2));
       return h("span", null, "child");
     }
 
-    function Parent() {
+    function Parent(_: any, { onMount }: any) {
       onMount(() => order.push(1));
       return h("div", null, h(Child));
     }
 
     const el = h(Parent);
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
 
-    expect(order).toEqual([1, 2]); // parent before child
+    expect(order).toEqual([1, 2]);
 
-    unmount(el);
+    unmount(el as HTMLElement);
   });
 
   test("child component unmount order", () => {
     const order: number[] = [];
 
-    function Child() {
+    function Child(_: any, { onUnmount }: any) {
       onUnmount(() => order.push(2));
       return h("span", null, "child");
     }
 
-    function Parent() {
+    function Parent(_: any, { onUnmount }: any) {
       onUnmount(() => order.push(1));
       return h("div", null, h(Child));
     }
 
     const el = h(Parent);
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
 
-    unmount(el);
-    // disposeNode traverses bottom-up: child first, then parent
-    // But onUnmount on child reads from INSTANCE_KEY's unmountCallbacks
-    // The order is: child's unmountCallbacks, then parent's unmountCallbacks
+    unmount(el as HTMLElement);
     expect(order).toEqual([2, 1]);
   });
 });
@@ -131,7 +126,44 @@ describe("reactive signals from multiple components", () => {
     expect(el1.textContent).toBe("5");
     expect(el2.textContent).toBe("5");
 
-    el1.remove();
-    el2.remove();
+    (el1 as Element).remove();
+    (el2 as Element).remove();
+  });
+});
+
+describe("async component", () => {
+  test("async component renders after promise resolves", async () => {
+    async function AsyncComp(_: any, { onMount }: any) {
+      onMount(() => {
+        /* mounted */
+      });
+      const data = await Promise.resolve("hello");
+      return h("p", null, data);
+    }
+
+    const el = h(AsyncComp);
+
+    // 初始返回 wrapper（display:contents）
+    expect((el as HTMLElement).style.display).toBe("contents");
+
+    // 等待微任务
+    await new Promise((r) => setTimeout(r, 0));
+
+    // 真实内容应已就位
+    expect(el.textContent).toBe("hello");
+  });
+
+  test("async component can be disposed before resolve", async () => {
+    async function AsyncComp() {
+      await new Promise(() => {}); // 永不 resolve
+      return h("p", null, "never");
+    }
+
+    const el = h(AsyncComp);
+
+    unmount(el as HTMLElement);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(true).toBe(true);
   });
 });

@@ -4,7 +4,7 @@
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";
 import { h } from "../../src/dom/h.ts";
-import { mount, unmount, onMount, onUnmount } from "../../src/dom/component.ts";
+import { mount, unmount } from "../../src/dom/component.ts";
 
 describe("h — basic element creation", () => {
   test("creates element with tag name", () => {
@@ -91,7 +91,6 @@ describe("h — reactive bindings", () => {
     const [b, setB] = use("B");
     const el = h("div", null, a, b);
 
-    // 信号绑定创建的是 TextNode，不是 Element，需用 childNodes
     expect(el.childNodes.length).toBe(2);
     expect(el.childNodes[0].textContent).toBe("A");
     expect(el.childNodes[1].textContent).toBe("B");
@@ -145,7 +144,7 @@ describe("h — component mode", () => {
 describe("h — lifecycle", () => {
   test("onMount fires after mounting", () => {
     let mounted = false;
-    function Comp() {
+    function Comp(_: any, { onMount }: any) {
       onMount(() => {
         mounted = true;
       });
@@ -155,7 +154,7 @@ describe("h — lifecycle", () => {
     const el = h(Comp);
     expect(mounted).toBe(false);
 
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
     expect(mounted).toBe(true);
 
     el.remove();
@@ -163,7 +162,7 @@ describe("h — lifecycle", () => {
 
   test("onUnmount fires after unmount and dispose", () => {
     let unmounted = false;
-    function Comp() {
+    function Comp(_: any, { onUnmount }: any) {
       onUnmount(() => {
         unmounted = true;
       });
@@ -171,10 +170,10 @@ describe("h — lifecycle", () => {
     }
 
     const el = h(Comp);
-    mount(el, document.body);
+    mount(el as HTMLElement, document.body);
     expect(unmounted).toBe(false);
 
-    unmount(el);
+    unmount(el as HTMLElement);
     expect(unmounted).toBe(true);
   });
 });

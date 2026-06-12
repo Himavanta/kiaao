@@ -6,8 +6,8 @@ export { use, isUse, toUse, toVal } from "./reactive/core.ts";
 // DOM rendering
 export { h } from "./dom/h.ts";
 
-// Lifecycle & mount
-export { onMount, onUnmount, mount, unmount } from "./dom/component.ts";
+// Mount & unmount
+export { mount, unmount } from "./dom/component.ts";
 
 // Components
 export { Fragment } from "./dom/fragment.ts";

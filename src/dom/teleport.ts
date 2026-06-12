@@ -1,14 +1,17 @@
 // kiaao v4 — Teleport component
+// Renders content into a specified DOM container outside the component tree.
 
 import { SSR_COMPONENT } from "../reactive/types.ts";
-import { onUnmount, disposeNode, triggerMount } from "./component.ts";
+import type { ComponentContext } from "./h.ts";
+import { disposeNode, triggerMount } from "./component.ts";
 import { ssr } from "./ssr-helpers.ts";
 import { createComment, qs } from "./dom-utils.ts";
 
-export function Teleport(props: {
-  to: string | HTMLElement;
-  children: (() => any) | (() => any);
-}): Node {
+// eslint-disable-next-line @typescript-eslint/unbound-method
+export function Teleport(
+  props: { to: string | HTMLElement; children: (() => any) | (() => any) },
+  { onUnmount }: ComponentContext,
+): Node {
   const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;
   if (!target) return createComment("teleport-missing-target");
 

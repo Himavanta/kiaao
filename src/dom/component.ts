@@ -1,5 +1,5 @@
 // kiaao v4 — Component model & lifecycle (DOM)
-// Component stack, lifecycle hooks, mount/unmount, dispose.
+// Component instance creation, lifecycle hooks (via context), mount/unmount, dispose.
 
 import {
   DISPOSE_KEY,
@@ -10,23 +10,9 @@ import {
   type ComponentInstance,
 } from "../reactive/types.ts";
 
-// ── Component Stack ────────────────────────────────────
-// 在 h() 的组件模式执行期间维护，供 onMount/onUnmount 注册回调。
+// ── Component Instance ─────────────────────────────────
 
 let nextComponentId = 0;
-const componentStack: ComponentInstance[] = [];
-
-export function currentComponent(): ComponentInstance | undefined {
-  return componentStack[componentStack.length - 1] ?? undefined;
-}
-
-export function pushComponent(inst: ComponentInstance): void {
-  componentStack.push(inst);
-}
-
-export function popComponent(): void {
-  componentStack.pop();
-}
 
 export function createComponentInstance(): ComponentInstance {
   return {
@@ -37,19 +23,17 @@ export function createComponentInstance(): ComponentInstance {
   };
 }
 
-// ── Lifecycle Hooks ────────────────────────────────────
+// ── Safe Call ──────────────────────────────────────────
+// 统一执行生命周期回调，捕获同步错误和异步 rejection。
 
-export function onMount(fn: () => void): void {
-  const comp = currentComponent();
-  if (comp) {
-    comp.mountCallbacks.push(fn);
-  }
-}
-
-export function onUnmount(fn: () => void): void {
-  const comp = currentComponent();
-  if (comp) {
-    comp.unmountCallbacks.push(fn);
+export function safeCall(fn: () => void | Promise<void>, label: string): void {
+  try {
+    const result = fn();
+    if (result instanceof Promise) {
+      result.catch((err) => console.error(`[kiaao] ${label}:`, err));
+    }
+  } catch (err) {
+    console.error(`[kiaao] ${label}:`, err);
   }
 }
 
@@ -61,7 +45,7 @@ export function createDisposeFn(instance: ComponentInstance): () => void {
     (instance as any)[DISPOSED_KEY] = true;
 
     for (const cb of instance.unmountCallbacks) {
-      cb();
+      safeCall(cb, "onUnmount");
     }
 
     for (const stop of instance.effectStops) {
@@ -77,7 +61,7 @@ export function triggerMount(node: Node): void {
   if (instance && !(instance as any)[INITIALIZED_KEY]) {
     (instance as any)[INITIALIZED_KEY] = true;
     for (const cb of instance.mountCallbacks) {
-      cb();
+      safeCall(cb, "onMount");
     }
   }
 
