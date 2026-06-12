@@ -1,4 +1,4 @@
-# kiaao 框架规范 v4.0（更新）
+# kiaao 框架规范 v4.1
 
 **宣传语**：更少的概念，更少的编译，更多的控制，更高的性能。
 
@@ -10,7 +10,7 @@
 
 ### 数据平权
 
-所有数据都是信号，所有信号都由 `use` 产生，所有消费都通过 `getter()` 完成。不存在“原始值”和“响应式值”的区分，不存在“可写信号”和“只读信号”在 API 层面的区分——所有信号都返回 `[getter, setter]`。
+所有数据都是信号，所有信号都由 `use` 产生，所有消费都通过 `getter()` 完成。不存在"原始值"和"响应式值"的区分，不存在"可写信号"和"只读信号"在 API 层面的区分——所有信号都返回 `[getter, setter]`。
 
 ### 一切皆派生
 
@@ -31,6 +31,10 @@
 ### 原生控制流
 
 控制流通过 `h()` 的属性指令实现，直接依附于原生 DOM 元素，而非独立的组件。这保证了动态内容始终处于宿主元素的 `childNodes` 中，`disposeNode` 沿 DOM 树的递归路径自然可抵达所有动态节点。
+
+### 显式上下文
+
+组件实例上下文通过函数参数显式传递，而非依赖全局栈。生命周期 API 是组件实例的方法，不是从框架导入的全局函数。这从根本上消除了异步执行导致的上下文归属问题。
 
 ---
 
@@ -172,7 +176,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, S
 使用场景：组件适配外部参数，使内部逻辑统一。
 
 ```js
-function Slider(props) {
+function Slider(props, { onMount, onUnmount }) {
   const [value, setValue] = toUse(props.value);
   // 内部统一使用 value() 读取，setValue() 更新
 }
@@ -247,35 +251,133 @@ JSX 的 `<>...</>` 语法由编译器解析为 `Fragment` 组件（`h(Fragment, 
 
 ### 3.2 组件模式（`tag` 为函数）
 
-创建组件实例并压入 `currentComponent` 栈，执行 `tag(props)`，返回真实 DOM 节点。组件函数只执行一次。
+组件函数签名从 `(props)` 变更为 `(props, context)`。
+
+#### 3.2.1 组件函数签名
+
+```ts
+interface ComponentContext {
+  onMount(fn: () => void | Promise<void>): void;
+  onUnmount(fn: () => void | Promise<void>): void;
+}
+
+type ComponentFunction<P = any> = (
+  props: P,
+  context: ComponentContext,
+) => HTMLElement | Promise<HTMLElement>;
+```
+
+#### 3.2.2 同步组件
+
+当组件函数返回 `Node` 实例时，为同步组件。流程：
+
+1. 创建组件实例，构建 `context` 对象。
+2. 调用 `tag(props, context)`，同步获取返回的 DOM 节点。
+3. 若返回值为 `Node`，在结果节点上挂载 `INSTANCE_KEY` 和 `DISPOSE_KEY`。
+4. 若返回值非 `Node`，创建注释节点作为占位，并挂载实例关联（防御性兜底）。
+5. 返回 DOM 节点。
+
+#### 3.2.3 异步组件
+
+当组件函数返回 `Promise` 时，为异步组件。流程：
+
+1. 创建组件实例，构建 `context` 对象。
+2. 调用 `tag(props, context)`，获取返回的 Promise。
+3. 创建 wrapper 元素（`<div style="display: contents">`），挂载 `DISPOSE_KEY`。
+4. 注册 `disposed` 标志位，防止卸载后 Promise resolve 继续操作。
+5. 等待 Promise resolve：
+   - 检查 `disposed`，若已卸载则跳过。
+   - 检查 `realDOM instanceof Node`，非法值降级为注释节点。
+   - 将 `realDOM` 作为子节点插入 wrapper。
+   - 调用 `triggerMount(realDOM)` 递归触发子树中所有同步子组件的挂载回调。
+   - 手动触发当前异步组件自身的 `mountCallbacks`。
+6. Promise reject 时打印错误，生产模式保留空 wrapper。
+7. 返回 wrapper。
+
+wrapper 不设置 `INSTANCE_KEY`，因此 `triggerMount(wrapper)` 递归不会提前触发异步组件的挂载回调。wrapper 从创建到卸载始终是组件的根节点，持有 `DISPOSE_KEY`。`realDOM` 仅作为普通子节点插入，不接管组件级别的元数据。
 
 ---
 
-## 四、内置组件
+## 四、生命周期
+
+生命周期 API 通过 `context` 参数传入组件函数，不再从框架中导入。
+
+### 4.1 `onMount(fn)`
+
+注册组件挂载完成后的回调。可在任何位置调用，只要组件实例尚未销毁。
+
+**执行时机**：
+
+| 调用时组件状态 | 行为                                                      |
+| -------------- | --------------------------------------------------------- |
+| 尚未挂载       | `fn` 被推入 `mountCallbacks` 队列，等待挂载完成后统一触发 |
+| 已挂载         | `fn` 立即同步执行                                         |
+
+- **同步组件**："挂载完成"指 `triggerMount` 递归遍历到该组件根节点时，DOM 已插入文档。
+- **异步组件**："挂载完成"指 Promise resolve 且真实 DOM 插入 wrapper 后，`triggerMount(realDOM)` 递归触发子树完毕，再手动触发当前组件自身的 `mountCallbacks`。此时真实内容已就位，子树中已就位的同步子孙组件均已挂载完毕。
+- `fn` 可以是同步函数或 async 函数。框架不等待其完成。内部错误由 `safeCall` 捕获并打印。
+- 若在组件已挂载后调用 `onMount`，`fn` 立即执行。
+- 若在组件已销毁后调用，开发模式警告并忽略，生产模式静默忽略。
+
+**异步组件与同步组件的 `onMount` 触发顺序**：
+
+- **同步组件**：`triggerMount` 深度优先前序遍历，父组件先于子组件触发 `onMount`。
+- **异步组件**：resolve 后先 `triggerMount(realDOM)` 递归触发子树中的所有同步子组件，再触发当前异步组件自身的 `mountCallbacks`。子组件先于父异步组件触发 `onMount`。
+
+两者的机制不同，但保证一个不变量：**父组件的 `onMount` 回调执行时，所有已就位的子组件的 `onMount` 都已经触发完毕。**
+
+嵌套异步子组件尚未 resolve 时，其 `onMount` 尚未触发——这是异步并发模型的自然结果，并非框架缺陷。
+
+### 4.2 `onUnmount(fn)`
+
+注册组件销毁前的清理回调。可在任何位置调用，只要组件实例尚未销毁。
+
+**执行时机**：组件卸载时，`createDisposeFn` 使用 `safeCall` 执行所有已注册的 `onUnmount` 回调。此时组件的 DOM 仍存在于文档中，所有响应式绑定仍有效。
+
+- `fn` 可以是同步函数或 async 函数。框架不等待其完成。内部错误由 `safeCall` 捕获并打印。
+- 若在组件已销毁后调用，开发模式警告并忽略，生产模式静默忽略。
+
+### 4.3 `mount(root, container)` / `unmount(root)`
+
+显式挂载/卸载组件树。
+
+- `mount(root, container)`：将 `root` 添加到 `container`，调用 `triggerMount(root)` 递归触发所有 `onMount` 回调。
+- `unmount(root)`：调用 `disposeNode(root)` 递归清理所有资源（`LOCAL_EFFECTS`、`DISPOSE_KEY`），然后从 DOM 中移除 `root`。
+
+### 4.4 模块级工具函数 `safeCall`
+
+`safeCall(fn, label)` 是模块级工具函数，用于统一执行生命周期回调，捕获同步错误和异步 rejection。
+
+```ts
+export function safeCall(fn: () => void | Promise<void>, label: string): void {
+  try {
+    const result = fn();
+    if (result instanceof Promise) {
+      result.catch((err) => console.error(`[kiaao] ${label}:`, err));
+    }
+  } catch (err) {
+    console.error(`[kiaao] ${label}:`, err);
+  }
+}
+```
+
+用于 `createDisposeFn` 执行 `unmountCallbacks` 和 `h()` 执行 `mountCallbacks`。
+
+---
+
+## 五、内置组件
 
 ### `<Teleport to={...}>`
 
-将子内容渲染到指定 DOM 容器（CSS 选择器或元素），逻辑上仍属于当前组件树，卸载时自动清除。
+将子内容渲染到指定 DOM 容器（CSS 选择器或元素），逻辑上仍属于当前组件树，卸载时自动清除。需从 `context` 参数中解构生命周期 API。
 
 ### `lazy(loader)`
 
-异步加载组件，配合 `import()` 使用。初始渲染占位注释，加载完成后替换为真实组件。
+异步加载组件，配合 `import()` 使用。初始渲染占位注释，加载完成后替换为真实组件。`lazy` 本身是同步组件（返回 Proxy），不依赖异步组件机制。
 
 ### `Fragment`
 
 渲染为 `<div style="display: contents">`，其 `children` 正常处理。JSX 的 `<>...</>` 语法经编译器转换后调用此组件。
-
----
-
-## 五、生命周期与挂载
-
-### `onMount(fn)` / `onUnmount(fn)`
-
-注册组件挂载/卸载回调，必须在组件函数顶层同步调用。
-
-### `mount(root, container)` / `unmount(root)`
-
-显式挂载/卸载组件树，触发相应生命周期和资源清理。
 
 ---
 
@@ -309,15 +411,18 @@ JSX 的 `<>...</>` 语法由编译器解析为 `Fragment` 组件（`h(Fragment, 
 
 ## 八、与 v3.4 的差异对照
 
-| 维度          | v3.4                                            | v4.0                                           |
-| ------------- | ----------------------------------------------- | ---------------------------------------------- |
-| 创建可写信号  | `define(init)` → `[get, set]`                   | `use(init)` → `[get, set]`                     |
-| 创建派生信号  | `derive(fn)` → `getter`                         | `use(...deps, fn)` → `[get, set]`              |
-| 副作用        | `effect(fn)` → `stop`                           | 派生模式（不接收返回值），返回 `[get, set]`    |
-| 细粒度订阅    | `getter(selector)`                              | `use(signal, fn)`                              |
-| 返回值结构    | 不一致（定义/派生/副作用各不同）                | 完全一致（均为元组）                           |
-| 核心 API 数量 | 4 (define/derive/effect/h)                      | 3 (use/h 及辅助)                               |
-| Fragment 处理 | 不支持，`<>...</>` 编译为 null tag 后无特殊处理 | `Fragment` 组件渲染为 `display: contents` 容器 |
+| 维度          | v3.4                                            | v4.1                                            |
+| ------------- | ----------------------------------------------- | ----------------------------------------------- |
+| 创建可写信号  | `define(init)` → `[get, set]`                   | `use(init)` → `[get, set]`                      |
+| 创建派生信号  | `derive(fn)` → `getter`                         | `use(...deps, fn)` → `[get, set]`               |
+| 副作用        | `effect(fn)` → `stop`                           | 派生模式（不接收返回值），返回 `[get, set]`     |
+| 细粒度订阅    | `getter(selector)`                              | `use(signal, fn)`                               |
+| 生命周期注册  | `import { onMount, onUnmount } from 'kiaao'`    | 通过 `context` 参数解构                         |
+| 组件函数签名  | `(props)`                                       | `(props, context)`                              |
+| 异步组件      | 不支持                                          | 返回 Promise 即为异步组件                       |
+| 返回值结构    | 不一致（定义/派生/副作用/生命周期各不同）       | 完全一致（均为元组），生命周期通过 context 方法 |
+| 核心概念数量  | 4 (define/derive/effect/h) + 生命周期           | 3 (use/h 及辅助) + context                      |
+| Fragment 处理 | 不支持，`<>...</>` 编译为 null tag 后无特殊处理 | `Fragment` 组件渲染为 `display: contents` 容器  |
 
 ---
 
@@ -335,9 +440,9 @@ JSX 的 `<>...</>` 语法由编译器解析为 `Fragment` 组件（`h(Fragment, 
 
 ## 十、代码量估算
 
-核心响应式 + 辅助函数 + 集成适配约 200 行，`h()` 及相关指令、属性处理保持不变（约 120 行），总体核心代码量在 350 行左右。
+核心响应式 + 辅助函数 + 生命周期 + 异步组件支持约 250 行，`h()` 及相关指令、属性处理保持不变（约 120 行），总体核心代码量在 400 行左右。
 
 ---
 
-**文档版本**：v4.0  
+**文档版本**：v4.1  
 **状态**：定稿，依据已实现的代码库撰写
