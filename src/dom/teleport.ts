@@ -8,7 +8,7 @@ import { ssr } from "./ssr-helpers.ts";
 import { createComment, qs } from "./dom-utils.ts";
 
 export function Teleport(
-  props: { to: string | HTMLElement; children: (() => any) | any },
+  props: { to: string | HTMLElement; children: any },
   { onUnmount }: ComponentContext,
 ): Node {
   const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;

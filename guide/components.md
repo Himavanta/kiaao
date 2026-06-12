@@ -90,6 +90,24 @@ const CounterB = createCounter();
 
 ---
 
+## Lifecycle / 生命周期
+
+Lifecycle hooks are not imported — they come from the `context` object, the second argument to every component function. See the Lifecycle guide for full details.
+
+生命周期钩子不再从框架导入——它们来自每个组件函数的第二个参数 `context` 对象。详见生命周期引导文档。
+
+```jsx
+function App(props, { onMount, onUnmount }) {
+  onMount(() => console.log("mounted"));
+  onUnmount(() => console.log("unmounting"));
+  return <div>Hello</div>;
+}
+```
+
+- [Lifecycle / 生命周期](./lifecycle.md)
+
+---
+
 ## Exposing the DOM / 暴露 DOM
 
 A component returns a real DOM element. There is no `ref` forwarding, no `forwardRef`, no `defineExpose`. You can interact with the returned element directly.
@@ -193,8 +211,6 @@ import { Teleport } from "kiaao";
 function Modal() {
   const [open, setOpen] = use(false);
 
-  onUnmount(() => console.log("Modal unmounted"));
-
   return (
     <div>
       <button onClick={() => setOpen((o) => !o)}>Toggle</button>
@@ -214,47 +230,52 @@ The `to` prop accepts a CSS selector string or a DOM element. If the target does
 
 ---
 
-## `lazy` / 异步组件
+## `lazy` / 代码拆分
 
-`lazy(fn)` wraps a dynamically imported component for code splitting. It returns a proxy component. During loading, a placeholder comment node is rendered. When the module resolves, the placeholder is replaced with the real component.
+`lazy(fn)` wraps a dynamically imported component for code splitting. It returns a proxy component that renders a placeholder comment node until the module loads, then replaces it with the real component. `lazy` itself is a synchronous component — the asynchronous loading happens outside the component function.
 
-`lazy(fn)` 包装动态导入的组件以实现代码拆分。它返回一个代理组件。加载期间渲染一个占位注释节点。模块解析完成后，占位符被替换为真实组件。
+`lazy(fn)` 包装动态导入的组件以实现代码拆分。它返回一个代理组件，在模块加载期间渲染占位注释节点，完成后替换为真实组件。`lazy` 本身是同步组件——异步加载发生在组件函数外部。
 
 ```jsx
 import { lazy } from "kiaao";
 
 const HeavyProfile = lazy(() => import("./HeavyProfile"));
-const HeavySettings = lazy(() => import("./HeavySettings"));
 
 function App() {
-  return (
-    <div>
-      <HeavyProfile userId={42} />
-      <HeavySettings />
-    </div>
-  );
+  return <HeavyProfile userId={42} />;
 }
 ```
 
-The loader function should return a Promise that resolves to a module with a `default` export, or to a component function directly. If the Promise rejects, the error is thrown and can be caught by an error boundary.
+For components that need to `await` data before rendering, see Async Components. `lazy` is specifically for code splitting — it does not support `await` inside the component function.
 
-loader 函数应返回一个 Promise，resolve 为带有 `default` 导出的模块，或直接 resolve 为组件函数。如果 Promise 被拒绝，错误会被抛出，可由错误边界捕获。
+对于需要在渲染前 `await` 数据的组件，参见异步组件。`lazy` 专门用于代码拆分——它不支持在组件函数内部使用 `await`。
+
+---
+
+## Async Components / 异步组件
+
+A component function that returns a Promise is an async component. The framework automatically wraps it in a transparent container and defers `onMount` until the promise resolves. This is a first-class feature, not a wrapper API — just return a Promise from your component.
+
+返回 Promise 的组件函数即为异步组件。框架自动将其包裹在透明容器中，并将 `onMount` 延迟到 Promise resolve 之后。这是一等公民特性，而非包装 API——直接从组件中返回 Promise 即可。
 
 ```jsx
-// Typical usage with dynamic import
-// 动态导入的典型用法
-const MyComponent = lazy(() => import("./MyComponent"));
-
-// The loader can also return a component directly
-// loader 也可以直接返回组件
-const MyComponent = lazy(async () => {
-  const data = await fetchConfig();
-  return function LoadedComponent() {
-    /* ... */
-  };
-});
+async function DataLoader(props, { onMount }) {
+  const data = await fetch("/api");
+  onMount(() => console.log("ready"));
+  return <div>{data}</div>;
+}
 ```
 
-Each `lazy` call creates a proxy that can be used as a component. Multiple instances share the same module — the loader runs only once.
+See the full guide for details on wrapper behavior, mount order, error handling, and SSR limitations.
 
-每个 `lazy` 调用创建一个可作为组件使用的代理。多个实例共享同一个模块——loader 只执行一次。
+完整的异步组件指南涵盖 wrapper 行为、挂载顺序、错误处理和 SSR 限制。
+
+- [Async Components / 异步组件](./async-components.md)
+
+---
+
+Now that you know how to build components, learn about control flow for conditional and list rendering. / 现在你知道了如何构建组件，继续了解条件渲染和列表渲染的控制流。
+
+- [Control Flow / 控制流](./control-flow.md)
+- [Lifecycle / 生命周期](./lifecycle.md)
+- [SSR / 服务端渲染](./ssr.md)

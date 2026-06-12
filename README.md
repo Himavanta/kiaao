@@ -105,6 +105,7 @@ console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，�
 
 - [Reactivity / 响应式系统](./guide/reactivity.md)
 - [Components / 组件](./guide/components.md)
+- [Async Components / 异步组件](./async-components.md)
 - [Attributes / 属性处理](./guide/attributes.md)
 - [Control Flow / 控制流](./guide/control-flow.md)
 - [Lifecycle / 生命周期](./guide/lifecycle.md)
