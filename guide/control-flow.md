@@ -6,15 +6,17 @@ In kiaao, conditional rendering and list rendering are achieved through `when` a
 
 `when` and `each` work only on native HTML elements (string tags). They cannot be used on component functions. If you need conditional or list rendering inside a component, apply the attribute to an element returned by that component.
 
-`when` 和 `each` 仅对原生 HTML 元素（字符串标签）生效，不能在组件函数上使用。如果需要在组件内部进行条件或列表渲染，请将指令应用在组件返回的元素上。
+**Important:** In kiaao, only signal getters (created by `use`) are callable. Plain functions passed as prop values are treated as static values — they are never called automatically. To create a reactive `when` condition or `each` source, always use a signal, not a plain function.
+
+**重要：** 在 kiaao 中，只有信号 getter（由 `use` 创建）是可调用的。普通函数作为 prop 值传入时被视为静态值——永远不会被自动调用。要创建响应式的 `when` 条件或 `each` 数据源，始终使用信号而非普通函数。
 
 ---
 
 ## `when` — Conditional Rendering / 条件渲染
 
-The `when` attribute controls whether the host element's children are rendered. The host element itself stays in the DOM regardless of the condition. `when` accepts a signal (a getter created by `use`) or a plain function. If a signal is passed, changes to that signal automatically update the rendered children. If a plain function is passed, it is evaluated once at initialization and will not be reactive.
+The `when` attribute controls whether the host element's children are rendered. The host element itself stays in the DOM regardless of the condition. `when` accepts a signal (a getter created by `use`) or any static value. If a signal is passed, changes to that signal automatically update the rendered children. Static values (including plain functions) are used as-is — a plain function is treated as a truthy value, never called.
 
-`when` 属性控制宿主元素的子节点是否渲染。宿主元素本身始终存在于 DOM 中，不受条件影响。`when` 接受一个信号（由 `use` 创建的 getter）或一个普通函数。如果传入信号，该信号的变化会自动更新渲染的子节点。如果传入普通函数，它只在初始化时执行一次，不会产生响应式更新。
+`when` 属性控制宿主元素的子节点是否渲染。宿主元素本身始终存在于 DOM 中，不受条件影响。`when` 接受一个信号（由 `use` 创建的 getter）或任何静态值。如果传入信号，该信号的变化会自动更新渲染的子节点。静态值（包括普通函数）直接使用——普通函数作为 truthy 值处理，不会被执行。
 
 ### Boolean Mode / 布尔模式
 
