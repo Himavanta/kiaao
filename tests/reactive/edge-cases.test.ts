@@ -2,14 +2,7 @@
 // kiaao v4 — Reactive core edge cases & stress tests
 
 import { expect, test, describe } from "vite-plus/test";
-import {
-  use,
-  isUse,
-  toUse,
-  toValue,
-  setRenderMode,
-  getRenderMode,
-} from "../../src/reactive/core.ts";
+import { use, isUse, toValue, setRenderMode, getRenderMode } from "../../src/reactive/core.ts";
 
 // ── Deep Derivation Chain ─────────────────────────────
 
@@ -108,28 +101,28 @@ describe("null/undefined signal values", () => {
   });
 });
 
-// ── toUse / toValue edge cases ──────────────────────────
+// ── use / toValue edge cases ──────────────────────────
 
-describe("toUse / toValue edge cases", () => {
-  test("toUse on signal multiple times returns same getter", () => {
+describe("use / toValue edge cases", () => {
+  test("use on signal multiple times returns same getter", () => {
     const [count] = use(0);
-    const [a] = toUse(count);
-    const [b] = toUse(count);
+    const [a] = use(count);
+    const [b] = use(count);
     expect(a).toBe(b);
     expect(a).toBe(count);
   });
 
-  test("toUse on non-signal creates independent copies", () => {
-    const [a] = toUse(42);
-    const [b] = toUse(42);
+  test("use on non-signal creates independent copies", () => {
+    const [a] = use(42);
+    const [b] = use(42);
     expect(a).not.toBe(b);
     expect(a()).toBe(42);
     expect(b()).toBe(42);
   });
 
-  test("toUse same non-signal value creates different signals", () => {
-    const [x] = toUse(10);
-    const [y] = toUse(10);
+  test("use same non-signal value creates different signals", () => {
+    const [x] = use(10);
+    const [y] = use(10);
     expect(x).not.toBe(y);
   });
 

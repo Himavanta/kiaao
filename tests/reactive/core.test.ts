@@ -2,14 +2,7 @@
 // Platform-agnostic: No DOM environment needed.
 
 import { expect, test, describe } from "vite-plus/test";
-import {
-  use,
-  isUse,
-  toUse,
-  toValue,
-  setRenderMode,
-  getRenderMode,
-} from "../../src/reactive/core.ts";
+import { use, isUse, toValue, setRenderMode, getRenderMode } from "../../src/reactive/core.ts";
 import { REACTIVE } from "../../src/reactive/types.ts";
 
 // ── Helpers ───────────────────────────────────────────
@@ -321,11 +314,11 @@ describe("isUse", () => {
   });
 });
 
-// ── toUse ─────────────────────────────────────────────
+// ── use ─────────────────────────────────────────────
 
-describe("toUse", () => {
+describe("use", () => {
   test("non-signal value creates a new signal", () => {
-    const [val, setVal] = toUse(42);
+    const [val, setVal] = use(42);
     expect(val()).toBe(42);
     expect(isUse(val)).toBe(true);
 
@@ -335,7 +328,7 @@ describe("toUse", () => {
 
   test("existing definition signal returns same getter and its setter", () => {
     const [count, setCount] = use(0);
-    const [val, setVal] = toUse(count);
+    const [val, setVal] = use(count);
 
     expect(val).toBe(count); // same getter
     expect(setVal).toBe(setCount); // same setter
@@ -348,14 +341,14 @@ describe("toUse", () => {
   test("existing derivation signal returns same getter and its setter", () => {
     const [count] = use(5);
     const [double, setDouble] = use(count, () => count() * 2);
-    const [val, setVal] = toUse(double);
+    const [val, setVal] = use(double);
 
     expect(val).toBe(double);
     expect(setVal).toBe(setDouble);
   });
 
   test("string value creates signal", () => {
-    const [val, setVal] = toUse("hello");
+    const [val, setVal] = use("hello");
     expect(val()).toBe("hello");
     setVal("world");
     expect(val()).toBe("world");
@@ -363,7 +356,7 @@ describe("toUse", () => {
 
   test("object value creates signal", () => {
     const obj = { a: 1 };
-    const [val] = toUse(obj);
+    const [val] = use(obj);
     expect(val()).toBe(obj);
   });
 });
@@ -477,10 +470,10 @@ describe("edge cases", () => {
     expect(final()).toBe(6);
   });
 
-  test("toUse with non-signal followed by signal returns correct setter", () => {
-    // toUse(42) creates a signal, then toUse on it returns same setter
-    const [v1, s1] = toUse(42);
-    const [v2, s2] = toUse(v1);
+  test("use with non-signal followed by signal returns correct setter", () => {
+    // use(42) creates a signal, then use on it returns same setter
+    const [v1, s1] = use(42);
+    const [v2, s2] = use(v1);
 
     expect(v1).toBe(v2);
     expect(s1).toBe(s2);

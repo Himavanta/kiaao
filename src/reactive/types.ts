@@ -30,9 +30,13 @@ export const SSR_COMPONENT = Symbol("kiaao.ssr");
 
 // ── Public API Types ───────────────────────────────────
 
+/** @internal 用于类型层面区分信号和普通函数的 brand */
+export declare const GETTER_BRAND: unique symbol;
+
 /** 信号读取函数 */
 export interface Getter<T> {
   (): T;
+  readonly [GETTER_BRAND]: true;
 }
 
 /** 信号写入函数 */
@@ -51,6 +55,8 @@ export interface DefinitionState<T> {
   value: T;
   subs: Set<DerivationState<any>>;
   set: Setter<T>;
+  /** 定义模式无上游依赖，stop 为空操作 */
+  stop: () => void;
 }
 
 /**

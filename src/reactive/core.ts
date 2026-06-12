@@ -1,4 +1,4 @@
-// kiaao v4 — Reactive core: use, isUse, toUse, toValue
+// kiaao v4 — Reactive core: use, isUse, toValue
 // Platform-agnostic. No DOM dependencies.
 
 import {
@@ -39,24 +39,6 @@ export function isUse(v: any): boolean {
 // ── Value Normalization ────────────────────────────────
 
 /**
- * 将任意值规范化为 [getter, setter] 信号元组。
- *
- * - 若 v 已是信号：返回 [v, v[REACTIVE].set]（复用已有 getter 和 setter）
- * - 若 v 非信号：等价于 use(v)，创建新信号
- *
- * 由于所有信号（含派生信号）都有 setter，此函数永远安全。
- */
-export function toUse<T>(v: Getter<T>): [Getter<T>, Setter<T>];
-export function toUse<T>(v: T): [Getter<T>, Setter<T>];
-export function toUse(v: any): any {
-  if (isUse(v)) {
-    const state = (v as any)[REACTIVE] as { set: Setter<any> };
-    return [v, state.set];
-  }
-  return use(v);
-}
-
-/**
  * 将任意值解包为原始 JavaScript 值。
  * - 若 v 是信号：调用 v() 返回当前值
  * - 否则：原样返回 v
@@ -85,11 +67,19 @@ export function toValue(v: any): any {
 
 // ── 类型重载 ──
 
+export function use<T>(signal: Getter<T>): [Getter<T>, Setter<T>];
 export function use<T>(initialValue: T): [Getter<T>, Setter<T>];
 export function use<T>(...deps: [...Getter<any>[], (v?: any) => T]): [Getter<T>, Setter<T>];
 export function use(...args: any[]): any {
+  // 一元调用：可能是创建新信号，也可能是收到一个已有信号
   if (args.length === 1) {
-    return definitionMode(args[0]);
+    const val = args[0];
+    // 如果是信号，直接返回（吸收 toUse）
+    if (isUse(val)) {
+      const state = (val as any)[REACTIVE] as { set: Setter<any> };
+      return [val, state.set];
+    }
+    return definitionMode(val);
   }
   return derivationMode(...args);
 }
@@ -111,6 +101,7 @@ function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
     value: initialValue,
     subs: new Set(),
     set: null as any,
+    stop: () => {},
   };
 
   const getter = (() => state.value) as Getter<T>;

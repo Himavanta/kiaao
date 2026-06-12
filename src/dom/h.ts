@@ -1,9 +1,8 @@
 // kiaao v4 — h() function: creates real DOM or dispatches to hSSR in SSR mode
 // Component mode supports both sync and async components via context-based lifecycle.
 
-import { getRenderMode } from "../reactive/core.ts";
-import { isUse } from "../reactive/core.ts";
-import { DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
+import { getRenderMode, isUse, use as globalUse } from "../reactive/core.ts";
+import { REACTIVE, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
 import type { ComponentInstance } from "../reactive/types.ts";
 import {
   createComponentInstance,
@@ -23,6 +22,7 @@ import { createElement, createComment } from "./dom-utils.ts";
 export interface ComponentContext {
   onMount: (fn: () => void | Promise<void>) => void;
   onUnmount: (fn: () => void | Promise<void>) => void;
+  use: typeof globalUse;
 }
 
 export type ComponentFunction<P = any> = (
@@ -30,9 +30,42 @@ export type ComponentFunction<P = any> = (
   context: ComponentContext,
 ) => Node | Promise<Node>;
 
+// ── Safe Signal ───────────────────────────────────────
+// 组件已销毁后返回的无操作信号
+
+function createSafeSignal(): [() => undefined, (v?: any) => void] {
+  const noop = () => {};
+  (noop as any)[REACTIVE] = { value: undefined, subs: new Set(), set: noop, stop: () => {} };
+  return [() => undefined, noop];
+}
+
 // ── Context Creator ─────────────────────────────────
 
 function createComponentContext(instance: ComponentInstance): ComponentContext {
+  const contextUse = (...args: any[]): any => {
+    if ((instance as any)[DISPOSED_KEY]) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[kiaao] context.use called after component disposed");
+      }
+      return createSafeSignal();
+    }
+
+    const result = (globalUse as (...a: any[]) => any)(...args);
+    const getter = result[0];
+
+    // 引用已有信号，不注册清理
+    if (args.length === 1 && isUse(args[0]) && result[0] === args[0]) {
+      return result;
+    }
+
+    // 创建了新资源，注册 stop 到组件实例
+    const stop = (getter as any)[REACTIVE].stop;
+    if (typeof stop === "function") {
+      instance.unmountCallbacks.push(stop);
+    }
+    return result;
+  };
+
   return {
     onMount: (fn) => {
       if ((instance as any)[DISPOSED_KEY]) {
@@ -56,6 +89,7 @@ function createComponentContext(instance: ComponentInstance): ComponentContext {
       }
       instance.unmountCallbacks.push(fn);
     },
+    use: contextUse,
   };
 }
 
