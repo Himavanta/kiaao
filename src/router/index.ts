@@ -51,8 +51,8 @@ export interface Router {
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
   currentPath: Getter<string>;
-  /** Query parameters from current URL. */
-  currentParams: () => Record<string, string>;
+  /** Current URL query parameters signal (getter) */
+  currentParams: Getter<Record<string, string>>;
   /** Declarative navigation link component. */
   Link: (props: RouterLinkProps) => Node;
 }
@@ -139,7 +139,7 @@ export function createRouter(options: RouterOptions = {}): Router {
     );
   }
 
-  function currentParams(): Record<string, string> {
+  const [currentParams] = use(currentPath, () => {
     const params: Record<string, string> = {};
     const search = getSearch();
     if (search) {
@@ -148,7 +148,7 @@ export function createRouter(options: RouterOptions = {}): Router {
       });
     }
     return params;
-  }
+  });
 
   return { RouterView, navigate, currentPath, currentParams, Link };
 }
