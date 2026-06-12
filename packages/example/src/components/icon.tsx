@@ -1,4 +1,4 @@
-import { use, toVal, romise } from "kiaao";
+import { use, toVal } from "kiaao";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -34,22 +34,23 @@ function fetchRaw(name: string): Promise<IconifyResponse> {
 // ── Component ──────────────────────────────────────────
 
 export default function Icon(props: Record<string, any>) {
+  const [data, setData] = use<IconData | null>(null);
   const { icon, ...svgProps } = props;
 
-  const { data } = romise(() => {
-    const name = toVal(icon);
-    if (!name) return Promise.resolve(null);
-
-    return fetchRaw(name).then((res) => {
-      const entry = res.icons[name.split(":")[1]];
-      if (!entry) throw new Error(`Icon not found: ${name}`);
-      return {
-        body: entry.body,
-        width: entry.width || res.width || 24,
-        height: entry.height || res.height || 24,
-      } as IconData;
-    });
-  });
+  const name = toVal(icon);
+  if (name) {
+    fetchRaw(name)
+      .then((res) => {
+        const entry = res.icons[name.split(":")[1]];
+        if (!entry) throw new Error(`Icon not found: ${name}`);
+        setData({
+          body: entry.body,
+          width: entry.width || res.width || 24,
+          height: entry.height || res.height || 24,
+        });
+      })
+      .catch((err) => console.error("[icon] failed to load:", err));
+  }
 
   const [body] = use(data, () => data()?.body ?? "");
   const [viewBox] = use(data, () => {

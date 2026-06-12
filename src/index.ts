@@ -15,7 +15,6 @@ export { Teleport } from "./dom/teleport.ts";
 export { lazy } from "./dom/lazy.ts";
 
 // Async utilities
-export { romise } from "./dom/async.ts";
 
 // JSX runtime
 export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
