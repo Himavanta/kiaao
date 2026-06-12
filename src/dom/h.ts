@@ -18,6 +18,11 @@ export interface ComponentContext {
   onUnmount: (fn: () => void | Promise<void>) => void;
 }
 
+export type ComponentFunction<P = any> = (
+  props: P,
+  context: ComponentContext,
+) => Node | Promise<Node>;
+
 // ── h() ────────────────────────────────────────────────
 
 export function h(

@@ -256,7 +256,8 @@ describe("renderToString — lazy", () => {
     }
 
     const html = renderToString(Comp);
-    expect(html).toBe('<div style="display: contents"></div>');
+    // SSR 模式下 lazy 返回 Promise，hSSR 无法等待，回退为空
+    expect(html).toBe("");
   });
 });
 

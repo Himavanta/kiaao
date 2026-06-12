@@ -1,39 +1,27 @@
-// kiaao v4 — lazy (async component)
+// kiaao v4 — lazy (async component loader)
+// Returns a component that loads asynchronously and renders via the framework's
+// built-in async component mechanism (h() detects Promise return values).
 
-import { use } from "../reactive/core.ts";
+import type { ComponentFunction } from "./h.ts";
 import { h } from "./h.ts";
 
-export function lazy<T extends (...args: any[]) => any>(
+export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
-  options?: { onError?: (err: Error) => void },
 ): T {
-  const [Component, setComponent] = use<T | null>(null);
-  const [error, setError] = use<Error | null>(null);
+  const LazyComponent: ComponentFunction<any> = (_props, _context) => {
+    return loader()
+      .then((mod) => {
+        const Comp = (mod as any).default || mod;
+        return h(Comp, _props);
+      })
+      .catch((err: Error) => {
+        console.error("[kiaao] lazy loading error:", err);
+        if (typeof document !== "undefined") {
+          return document.createTextNode(String(err));
+        }
+        throw err;
+      });
+  };
 
-  loader()
-    .then((mod) => {
-      setComponent(() => (mod as any).default || mod);
-    })
-    .catch((err) => {
-      setError(err);
-      options?.onError?.(err);
-    });
-
-  const [isLoaded] = use(Component, () => Component() !== null);
-
-  const LazyComponent = ((props: any) => {
-    const err = error();
-    if (err) throw err;
-
-    return h(
-      "div",
-      {
-        when: isLoaded,
-        style: { display: "contents" },
-      },
-      () => h(Component()!, props),
-    );
-  }) as any;
-
-  return LazyComponent as T;
+  return LazyComponent as unknown as T;
 }

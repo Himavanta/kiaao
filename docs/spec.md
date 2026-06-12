@@ -373,7 +373,7 @@ export function safeCall(fn: () => void | Promise<void>, label: string): void {
 
 ### `lazy(loader)`
 
-异步加载组件，配合 `import()` 使用。初始渲染占位注释，加载完成后替换为真实组件。`lazy` 本身是同步组件（返回 Proxy），不依赖异步组件机制。
+`lazy(loader)` 是一个薄包装，将动态 `import()` 转换为组件。内部返回一个异步组件——`loader()` 返回的 Promise 由异步组件机制统一处理。加载失败时返回错误文本节点。`lazy` 是代码拆分的语法糖。
 
 ### `Fragment`
 
@@ -435,12 +435,6 @@ export function safeCall(fn: () => void | Promise<void>, label: string): void {
 - **SVG 元素**：默认所有属性走 setAttribute，`style` 正常处理，`prop:` 前缀可强制 property（注意只读属性风险）。
 - **事件**：`onXxx` 转为 `addEventListener`。
 - **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性；`prop:` 前缀、事件、不在列表中的属性不输出。
-
----
-
-## 十、代码量估算
-
-核心响应式 + 辅助函数 + 生命周期 + 异步组件支持约 250 行，`h()` 及相关指令、属性处理保持不变（约 120 行），总体核心代码量在 400 行左右。
 
 ---
 

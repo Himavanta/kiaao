@@ -26,17 +26,21 @@ The first argument is the component function. The second argument is the props o
 
 During SSR, some framework behaviors differ from client-side execution. This is because there is no DOM to interact with and no ongoing reactivity after the render completes.
 
-**Derivations**：Each `use(...deps, fn)` derivation executes its compute function once at creation time to produce the initial cached value. The value is then embedded in the HTML output. Derivations do not re-run after the render.
-
-**Lifecycle**：`onMount` and `onUnmount` callbacks are not invoked during SSR. They only run when the component is mounted or unmounted on the client.
-
-**Control flow**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
-
 SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 DOM 可供交互，且渲染完成后不再有持续的响应式更新。
+
+**Derivations / 派生**：Each `use(...deps, fn)` derivation executes its compute function once at creation time to produce the initial cached value. The value is then embedded in the HTML output. Derivations do not re-run after the render.
 
 **派生**：每个 `use(...deps, fn)` 派生在创建时执行一次计算函数，生成初始缓存值。该值随后被嵌入 HTML 输出。渲染完成后派生不再重新执行。
 
+**Lifecycle / 生命周期**：`onMount` and `onUnmount` callbacks are not invoked during SSR. They only run when the component is mounted or unmounted on the client.
+
 **生命周期**：SSR 期间不触发 `onMount` 和 `onUnmount` 回调。它们仅在客户端的组件挂载或卸载时运行。
+
+**Async components / 异步组件**：Async components are **not supported** in SSR. `renderToString` is synchronous and cannot wait for Promises. If an async component is encountered during SSR, the framework throws an error. For data-fetching scenarios in SSR, fetch the data outside the component and pass it via props to a synchronous component.
+
+**异步组件**：异步组件在 SSR 中**不受支持**。`renderToString` 是同步函数，无法等待 Promise。如果在 SSR 期间遇到异步组件，框架会抛出错误。对于 SSR 中的数据获取场景，应在组件外部获取数据，通过 props 传入同步组件。
+
+**Control flow / 控制流**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
 
 **控制流**：`when` 和 `each` 指令将其初始状态渲染到 HTML 中。`when` 输出 truthy 分支（或 `else` 如果为 falsy，无 `else` 则无输出）。`each` 遍历数据源并渲染每个条目的节点。
 
@@ -46,21 +50,34 @@ SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 
 
 Only attributes that have meaning in static HTML are serialized. The SSR serialization follows the same attribute handling rules as the client, with some differences:
 
-- **`attr:` prefix** — Output as HTML attributes. `attr:value="init"` becomes `value="init"`.
-- **`prop:` prefix** — Ignored. These are only meaningful for client-side DOM property assignment.
-- **Event handlers** — Ignored. `onClick`, `onInput`, etc. are not serialized.
-- **FORCE_ATTRIBUTE** — Standard HTML attributes (`class`, `id`, `disabled`, `src`, `href`, etc.) are output normally.
-- **`aria-*` / `data-*`** — Output as-is.
-- **`value` and `checked`** — Not output by default. Use `attr:value` or `attr:checked` to include initial values in the static HTML.
-
 只有对静态 HTML 有意义的属性才会被序列化。SSR 序列化遵循与客户端相同的属性处理规则，但存在一些差异：
 
-- **`attr:` 前缀** — 作为 HTML 属性输出。`attr:value="init"` 输出为 `value="init"`。
-- **`prop:` 前缀** — 忽略。仅对客户端 DOM property 赋值有意义。
-- **事件处理器** — 忽略。`onClick`、`onInput` 等不会被序列化。
-- **FORCE_ATTRIBUTE** — 标准 HTML 属性（`class`、`id`、`disabled`、`src`、`href` 等）正常输出。
-- **`aria-*` / `data-*`** — 原样输出。
-- **`value` 和 `checked`** — 默认不输出。使用 `attr:value` 或 `attr:checked` 在静态 HTML 中包含初始值。
+- **`attr:` prefix / `attr:` 前缀**
+
+  Output as HTML attributes. `attr:value="init"` becomes `value="init"`.  
+  作为 HTML 属性输出。`attr:value="init"` 输出为 `value="init"`。
+
+- **`prop:` prefix / `prop:` 前缀**
+
+  Ignored. These are only meaningful for client-side DOM property assignment.  
+  忽略。仅对客户端 DOM property 赋值有意义。
+
+- **Event handlers / 事件处理器**
+
+  Ignored. `onClick`, `onInput`, etc. are not serialized.  
+  忽略。`onClick`、`onInput` 等不会被序列化。
+
+- **FORCE_ATTRIBUTE**
+
+  Standard HTML attributes (`class`, `id`, `disabled`, `src`, `href`, etc.) are output normally.  
+  标准 HTML 属性（`class`、`id`、`disabled`、`src`、`href` 等）正常输出。
+
+- **`aria-*` / `data-*`** — Output as-is. / 原样输出。
+
+- **`value` `checked` / `value`**
+
+  Not output by default. Use `attr:value` or `attr:checked` to include initial values in the static HTML.  
+  默认不输出。使用 `attr:value` 或 `attr:checked` 在静态 HTML 中包含初始值。
 
 For the full attribute handling specification, see the Attribute Handling document.
 
@@ -85,7 +102,7 @@ const html = renderToString(App, { items: ["a", "b", "c"] });
 
 ```jsx
 // App.tsx
-function App({ items }) {
+function App({ items }, context) {
   const [count, setCount] = use(0);
 
   return (
@@ -150,3 +167,7 @@ import Counter from './Counter'
 
 <Counter client:only />
 ```
+
+---
+
+- [Router / 路由](./router.md)

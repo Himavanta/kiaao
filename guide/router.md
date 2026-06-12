@@ -178,11 +178,13 @@ When navigating to `/dashboard/users`:
 `Link` 是声明式导航组件。它渲染一个 `<a>` 元素，拦截点击事件并在内部调用 `navigate`，阻止完整页面重载。`to` 属性接受绝对路径字符串或信号 getter。
 
 ```jsx
-<Link to="/dashboard/users">Users</Link>
+<Link to="/dashboard/users">Users</Link>;
 
 // Reactive target / 响应式目标
-const [item] = use({ path: '/dashboard', title: 'Dashboard' })
-<Link to={item(v => v.path)}>{item(v => v.title)}</Link>
+const [item] = use({ path: "/dashboard", title: "Dashboard" });
+const [to] = use(item, () => item().path);
+const [text] = use(item, () => item().title);
+<Link to={to}>{text}</Link>;
 ```
 
 ---
@@ -226,5 +228,9 @@ return <div class={isActive ? "active" : ""}>Current: {currentPath}</div>;
 const { currentParams } = createRouter();
 
 // URL: /search?q=kiaao&page=1
-console.log(currentParams()); // { q: 'kiaao', page: '1' }
+console.log(currentParams()); // { q: 'kiaao', 'page': '1' }
 ```
+
+---
+
+- [JSX/TSX Setup / 配置 JSX/TSX](./jsx-setup.md)
