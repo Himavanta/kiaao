@@ -1,4 +1,4 @@
-// kiaao v4 — Reactive core: use, isUse, toUse, toVal
+// kiaao v4 — Reactive core: use, isUse, toUse, toValue
 // Platform-agnostic. No DOM dependencies.
 
 import {
@@ -63,7 +63,7 @@ export function toUse(v: any): any {
  *
  * 只做一层解包，不递归，不处理返回值是函数的情况。
  */
-export function toVal(v: any): any {
+export function toValue(v: any): any {
   return isUse(v) ? (v as any)() : v;
 }
 

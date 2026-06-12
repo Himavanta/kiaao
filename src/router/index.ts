@@ -1,6 +1,6 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
-import { use, toVal } from "../reactive/core.ts";
+import { use, toValue } from "../reactive/core.ts";
 import { type Getter } from "../reactive/types.ts";
 import { h } from "../dom/h.ts";
 import {
@@ -124,7 +124,7 @@ export function createRouter(options: RouterOptions = {}): Router {
     const { to, children, onClick: userOnClick, ...rest } = props;
 
     // 解析导航目标值（支持 getter）
-    const resolveTo = () => toVal(to);
+    const resolveTo = () => toValue(to);
 
     return h(
       "a",

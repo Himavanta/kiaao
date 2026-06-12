@@ -1,7 +1,7 @@
 // kiaao v4 — Public API
 
 // Reactive core (platform-agnostic)
-export { use, isUse, toUse, toVal } from "./reactive/core.ts";
+export { use, isUse, toUse, toValue } from "./reactive/core.ts";
 
 // DOM rendering
 export { h } from "./dom/h.ts";

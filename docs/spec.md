@@ -182,7 +182,7 @@ function Slider(props, { onMount, onUnmount }) {
 }
 ```
 
-### `toVal(v: any): any`
+### `toValue(v: any): any`
 
 若 `v` 是信号则返回 `v()`（当前值），否则返回 `v` 本身。
 

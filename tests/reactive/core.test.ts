@@ -2,7 +2,14 @@
 // Platform-agnostic: No DOM environment needed.
 
 import { expect, test, describe } from "vite-plus/test";
-import { use, isUse, toUse, toVal, setRenderMode, getRenderMode } from "../../src/reactive/core.ts";
+import {
+  use,
+  isUse,
+  toUse,
+  toValue,
+  setRenderMode,
+  getRenderMode,
+} from "../../src/reactive/core.ts";
 import { REACTIVE } from "../../src/reactive/types.ts";
 
 // ── Helpers ───────────────────────────────────────────
@@ -361,34 +368,34 @@ describe("toUse", () => {
   });
 });
 
-// ── toVal ─────────────────────────────────────────────
+// ── toValue ─────────────────────────────────────────────
 
-describe("toVal", () => {
+describe("toValue", () => {
   test("signal returns its current value", () => {
     const [count] = use(42);
-    expect(toVal(count)).toBe(42);
+    expect(toValue(count)).toBe(42);
   });
 
   test("derivation returns its current cached value", () => {
     const [count] = use(5);
     const [double] = use(count, () => count() * 2);
-    expect(toVal(double)).toBe(10);
+    expect(toValue(double)).toBe(10);
   });
 
   test("non-signal value is returned as-is", () => {
-    expect(toVal(42)).toBe(42);
-    expect(toVal("hello")).toBe("hello");
-    expect(toVal(null)).toBeNull();
-    expect(toVal(undefined)).toBeUndefined();
-    expect(toVal(true)).toBe(true);
+    expect(toValue(42)).toBe(42);
+    expect(toValue("hello")).toBe("hello");
+    expect(toValue(null)).toBeNull();
+    expect(toValue(undefined)).toBeUndefined();
+    expect(toValue(true)).toBe(true);
     const obj = { a: 1 };
-    expect(toVal(obj)).toBe(obj);
+    expect(toValue(obj)).toBe(obj);
   });
 
   test("does not unwrap function values from signals", () => {
     const fn = () => 42;
     const [getFn] = use(fn);
-    const result = toVal(getFn);
+    const result = toValue(getFn);
     expect(result).toBe(fn); // function itself, not its return value
     expect(result()).toBe(42);
   });

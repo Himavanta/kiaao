@@ -1,4 +1,4 @@
-import { use, toVal } from "kiaao";
+import { use, toValue } from "kiaao";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export default function Icon(props: Record<string, any>) {
   const [data, setData] = use<IconData | null>(null);
   const { icon, ...svgProps } = props;
 
-  const name = toVal(icon);
+  const name = toValue(icon);
   if (name) {
     fetchRaw(name)
       .then((res) => {

@@ -2,7 +2,14 @@
 // kiaao v4 — Reactive core edge cases & stress tests
 
 import { expect, test, describe } from "vite-plus/test";
-import { use, isUse, toUse, toVal, setRenderMode, getRenderMode } from "../../src/reactive/core.ts";
+import {
+  use,
+  isUse,
+  toUse,
+  toValue,
+  setRenderMode,
+  getRenderMode,
+} from "../../src/reactive/core.ts";
 
 // ── Deep Derivation Chain ─────────────────────────────
 
@@ -101,9 +108,9 @@ describe("null/undefined signal values", () => {
   });
 });
 
-// ── toUse / toVal edge cases ──────────────────────────
+// ── toUse / toValue edge cases ──────────────────────────
 
-describe("toUse / toVal edge cases", () => {
+describe("toUse / toValue edge cases", () => {
   test("toUse on signal multiple times returns same getter", () => {
     const [count] = use(0);
     const [a] = toUse(count);
@@ -126,24 +133,24 @@ describe("toUse / toVal edge cases", () => {
     expect(x).not.toBe(y);
   });
 
-  test("toVal on signal getter returns current value", () => {
+  test("toValue on signal getter returns current value", () => {
     const [count, setCount] = use(42);
-    expect(toVal(count)).toBe(42);
+    expect(toValue(count)).toBe(42);
     setCount(100);
-    expect(toVal(count)).toBe(100);
+    expect(toValue(count)).toBe(100);
   });
 
-  test("toVal on non-signal returns as-is", () => {
-    expect(toVal(null)).toBeNull();
-    expect(toVal(undefined)).toBeUndefined();
-    expect(toVal(false)).toBe(false);
-    expect(toVal(0)).toBe(0);
-    expect(toVal("hello")).toBe("hello");
+  test("toValue on non-signal returns as-is", () => {
+    expect(toValue(null)).toBeNull();
+    expect(toValue(undefined)).toBeUndefined();
+    expect(toValue(false)).toBe(false);
+    expect(toValue(0)).toBe(0);
+    expect(toValue("hello")).toBe("hello");
     const obj = {};
-    expect(toVal(obj)).toBe(obj);
+    expect(toValue(obj)).toBe(obj);
   });
 
-  test("toVal on derivation getter returns cached value without recomputing", () => {
+  test("toValue on derivation getter returns cached value without recomputing", () => {
     let computeCalls = 0;
     const [count] = use(5);
     const [double] = use(count, () => {
@@ -152,7 +159,7 @@ describe("toUse / toVal edge cases", () => {
     });
 
     expect(computeCalls).toBe(1);
-    expect(toVal(double)).toBe(10);
+    expect(toValue(double)).toBe(10);
     expect(computeCalls).toBe(1); // 不会重新计算
   });
 });

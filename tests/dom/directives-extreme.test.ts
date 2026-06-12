@@ -118,7 +118,7 @@ describe("when — non-signal condition", () => {
   });
 
   test("plain function condition treated as truthy value", () => {
-    // 非信号函数不作调用，toVal 直接返回函数本身（truthy）
+    // 非信号函数不作调用，toValue 直接返回函数本身（truthy）
     const el = h("div", { when: () => true }, h("span", null, "ok"));
     expect(el.textContent).toBe("ok");
   });

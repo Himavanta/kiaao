@@ -185,7 +185,7 @@ function Slider(props) {
 }
 ```
 
-### `toVal(v)`
+### `toValue(v)`
 
 Returns `v()` if `v` is a signal, otherwise returns `v` itself. A convenience for reading a value that might or might not be reactive.
 

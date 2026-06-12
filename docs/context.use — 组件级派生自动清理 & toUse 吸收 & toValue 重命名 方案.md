@@ -1,4 +1,4 @@
-# context.use — 组件级派生自动清理 & toUse 吸收 & toValue 重命名 方案
+# context.use — 组件级派生自动清理 & toUse 吸收 & toValueue 重命名 方案
 
 **状态**：定稿
 **关联**：kiaao v4.1 生命周期与组件模型
@@ -76,9 +76,9 @@ function Comp(props, { onMount, onUnmount, use }) {
 
 参数解析逻辑调整为：**先判断一元调用时传入的是否是信号，如果是则直接返回已有信号；如果不是信号，再检查参数个数和类型，检测最后一个是否是函数。** 这避免了信号被误判为计算函数（信号本身是函数）。
 
-### 2.3 核心思路三：toVal 重命名为 toValue
+### 2.3 核心思路三：toValue 重命名为 toValueue
 
-`toVal` 的简写不再必要。既然 `toUse` 已被吸收，不再需要与 `toVal` 并列作为两个独立的转换 API，`toValue` 更明确——它告诉开发者"调用这个方法会返回一个值"。与 `use`、`isUse` 放在一起也更协调。
+`toValue` 的简写不再必要。既然 `toUse` 已被吸收，不再需要与 `toValue` 并列作为两个独立的转换 API，`toValueue` 更明确——它告诉开发者"调用这个方法会返回一个值"。与 `use`、`isUse` 放在一起也更协调。
 
 ### 2.4 两层 use 的职责
 
@@ -254,7 +254,7 @@ function buildContext(instance) {
 ### 4.5 移除的 API
 
 - `toUse` 从公开导出中移除，其功能完全被 `use` 吸收
-- `toVal` 重命名为 `toValue`
+- `toValue` 重命名为 `toValueue`
 
 ## 五、场景验证
 
