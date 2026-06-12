@@ -1,8 +1,8 @@
 # Components / 组件
 
-A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use` at the top level of the component function.
+A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use`. Every component receives a `context` object as its second argument, providing lifecycle methods and a component-level `use` that automatically cleans up signals on unmount.
 
-kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于组件函数顶层用 `use` 创建的信号中。
+kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收 `context` 对象作为第二个参数，提供生命周期方法和组件级 `use`，在卸载时自动清理信号。
 
 ---
 
@@ -43,13 +43,18 @@ function Greeting({ name }) {
 mount(<Greeting name="kiaao" />, document.getElementById("app"));
 ```
 
-Props can be signals. Use `toUse` in the child component to normalize a prop that might be a plain value or an existing signal. The child's internal logic then works uniformly regardless of how the prop was passed.
+Props can be signals. Pass them through `use` to normalize — if the prop is a plain value, `use` creates a new component-level signal. If the prop is already a signal, `use` returns the same signal's `[getter, setter]` directly. No separate `toUse` needed.
 
-Props 可以是信号。在子组件中使用 `toUse` 来规范化可能是普通值或已有信号的 prop。无论 prop 如何传入，子组件的内部逻辑都是统一的。
+Props 可以是信号。通过 `use` 来规范化——如果 prop 是普通值，`use` 创建一个新的组件级信号。如果 prop 已经是信号，`use` 直接返回该信号的 `[getter, setter]`。不需要单独的 `toUse`。
 
 ```jsx
-function Display({ value }) {
-  const [v, setV] = toUse(value);
+function Display(props, { use }) {
+  const [v, setV] = use(props.value);
+  // props.value is 42 → creates a new component-level signal
+  // props.value is 42 → 创建新的组件级信号
+  // props.value is a signal → returns [signal, signal's setter]
+  // props.value 是信号 → 返回 [信号, 信号的 setter]
+
   return (
     <div>
       <p>Value: {v}</p>
@@ -92,14 +97,17 @@ const CounterB = createCounter();
 
 ## Lifecycle / 生命周期
 
-Lifecycle hooks are not imported — they come from the `context` object, the second argument to every component function. See the Lifecycle guide for full details.
+Lifecycle hooks and component-level `use` are not imported — they come from the `context` object, the second argument to every component function. See the Lifecycle guide for full details.
 
-生命周期钩子不再从框架导入——它们来自每个组件函数的第二个参数 `context` 对象。详见生命周期引导文档。
+生命周期钩子和组件级 `use` 不再从框架导入——它们来自每个组件函数的第二个参数 `context` 对象。详见生命周期引导文档。
 
 ```jsx
-function App(props, { onMount, onUnmount }) {
+function App(props, { onMount, onUnmount, use }) {
+  const [count, setCount] = use(0); // component-level, auto-cleaned / 组件级，自动清理
+
   onMount(() => console.log("mounted"));
   onUnmount(() => console.log("unmounting"));
+
   return <div>Hello</div>;
 }
 ```
