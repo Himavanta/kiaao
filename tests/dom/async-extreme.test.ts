@@ -438,6 +438,20 @@ describe("async — resource cleanup", () => {
 // ── 7. 与 when/each 协作 ─────────────────────────────
 
 describe("async — directives interaction", () => {
+  test("async component inside when renders after resolve", async () => {
+    const [visible] = use(true);
+    async function Inner() {
+      await Promise.resolve();
+      return h("span", null, "loaded");
+    }
+
+    const el = h("div", { when: visible }, h(Inner));
+    expect(el.children.length).toBe(1);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(el.textContent).toBe("loaded");
+  });
+
   test("async component in child position renders", async () => {
     async function Inner() {
       await Promise.resolve();

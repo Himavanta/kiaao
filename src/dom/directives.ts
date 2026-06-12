@@ -308,18 +308,16 @@ export function createWhenElement(options: {
   // 订阅 whenFn 变化
   let whenStop: (() => void) | undefined;
 
-  if (isUse(whenFn) || typeof whenFn === "function") {
-    // 如果 whenFn 是信号，订阅它；否则（普通函数）只需执行一次
-    if (isUse(whenFn)) {
-      const [derived] = use(whenFn, () => {
-        renderBranch();
-      });
-      whenStop = (derived as any)[REACTIVE].stop;
-    }
+  if (isUse(whenFn)) {
+    const [derived] = use(whenFn, () => {
+      renderBranch();
+    });
+    whenStop = (derived as any)[REACTIVE].stop;
+    // 派生初始计算已执行 renderBranch，无需额外调用
+  } else {
+    // 非信号：静态值或普通函数，只需渲染一次
+    renderBranch();
   }
-
-  // 初始渲染
-  renderBranch();
 
   const selfCleaningStop = () => {
     if (whenStop) whenStop();
