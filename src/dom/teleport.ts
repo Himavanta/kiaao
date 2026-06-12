@@ -7,9 +7,8 @@ import { disposeNode, triggerMount } from "./component.ts";
 import { ssr } from "./ssr-helpers.ts";
 import { createComment, qs } from "./dom-utils.ts";
 
-// eslint-disable-next-line @typescript-eslint/unbound-method
 export function Teleport(
-  props: { to: string | HTMLElement; children: (() => any) | (() => any) },
+  props: { to: string | HTMLElement; children: (() => any) | any },
   { onUnmount }: ComponentContext,
 ): Node {
   const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;

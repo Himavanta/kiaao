@@ -14,8 +14,8 @@ import { createElement, createComment } from "./dom-utils.ts";
 // ── ComponentContext ───────────────────────────────────
 
 export interface ComponentContext {
-  onMount(fn: () => void | Promise<void>): void;
-  onUnmount(fn: () => void | Promise<void>): void;
+  onMount: (fn: () => void | Promise<void>) => void;
+  onUnmount: (fn: () => void | Promise<void>) => void;
 }
 
 // ── h() ────────────────────────────────────────────────
