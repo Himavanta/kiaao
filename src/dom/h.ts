@@ -4,6 +4,7 @@
 import { getRenderMode } from "../reactive/core.ts";
 import { isUse } from "../reactive/core.ts";
 import { INSTANCE_KEY, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
+import type { ComponentInstance } from "../reactive/types.ts";
 import { createComponentInstance, createDisposeFn, safeCall, triggerMount } from "./component.ts";
 import { hSSR } from "./ssr-helpers.ts";
 import { setProps } from "./props.ts";
@@ -22,6 +23,35 @@ export type ComponentFunction<P = any> = (
   props: P,
   context: ComponentContext,
 ) => Node | Promise<Node>;
+
+// ── Context Creator ─────────────────────────────────
+
+function createComponentContext(instance: ComponentInstance): ComponentContext {
+  return {
+    onMount: (fn) => {
+      if ((instance as any)[DISPOSED_KEY]) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[kiaao] onMount called after component disposed");
+        }
+        return;
+      }
+      if ((instance as any)[INITIALIZED_KEY]) {
+        safeCall(fn, "onMount");
+      } else {
+        instance.mountCallbacks.push(fn);
+      }
+    },
+    onUnmount: (fn) => {
+      if ((instance as any)[DISPOSED_KEY]) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[kiaao] onUnmount called after component disposed");
+        }
+        return;
+      }
+      instance.unmountCallbacks.push(fn);
+    },
+  };
+}
 
 // ── h() ────────────────────────────────────────────────
 
@@ -48,32 +78,7 @@ export function h(
   // ── 组件模式 ──
   if (typeof tag === "function") {
     const instance = createComponentInstance();
-
-    const context: ComponentContext = {
-      onMount: (fn) => {
-        if ((instance as any)[DISPOSED_KEY]) {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[kiaao] onMount called after component disposed");
-          }
-          return;
-        }
-        if ((instance as any)[INITIALIZED_KEY]) {
-          // 已挂载，立即执行
-          safeCall(fn, "onMount");
-        } else {
-          instance.mountCallbacks.push(fn);
-        }
-      },
-      onUnmount: (fn) => {
-        if ((instance as any)[DISPOSED_KEY]) {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[kiaao] onUnmount called after component disposed");
-          }
-          return;
-        }
-        instance.unmountCallbacks.push(fn);
-      },
-    };
+    const context = createComponentContext(instance);
 
     let compProps = props ?? {};
     if (children.length > 0) {

@@ -94,6 +94,16 @@ export function use(...args: any[]): any {
   return derivationMode(...args);
 }
 
+// ── Signal Creator ─────────────────────────────────────
+// 创建 getter/setter 元组，挂载 REACTIVE 标记
+// 返回 [getter, setter] 并保持 state.set = setter
+
+function createSignal<T>(getter: Getter<T>, setter: Setter<T>, state: any): [Getter<T>, Setter<T>] {
+  (getter as any)[REACTIVE] = state;
+  state.set = setter;
+  return [getter, setter];
+}
+
 // ── Definition Mode ────────────────────────────────────
 
 function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
@@ -104,21 +114,18 @@ function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
   };
 
   const getter = (() => state.value) as Getter<T>;
-  (getter as any)[REACTIVE] = state;
 
   const setter = ((updater: any): T => {
     const oldValue = state.value;
     state.value =
       typeof updater === "function" ? (updater as (prev: T) => T)(oldValue) : (updater as T);
-
     if (state.value !== oldValue) {
       triggerDerivations(state);
     }
     return state.value;
   }) as Setter<T>;
 
-  state.set = setter;
-  return [getter, setter];
+  return createSignal(getter, setter, state);
 }
 
 // ── Derivation Mode ────────────────────────────────────
@@ -195,19 +202,14 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
     state.cachedValue = undefined as any;
   }
 
-  // ── getter ──
   const getter = (() => state.cachedValue) as Getter<T>;
-  (getter as any)[REACTIVE] = state;
 
-  // ── setter ──
   const setter = ((value: any): T => {
     recomputeDerivation(state, value);
     return state.cachedValue;
   }) as Setter<T>;
 
-  state.set = setter;
-
-  return [getter, setter];
+  return createSignal(getter, setter, state);
 }
 
 // ── Internal: Update Propagation ───────────────────────

@@ -38,6 +38,17 @@ function normalizeEachSource(source: any): Array<[any, any, number]> {
 
 // ── Shared Each Renderer ───────────────────────────────
 
+/** 清空元素的所有子节点并返回被移除的 fragment */
+function clearChildren(el: Element): DocumentFragment {
+  const removed = createFragment();
+  let child: Node | null;
+  while ((child = firstChild(el))) {
+    disposeNode(child);
+    removed.append(child);
+  }
+  return removed;
+}
+
 function renderEach(
   container: Element,
   eachFn: (() => any[]) | (() => any),
@@ -220,12 +231,7 @@ export function createWhenElement(options: {
       if (showRaw === prevKey) return;
       prevKey = showRaw;
 
-      const removed = createFragment();
-      let child: Node | null;
-      while ((child = firstChild(el))) {
-        disposeNode(child);
-        removed.append(child);
-      }
+      clearChildren(el);
 
       const branchFn = mappingTable![showRaw];
       if (branchFn) {
@@ -250,12 +256,7 @@ export function createWhenElement(options: {
         eachStop();
         eachStop = undefined;
       }
-      const removed = createFragment();
-      let child: Node | null;
-      while ((child = firstChild(el))) {
-        disposeNode(child);
-        removed.append(child);
-      }
+      clearChildren(el);
       if (!show) {
         if (elseFn) {
           const node = elseFn();
@@ -275,12 +276,7 @@ export function createWhenElement(options: {
     }
 
     // 非惰性路径
-    const removed = createFragment();
-    let child: Node | null;
-    while ((child = firstChild(el))) {
-      disposeNode(child);
-      removed.append(child);
-    }
+    clearChildren(el);
     if (eachStop) {
       eachStop();
       eachStop = undefined;

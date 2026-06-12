@@ -9,7 +9,6 @@ import {
   LOCAL_EFFECTS,
   type ComponentInstance,
 } from "../reactive/types.ts";
-
 // ── Component Instance ─────────────────────────────────
 
 let nextComponentId = 0;
