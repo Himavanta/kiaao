@@ -3,9 +3,15 @@
 
 import { getRenderMode } from "../reactive/core.ts";
 import { isUse } from "../reactive/core.ts";
-import { INSTANCE_KEY, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
+import { DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
 import type { ComponentInstance } from "../reactive/types.ts";
-import { createComponentInstance, createDisposeFn, safeCall, triggerMount } from "./component.ts";
+import {
+  createComponentInstance,
+  createDisposeFn,
+  safeCall,
+  triggerMount,
+  attachInstance,
+} from "./component.ts";
 import { hSSR } from "./ssr-helpers.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
@@ -91,7 +97,8 @@ export function h(
     if (result instanceof Promise) {
       const wrapper = createElement("div") as HTMLElement;
       wrapper.style.display = "contents";
-      (wrapper as any)[DISPOSE_KEY] = createDisposeFn(instance);
+      (wrapper as any)[DISPOSE_KEY] = new Set<() => void>();
+      (wrapper as any)[DISPOSE_KEY].add(createDisposeFn(instance));
 
       let disposed = false;
       instance.unmountCallbacks.push(() => {
@@ -130,16 +137,14 @@ export function h(
 
     // —— 同步组件 ——
     if (result instanceof Node) {
-      (result as any)[INSTANCE_KEY] = instance;
-      (result as any)[DISPOSE_KEY] = createDisposeFn(instance);
+      attachInstance(result, instance);
       return result as unknown as Element;
     } else {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[kiaao] component returned non-Node value:", result);
       }
       const placeholder = createComment("component returned invalid value");
-      (placeholder as any)[INSTANCE_KEY] = instance;
-      (placeholder as any)[DISPOSE_KEY] = createDisposeFn(instance);
+      attachInstance(placeholder, instance);
       return placeholder as unknown as Element;
     }
   }

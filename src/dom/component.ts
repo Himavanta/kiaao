@@ -13,6 +13,28 @@ import {
 
 let nextComponentId = 0;
 
+/**
+ * 将一个组件实例关联到一个 DOM 节点上。
+ * 允许多个实例共享同一节点（如包装组件直接返回子组件结果）。
+ * 节点第一次关联时初始化 INSTANCE_KEY 和 DISPOSE_KEY 为 Set，
+ * 后续关联追加到 Set 中。
+ */
+/**
+ * 将一个组件实例关联到一个 DOM 节点上。
+ * 允许多个实例共享同一节点。
+ * INSTANCE_KEY 和 DISPOSE_KEY 各自独立初始化 Set。
+ */
+export function attachInstance(node: Node, instance: ComponentInstance): void {
+  if (!(node as any)[INSTANCE_KEY]) {
+    (node as any)[INSTANCE_KEY] = new Set<ComponentInstance>();
+  }
+  if (!(node as any)[DISPOSE_KEY]) {
+    (node as any)[DISPOSE_KEY] = new Set<() => void>();
+  }
+  (node as any)[INSTANCE_KEY].add(instance);
+  (node as any)[DISPOSE_KEY].add(createDisposeFn(instance));
+}
+
 export function createComponentInstance(): ComponentInstance {
   return {
     id: nextComponentId++,
@@ -51,12 +73,16 @@ export function createDisposeFn(instance: ComponentInstance): () => void {
 // ── Tree traversal ─────────────────────────────────────
 
 export function triggerMount(node: Node): void {
-  const instance = (node as any)[INSTANCE_KEY] as ComponentInstance | undefined;
-  if (instance && !(instance as any)[INITIALIZED_KEY]) {
-    (instance as any)[INITIALIZED_KEY] = true;
-    for (const cb of instance.mountCallbacks) {
-      safeCall(cb, "onMount");
-    }
+  const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
+  if (instances) {
+    instances.forEach((instance: ComponentInstance) => {
+      if (!(instance as any)[INITIALIZED_KEY]) {
+        (instance as any)[INITIALIZED_KEY] = true;
+        for (const cb of instance.mountCallbacks) {
+          safeCall(cb, "onMount");
+        }
+      }
+    });
   }
 
   for (const child of node.childNodes) {
@@ -78,9 +104,15 @@ export function disposeNode(node: Node): void {
     delete (node as any)[LOCAL_EFFECTS];
   }
 
-  const dispose = (node as any)[DISPOSE_KEY] as (() => void) | undefined;
-  if (dispose) {
-    dispose();
+  const disposeFns = (node as any)[DISPOSE_KEY] as Set<() => void> | undefined;
+  if (disposeFns) {
+    disposeFns.forEach((fn: () => void) => fn());
+    disposeFns.clear();
+  }
+
+  const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
+  if (instances) {
+    instances.clear();
   }
 }
 

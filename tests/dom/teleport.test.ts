@@ -3,6 +3,7 @@
 
 import { expect, test, describe, beforeEach, afterEach } from "vite-plus/test";
 import { h } from "../../src/index.ts";
+import { unmount } from "../../src/dom/component.ts";
 
 let container: HTMLElement;
 let target: HTMLElement;
@@ -88,5 +89,46 @@ describe("Teleport — direct instance", () => {
     h(Teleport, { to: target, children: () => h("span", null, "second") });
     expect(target.textContent).toContain("first");
     expect(target.textContent).toContain("second");
+  });
+});
+
+describe("Teleport — cleanup after fix", () => {
+  test("content removed when component unmounts", () => {
+    function Comp() {
+      return h(Teleport, { to: "#teleport-target", children: () => h("span", null, "cleanup") });
+    }
+    const el = h(Comp);
+    expect(target.textContent).toBe("cleanup");
+
+    unmount(el as HTMLElement);
+    expect(target.textContent).toBe("");
+  });
+
+  test("content cleaned up even if target has other children", () => {
+    target.textContent = "existing";
+
+    function Comp() {
+      return h(Teleport, { to: "#teleport-target", children: () => h("span", null, "added") });
+    }
+    const el = h(Comp);
+    expect(target.textContent).toContain("existing");
+    expect(target.textContent).toContain("added");
+
+    unmount(el as HTMLElement);
+    expect(target.textContent).toBe("existing");
+  });
+
+  test("static children cleaned up on unmount", () => {
+    const span = document.createElement("span");
+    span.textContent = "static";
+
+    function Comp() {
+      return h(Teleport, { to: "#teleport-target", children: span });
+    }
+    const el = h(Comp);
+    expect(target.textContent).toBe("static");
+
+    unmount(el as HTMLElement);
+    expect(target.textContent).toBe("");
   });
 });
