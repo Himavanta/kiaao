@@ -7,7 +7,7 @@
 //
 // 点击 trigger 区域切换面板显隐，点击面板外部或按 Escape 关闭。
 
-import { use } from "kiaao";
+import type { Context } from "kiaao";
 
 type Placement = "bottom-left" | "bottom-right" | "top-left" | "top-right";
 
@@ -31,8 +31,8 @@ const PLACEMENT_CLASS: Record<Placement, string> = {
   "top-right": "right-0 bottom-full mb-1 origin-bottom-right",
 };
 
-export default function Dropdown(props: DropdownProps, { onUnmount }: any) {
-  const [open, setOpen] = use(false);
+export default function Dropdown(props: DropdownProps, { onUnmount, use }: Context) {
+  const [open, setOpen] = use<boolean>(false);
   const toggle = () => setOpen((v) => !v);
   const close = () => setOpen(false);
 
