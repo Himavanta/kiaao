@@ -1,6 +1,6 @@
 // kiaao v4 — SSR helper functions shared between h.ts and components
 
-import { isUse } from "../reactive/core.ts";
+import { isUse, toVal } from "../reactive/core.ts";
 import { SSR_COMPONENT } from "../reactive/types.ts";
 import { escapeHtml, escapeAttr, FORCE_ATTRIBUTE, stripPrefix, splitSet } from "./dom-utils.ts";
 
@@ -127,7 +127,7 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
   }
 
   if (props?.when !== undefined) {
-    const whenVal = typeof props.when === "function" ? props.when() : props.when;
+    const whenVal = toVal(props.when);
     const elseFn = props.else;
 
     if (children.length === 1 && isPlainObject(children[0])) {
@@ -173,7 +173,7 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
     if (VOID_ELEMENTS.has(tag)) {
       throw new Error(`each cannot be used on void element <${tag}>`);
     }
-    const items = typeof props.each === "function" ? props.each() : props.each;
+    const items = toVal(props.each);
     const attrs = serializeAttrs(stripDirectives(props));
     const childFn = children[0];
     let html = `<${tag}${attrs}>`;
