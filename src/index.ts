@@ -11,7 +11,7 @@ export { mount, unmount } from "./dom/component.ts";
 
 // Components
 export { Fragment } from "./dom/fragment.ts";
-export { Teleport } from "./dom/teleport.ts";
+export { Portal } from "./dom/portal.ts";
 export { lazy } from "./dom/lazy.ts";
 
 // Async utilities

@@ -207,14 +207,14 @@ JSX 的 `<></>` 语法在 kiaao 中会被渲染为一个 `<div style="display: c
 
 ---
 
-## Teleport / 传送门
+## Portal / 传送门
 
-`Teleport` renders its children into a different location in the DOM, while keeping them logically inside the current component tree. The children remain connected to the component's signals, lifecycle, and cleanup. When the component unmounts, the teleported content is automatically removed from the target.
+`Portal` renders its children into a different location in the DOM, while keeping them logically inside the current component tree. The children remain connected to the component's signals, lifecycle, and cleanup. When the component unmounts, the portaled content is automatically removed from the target.
 
-`Teleport` 将子节点渲染到 DOM 中的另一个位置，同时在逻辑上保持它们属于当前组件树。子节点仍然与组件的信号、生命周期和清理机制保持连接。当组件卸载时，传送的内容会自动从目标容器中移除。
+`Portal` 将子节点渲染到 DOM 中的另一个位置，同时在逻辑上保持它们属于当前组件树。子节点仍然与组件的信号、生命周期和清理机制保持连接。当组件卸载时，传送的内容会自动从目标容器中移除。
 
 ```jsx
-import { Teleport } from "kiaao";
+import { Portal } from "kiaao";
 
 function Modal() {
   const [open, setOpen] = use(false);
@@ -223,18 +223,18 @@ function Modal() {
     <div>
       <button onClick={() => setOpen((o) => !o)}>Toggle</button>
       <div when={open}>
-        <Teleport to="#modal-root">
+        <Portal to="#modal-root">
           <div class="modal">This is rendered inside #modal-root.</div>
-        </Teleport>
+        </Portal>
       </div>
     </div>
   );
 }
 ```
 
-The `to` prop accepts a CSS selector string or a DOM element. If the target does not exist at mount time, `Teleport` renders a placeholder comment node. The content is moved when the target becomes available, or cleaned up when the component unmounts.
+The `to` prop accepts a CSS selector string or a DOM element. If the target does not exist at mount time, `Portal` renders a placeholder comment node. The content is moved when the target becomes available, or cleaned up when the component unmounts.
 
-`to` 属性接受 CSS 选择器字符串或 DOM 元素。如果挂载时目标不存在，`Teleport` 会渲染一个占位注释节点。当目标可用时内容被移入，或当组件卸载时被清理。
+`to` 属性接受 CSS 选择器字符串或 DOM 元素。如果挂载时目标不存在，`Portal` 会渲染一个占位注释节点。当目标可用时内容被移入，或当组件卸载时被清理。
 
 ---
 

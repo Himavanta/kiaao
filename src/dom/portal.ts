@@ -1,4 +1,4 @@
-// kiaao v4 — Teleport component
+// kiaao v4 — Portal component
 // Renders content into a specified DOM container outside the component tree.
 
 import { SSR_COMPONENT } from "../reactive/types.ts";
@@ -7,12 +7,12 @@ import { disposeNode, triggerMount } from "./component.ts";
 import { ssr } from "./ssr-helpers.ts";
 import { createComment, qs } from "./dom-utils.ts";
 
-export function Teleport(
+export function Portal(
   props: { to: string | HTMLElement; children: any },
   { onUnmount }: Context,
 ): Node {
   const target = typeof props.to === "string" ? qs<HTMLElement>(props.to) : props.to;
-  if (!target) return createComment("teleport-missing-target");
+  if (!target) return createComment("portal-missing-target");
 
   const nodes = Array.isArray(props.children) ? props.children : [props.children];
 
@@ -32,7 +32,7 @@ export function Teleport(
     }
   });
 
-  return createComment("teleport");
+  return createComment("portal");
 }
 
-(Teleport as any)[SSR_COMPONENT] = () => ssr("<!-- teleport placeholder -->");
+(Portal as any)[SSR_COMPONENT] = () => ssr("<!-- portal placeholder -->");

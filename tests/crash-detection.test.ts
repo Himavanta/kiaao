@@ -5,7 +5,7 @@ import { expect, test, describe } from "vite-plus/test";
 import { use } from "../src/reactive/core.ts";
 import { h } from "../src/dom/h.ts";
 import { mount, unmount, disposeNode, safeCall } from "../src/dom/component.ts";
-import { Teleport } from "../src/dom/teleport.ts";
+import { Portal } from "../src/dom/portal.ts";
 import { renderToString } from "../src/server/index.ts";
 
 // ── 1. reactive/core.ts 非法场景 ─────────────────────
@@ -319,19 +319,19 @@ describe("props — crash scenarios", () => {
   });
 });
 
-// ── 7. Teleport 非法场景 ─────────────────────────────
+// ── 7. Portal 非法场景 ─────────────────────────────
 
-describe("Teleport — crash scenarios", () => {
-  test("Teleport with non-existent target", () => {
+describe("Portal — crash scenarios", () => {
+  test("Portal with non-existent target", () => {
     function Comp() {
-      return h(Teleport, { to: "#does-not-exist", children: () => h("div") });
+      return h(Portal, { to: "#does-not-exist", children: () => h("div") });
     }
     expect(() => h(Comp)).not.toThrow();
   });
 
-  test("Teleport with null target", () => {
+  test("Portal with null target", () => {
     function Comp() {
-      return h(Teleport, { to: null as any, children: () => h("div") });
+      return h(Portal, { to: null as any, children: () => h("div") });
     }
     expect(() => h(Comp)).not.toThrow();
   });

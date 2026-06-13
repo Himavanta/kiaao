@@ -345,7 +345,7 @@ function attachInstance(node, instance) {
 
 ## 五、内置组件
 
-### `<Teleport to={...}>`
+### `<Portal to={...}>`
 
 将子内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树。
 

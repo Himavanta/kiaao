@@ -3,7 +3,7 @@
 import { expect, test, describe } from "vite-plus/test";
 import { use, getRenderMode } from "../src/reactive/core.ts";
 import { h } from "../src/dom/h.ts";
-import { Teleport } from "../src/dom/teleport.ts";
+import { Portal } from "../src/dom/portal.ts";
 import { lazy } from "../src/dom/lazy.ts";
 import { renderToString } from "../src/server/index.ts";
 
@@ -234,16 +234,16 @@ describe("renderToString — each directive", () => {
   });
 });
 
-describe("renderToString — Teleport", () => {
+describe("renderToString — Portal", () => {
   test("renders placeholder", () => {
     function Comp() {
-      return h(Teleport, {
+      return h(Portal, {
         to: "#root",
         children: () => h("div", null, "content"),
       });
     }
     const html = renderToString(Comp);
-    expect(html).toBe("<!-- teleport placeholder -->");
+    expect(html).toBe("<!-- portal placeholder -->");
   });
 });
 

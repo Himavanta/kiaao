@@ -1,4 +1,4 @@
-import { lazy, Teleport } from "kiaao";
+import { lazy, Portal } from "kiaao";
 
 const Demo = lazy(() => import("../Demo2"));
 
@@ -13,12 +13,12 @@ function FragmentDemo() {
 
 export default function () {
   return (
-    <Teleport to="body">
+    <Portal to="body">
       <div>hhhh</div>
       <>
         <FragmentDemo />
         <Demo />
       </>
-    </Teleport>
+    </Portal>
   );
 }

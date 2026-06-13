@@ -403,19 +403,19 @@ async function DataLoader(props, { onMount }) {
 
 ### 10.3 内置组件迁移
 
-`Teleport` 等内置组件若使用了全局 `onUnmount`，需改为从 `context` 参数解构：
+`Portal` 等内置组件若使用了全局 `onUnmount`，需改为从 `context` 参数解构：
 
 ```ts
 // 旧
 import { onUnmount } from "kiaao";
-export function Teleport(props) {
+export function Portal(props) {
   onUnmount(() => {
     /* ... */
   });
 }
 
 // 新
-export function Teleport(props, { onUnmount }) {
+export function Portal(props, { onUnmount }) {
   onUnmount(() => {
     /* ... */
   });

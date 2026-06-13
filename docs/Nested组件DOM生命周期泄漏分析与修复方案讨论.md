@@ -244,7 +244,7 @@ fragment_B（内层 Show 的返回值，有 DISPOSE_KEY）
 | List 被外层销毁                                       | ✅   | 锚点 DISPOSE_KEY → dispose List 实例 → onUnmount 清理列表项             |
 | 多层嵌套 Show                                         | ✅   | 链式传播，层层拆卸                                                      |
 | Fragment 在 Show 中                                   | ✅   | 有 INSTANCE_KEY 的子节点被跳过传播，各自独立                            |
-| Teleport                                              | ✅   | 返回单节点，无 fragment；内容通过 onUnmount 管理                        |
+| Portal                                                | ✅   | 返回单节点，无 fragment；内容通过 onUnmount 管理                        |
 | 组件首次调用返回空 fragment（无子节点），后续动态添加 | ❌   | childNodes 为空，传播无处附着；动态添加的节点不在 branchNodes 中        |
 | 用户自定义组件返回非常规结构 fragment（首节点非锚点） | ⚠️   | 依赖 heuristic，违反假设时可能误触                                      |
 | Show/List 绕过 `h()` 被直接调用                       | ⚠️   | 不经过 `h()` 组件模式，INSTANCE_KEY 不会被传播                          |
@@ -287,7 +287,7 @@ fragment_B（内层 Show 的返回值，有 DISPOSE_KEY）
 
 **缺点/隐患：**
 
-- 架构变动大，需在 Show、List、Teleport、甚至 `h()` 的 processChildren 等多处同步
+- 架构变动大，需在 Show、List、Portal、甚至 `h()` 的 processChildren 等多处同步
 - 组件实例与 DOM 节点的双向引用需要妥善管理，避免内存泄漏
 
 ### 方案四：链接列表（锚点范围）模型
@@ -352,13 +352,13 @@ removeBranch() 时：
 
 **缺点/隐患：**
 
-| 问题                         | 严重程度 | 说明                                                                        |
-| ---------------------------- | -------- | --------------------------------------------------------------------------- |
-| Fragment `<></>` 不支持 `as` | ⚠️ 中    | JSX `<></>` 语法不能传 prop，需废弃或默认改 `as="div"`                      |
-| 全链路必须一致               | ⚠️ 中    | 链中任一处没用 `as`（保留 fragment）→ 从该点下游失效                        |
-| 组合多个控制流时层级膨胀     | ⚠️ 低    | 每层 Show/List 产生原生标签，开发者可控                                     |
-| 默认值设计                   | ⚠️ 中    | `as` 可选则不安全，必选则是 breaking change                                 |
-| Teleport 不一致              | ⚠️ 低    | 当前返回单节点 `<!--teleport-->`，可用 `onUnmount` 管理，与其他组件模式不同 |
+| 问题                         | 严重程度 | 说明                                                                      |
+| ---------------------------- | -------- | ------------------------------------------------------------------------- |
+| Fragment `<></>` 不支持 `as` | ⚠️ 中    | JSX `<></>` 语法不能传 prop，需废弃或默认改 `as="div"`                    |
+| 全链路必须一致               | ⚠️ 中    | 链中任一处没用 `as`（保留 fragment）→ 从该点下游失效                      |
+| 组合多个控制流时层级膨胀     | ⚠️ 低    | 每层 Show/List 产生原生标签，开发者可控                                   |
+| 默认值设计                   | ⚠️ 中    | `as` 可选则不安全，必选则是 breaking change                               |
+| Portal 不一致                | ⚠️ 低    | 当前返回单节点 `<!--portal-->`，可用 `onUnmount` 管理，与其他组件模式不同 |
 
 ---
 
@@ -814,11 +814,11 @@ html += `</${tag}>`;
 
 可做到，但 `hSSR` 不再是简单线性的序列化。⚠️
 
-**场景 11：Teleport**
+**场景 11：Portal**
 
-Teleport 当前返回 `<!--teleport-->` 单节点（不涉及 fragment），内容通过 `onUnmount` 管理。它已经是单根。指令方案不需要改变它的工作方式。
+Portal 当前返回 `<!--portal-->` 单节点（不涉及 fragment），内容通过 `onUnmount` 管理。它已经是单根。指令方案不需要改变它的工作方式。
 
-但一致性考虑：when/each 是原生属性，Teleport 保持为组件调用，API 风格不一致。可接受，因为 Teleport 做的事情本质不同（把内容移到另一个 DOM 位置）。
+但一致性考虑：when/each 是原生属性，Portal 保持为组件调用，API 风格不一致。可接受，因为 Portal 做的事情本质不同（把内容移到另一个 DOM 位置）。
 
 **覆盖总表**
 
@@ -835,7 +835,7 @@ Teleport 当前返回 `<!--teleport-->` 单节点（不涉及 fragment），内�
 | 自定义组件上的 when            | ⚠️     | 不自动生效，用户需在内层包裹原生元素                            |
 | SSR when                       | ✅     | 条件判断后决定是否序列化子节点                                  |
 | SSR each                       | ⚠️     | 需要三段式序列化，不能简单递归 hSSR                             |
-| Teleport                       | ✅     | 保持单根，不影响                                                |
+| Portal                         | ✅     | 保持单根，不影响                                                |
 | Fragment                       | 已废弃 | 不再存在                                                        |
 | 深度嵌套性能                   | ✅     | 只有真实 DOM，没有额外包装层                                    |
 
@@ -903,7 +903,7 @@ Teleport 当前返回 `<!--teleport-->` 单节点（不涉及 fragment），内�
 2. **void 元素上的 `when`/`each`**：推荐抛错或警告。用户应使用 CSS 或父元素条件渲染。
 3. **自定义组件上的 `when`/`each`**：不自动生效。文档需明确「在原生元素上使用」。
 4. **SSR `each` 的三段式序列化**：需要改造 `hSSR` 以支持开标签 → 重复子节点 → 闭标签的模式。
-5. **Teleport 的一致性**：保留为组件形式还是也引入对应指令？选择保留组件不影响正确性。
+5. **Portal 的一致性**：保留为组件形式还是也引入对应指令？选择保留组件不影响正确性。
 6. **重构范围**：涉及 `h()`、`hSSR`、src/components.ts、测试、example 全部更新。Show/List 组件需要重写或废弃。
 
 ---
@@ -912,7 +912,7 @@ Teleport 当前返回 `<!--teleport-->` 单节点（不涉及 fragment），内�
 
 | 文件                                                 | 作用                                                   |
 | ---------------------------------------------------- | ------------------------------------------------------ |
-| `src/components.ts`                                  | Show/List/Teleport/lazy 实现，DocumentFragment 返回    |
+| `src/components.ts`                                  | Show/List/Portal/lazy 实现，DocumentFragment 返回      |
 | `src/dom.ts`                                         | `h()` 函数，`INSTANCE_KEY`/`DISPOSE_KEY` 挂载点        |
 | `src/lifecycle.ts`                                   | `disposeNode`、`triggerMount`、`createDisposeFn`       |
 | `src/runtime.ts`                                     | `effect`、`define`、组件栈管理                         |

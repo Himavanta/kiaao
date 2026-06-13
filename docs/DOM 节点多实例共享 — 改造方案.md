@@ -8,7 +8,7 @@
 
 ### 1.1 发现过程
 
-在实现 Teleport 组件时发现：当 `h(Comp)` 调用且 `Comp` 内部返回 `h(Teleport, ...)` 的结果时，框架的组件模式会无条件覆盖返回值节点上的 `INSTANCE_KEY` 和 `DISPOSE_KEY`，导致 Teleport 的清理回调丢失。
+在实现 Portal 组件时发现：当 `h(Comp)` 调用且 `Comp` 内部返回 `h(Portal, ...)` 的结果时，框架的组件模式会无条件覆盖返回值节点上的 `INSTANCE_KEY` 和 `DISPOSE_KEY`，导致 Portal 的清理回调丢失。
 
 ### 1.2 根本原因
 
@@ -17,7 +17,7 @@
 这一假设在以下场景中被打破：
 
 - 逻辑包装组件（wrapper component）直接返回子组件的 `h()` 调用结果
-- Teleport 等内置组件返回的占位节点
+- Portal 等内置组件返回的占位节点
 - 高阶组件模式
 
 在这些场景中，多个组件实例需要共享同一个 DOM 节点。但框架的“单值覆盖”行为导致只有最后一个写入者的实例关联被保留，前面的全部丢失。
@@ -230,11 +230,11 @@ function createDisposeFn(instance) {
 
 ## 四、场景验证
 
-### 4.1 Teleport 包裹场景
+### 4.1 Portal 包裹场景
 
 ```js
 function Comp() {
-  return h(Teleport, { to: "#target" }, "content");
+  return h(Portal, { to: "#target" }, "content");
 }
 ```
 
@@ -242,15 +242,15 @@ DOM 结构：
 
 ```
 Comment 节点
-  INSTANCE_KEY = Set { Comp的实例, Teleport的实例 }
-  DISPOSE_KEY  = Set { Comp的清理函数, Teleport的清理函数 }
+  INSTANCE_KEY = Set { Comp的实例, Portal的实例 }
+  DISPOSE_KEY  = Set { Comp的清理函数, Portal的清理函数 }
 ```
 
 卸载 Comp 时：
 
 1. `disposeNode(Comment)` 遍历 `DISPOSE_KEY` Set
 2. 执行 Comp 的清理函数 → 执行 `onUnmount` 回调 → `DISPOSED_KEY` 标记
-3. 执行 Teleport 的清理函数 → 执行 Teleport 的 `onUnmount` → 清理目标容器中的内容
+3. 执行 Portal 的清理函数 → 执行 Portal 的 `onUnmount` → 清理目标容器中的内容
 4. 两个清理都完整执行，无泄漏
 
 ### 4.2 逻辑包装组件
@@ -295,7 +295,7 @@ INSTANCE_KEY = Set { App的实例 }
 | -------------------------- | ---------------------------------------- | ---- |
 | 普通单组件                 | 行为完全一致（Set 一个元素）             |      |
 | 组件直接返回另一个组件     | ✅ 修复                                  |      |
-| Teleport                   | ✅ 修复                                  |      |
+| Portal                     | ✅ 修复                                  |      |
 | 异步组件 wrapper           | 不受影响（wrapper 不设 INSTANCE_KEY）    |      |
 | when/each 创建和销毁的节点 | 不受影响（分支切换时整个子树被 dispose） |      |
 | 组件返回非 Node 降级       | Set 初始化正常                           |      |
