@@ -4,11 +4,16 @@
 
 import type { ComponentFunction } from "./h.ts";
 import { h } from "./h.ts";
+import { getRenderMode } from "../reactive/core.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
 ): T {
   const LazyComponent: ComponentFunction<any> = (props) => {
+    if (getRenderMode() === "ssr") {
+      throw new Error("[kiaao] Async components are not supported in SSR.");
+    }
+
     return loader()
       .then((mod) => {
         const Comp = (mod as any).default || mod;
