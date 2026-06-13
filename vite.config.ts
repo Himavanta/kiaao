@@ -20,6 +20,7 @@ export default defineConfig({
     },
     platform: "neutral",
     exports: true,
+    deps: { skipNodeModulesBundle: true },
     // minify: true,
   },
   lint: {
