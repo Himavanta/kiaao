@@ -1,4 +1,4 @@
-# kiaao 框架规范 v4.2
+# kiaao 框架规范 v4.3
 
 **宣传语**：更少的概念，更少的编译，更多的控制，更高的性能。
 
@@ -33,6 +33,10 @@
 ### 显式上下文
 
 组件实例上下文通过函数参数显式传递，而非依赖全局栈。生命周期 API 和组件级 `use` 是 `context` 对象的方法，不是从框架导入的全局函数。这从根本上消除了异步执行导致的上下文归属问题。
+
+### 机制在核心，策略在扩展
+
+框架核心提供最小化的原语（信号创建、DOM 渲染、元素级生命周期），具体的行为策略（动画、验证、手势等）通过自定义指令系统由外部库或用户代码实现。
 
 ## 一、核心 API：`use`
 
@@ -191,7 +195,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, S
 
 ## 三、`h(tag, props?, ...children)`
 
-统一创建函数。根据第一个参数的类型分两种模式。
+统一创建函数。根据第一个参数的类型分三种模式：DOM 模式、组件模式、指令模式。
 
 ### 3.1 DOM 模式（`tag` 为字符串）
 
@@ -243,7 +247,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, S
 
 **`key` 属性**：可选函数 `(item, index, entryKey) => any`，自定义身份标识。
 
-### 3.2 组件模式（`tag` 为函数）
+### 3.2 组件模式（`tag` 为函数，且不带有 `DIRECT_KEY` 标记）
 
 组件函数签名：`(props, context)`。
 
@@ -265,6 +269,7 @@ interface ComponentContext {
 2. 调用 `tag(props, context)`，同步获取返回的 DOM 节点
 3. 通过 `attachInstance` 在返回值节点上追加实例关联（`INSTANCE_KEY` 和 `DISPOSE_KEY` 均为 Set）
 4. 若返回值非 `Node`，创建注释节点作为占位（防御性兜底）
+5. 若返回值为数组，创建 Fragment 容器包裹并挂载实例关联
 
 #### 3.2.3 异步组件
 
@@ -284,7 +289,76 @@ interface ComponentContext {
 
 wrapper 不设置 `INSTANCE_KEY`。wrapper 从创建到卸载始终是组件的根节点。
 
-### 3.3 多实例共享 DOM 节点
+### 3.3 指令模式（`tag` 为函数，且带有 `DIRECT_KEY` 标记）
+
+当 `tag` 是函数且带有 `DIRECT_KEY` 标记时，进入指令模式。
+
+指令通过 `direct` 函数创建。`direct` 为传入的函数添加 `DIRECT_KEY` 标记，`h()` 通过检测此标记区分指令和组件。
+
+#### 3.3.1 指令的创建与签名
+
+```ts
+import { direct } from "kiaao";
+
+const MyDirective = direct((el, props, context) => {
+  // el: 当前绑定的原生 DOM 元素
+  // props: JSX 传入的属性（包括 children）
+  // context: 元素级生命周期方法 { onMount, onUnmount, use }
+});
+```
+
+**指令签名**：
+
+```ts
+type DirectiveFunction = (
+  el: Element,
+  props: Record<string, any> & { children?: any },
+  context: DirectiveContext,
+) => void;
+
+interface DirectiveContext {
+  onMount(fn: () => void): void;
+  onUnmount(fn: () => void): void;
+  use: typeof use; // 元素级信号，元素移除时自动清理
+}
+```
+
+- **`el`**：指令绑定的单个原生 DOM 元素。当指令包含多个子元素时，指令函数会被多次调用，每次传入一个子元素。
+- **`props`**：JSX 中写在指令上的属性，包含一个特殊的 `children` 属性。
+- **`context`**：元素级生命周期上下文，直接绑定到当前 `el`。方法始终作用于当前正在处理的元素。
+
+#### 3.3.2 指令模式流程
+
+1. 计算 `props`（合并 rest children 到 `props.children`）。
+2. 遍历扁平化后的 `children`，对每个是 `Element` 的子元素调用指令函数。跳过非 Element 子元素并在开发模式警告。
+3. 忽略指令函数的返回值，继续将原始 `children` 返回。
+4. 若原始 `children` 为单子节点且为 `Node`，直接返回该 `Node`；否则返回数组。
+
+#### 3.3.3 指令与组件模式的区别
+
+指令模式不创建组件实例，不压入 `currentComponent` 栈，不触发组件生命周期。
+
+#### 3.3.4 元素级生命周期
+
+指令拥有独立于组件的元素级生命周期：
+
+- **`context.onMount(fn)`**：注册的回调在元素被插入 DOM 后由 `triggerMount` 调用。按注册顺序执行。
+- **`context.onUnmount(fn)`**：注册的回调在元素被移除前由 `disposeNode` 同步调用。`fn` 不应返回 Promise。用于清理资源（移除事件监听、断开 Observer、停止定时器等）。
+- **`context.use(...)`**：与组件级 `use` 语法完全一致，但创建的信号/派生绑定到当前元素的生存周期。元素被移除时，这些资源通过 `LOCAL_EFFECTS` 自动清理。
+
+#### 3.3.5 指令的嵌套与执行顺序
+
+多个指令可以嵌套使用。`h()` 从内到外执行，内层指令先注册钩子。`onMount` 按注册顺序触发，`onUnmount` 并行执行。
+
+#### 3.3.6 指令的返回值
+
+指令函数可以返回一个值，但框架会忽略它。指令不能通过返回新元素来修改 DOM 结构。指令的唯一正规途径是通过 `el` 直接操作 DOM 和通过 `context` 注册生命周期钩子。
+
+#### 3.3.7 SSR 兼容性
+
+SSR 模式下指令不执行。`hSSR` 跳过指令逻辑，直接返回 children 的 SSR 输出。
+
+### 3.4 多实例共享 DOM 节点
 
 `INSTANCE_KEY` 和 `DISPOSE_KEY` 从单值改为 `Set`，允许多个组件实例在同一个 DOM 节点上共存。
 
@@ -300,6 +374,10 @@ function attachInstance(node, instance) {
 ```
 
 `triggerMount` 遍历 Set 中所有实例。`disposeNode` 遍历 Set 执行所有清理函数后清空两个 Set。
+
+### 3.5 退出动画
+
+退出动画的异步时序控制由用户态代码处理。框架核心保持信号模型的纯粹性和可预测性，不引入任何信号层面的异步机制。推荐的实现模式是通过工厂函数将动画任务收集与信号触发分离，利用指令系统收集动画任务。详见《动画方案探索与 Motion 指令实现》文档。
 
 ## 四、生命周期
 
@@ -347,7 +425,7 @@ function attachInstance(node, instance) {
 
 ### `<Portal to={...}>`
 
-将子内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树。
+将子内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树，卸载时自动清除。需从 `context` 参数中解构生命周期 API。
 
 ### `lazy(loader)`
 
@@ -373,22 +451,26 @@ function attachInstance(node, instance) {
 - 清理由框架的所有权机制自动管理：
   - `context.use` 创建的信号/派生 → `unmountCallbacks`
   - DOM 绑定产生的匿名派生 → `LOCAL_EFFECTS`
+  - 指令的 `context.use` 创建的信号 → `LOCAL_EFFECTS`
   - 组件销毁 → `DISPOSE_KEY` Set
 
 ## 七、内部标记
 
-| Symbol            | 挂载位置               | 用途                                                              |
-| ----------------- | ---------------------- | ----------------------------------------------------------------- |
-| `REACTIVE`        | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set`/`stop` 等） |
-| `LOCAL_EFFECTS`   | DOM 节点               | 存储该节点上的匿名派生停止函数集合                                |
-| `DISPOSE_KEY`     | DOM 节点               | 存储 `Set<() => void>`（组件销毁回调集合）                        |
-| `INSTANCE_KEY`    | DOM 节点               | 存储 `Set<ComponentInstance>`（关联的组件实例集合）               |
-| `INITIALIZED_KEY` | 组件实例               | 标记挂载已完成                                                    |
-| `DISPOSED_KEY`    | 组件实例               | 标记已销毁                                                        |
+| Symbol              | 挂载位置               | 用途                                                              |
+| ------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `REACTIVE`          | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set`/`stop` 等） |
+| `LOCAL_EFFECTS`     | DOM 节点               | 存储该节点上的匿名派生停止函数集合                                |
+| `DISPOSE_KEY`       | DOM 节点               | 存储 `Set<() => void>`（组件销毁回调集合）                        |
+| `INSTANCE_KEY`      | DOM 节点               | 存储 `Set<ComponentInstance>`（关联的组件实例集合）               |
+| `INITIALIZED_KEY`   | 组件实例               | 标记挂载已完成                                                    |
+| `DISPOSED_KEY`      | 组件实例               | 标记已销毁                                                        |
+| `DIRECT_KEY`        | 指令函数               | 标记指令函数，供 `h()` 区分指令和组件                             |
+| `DIRECTIVE_MOUNT`   | DOM 节点               | 存储指令注册的 `onMount` 回调集合                                 |
+| `DIRECTIVE_UNMOUNT` | DOM 节点               | 存储指令注册的 `onUnmount` 回调集合                               |
 
 ## 八、与 v3.4 的差异对照
 
-| 维度           | v3.4                            | v4.2                                           |
+| 维度           | v3.4                            | v4.3                                           |
 | -------------- | ------------------------------- | ---------------------------------------------- |
 | 创建可写信号   | `define(init)` → `[get, set]`   | `use(init)` → `[get, set]`                     |
 | 创建派生信号   | `derive(fn)` → `getter`         | `use(...deps, fn)` → `[get, set]`              |
@@ -400,6 +482,7 @@ function attachInstance(node, instance) {
 | 组件级信号     | 不支持（需手动管理）            | `context.use`（自动清理）                      |
 | 组件函数签名   | `(props)`                       | `(props, context)`                             |
 | 异步组件       | 不支持                          | 返回 Promise 即为异步组件                      |
+| 自定义指令     | 不支持                          | `direct` 创建，元素级生命周期                  |
 | 多实例共享节点 | 覆盖（导致清理丢失）            | 追加到 Set（共存）                             |
 | Fragment       | 不支持                          | `Fragment` 组件渲染为 `display: contents` 容器 |
 
@@ -411,6 +494,6 @@ function attachInstance(node, instance) {
 - **事件**：`onXxx` 转为 `addEventListener`
 - **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性
 
-**文档版本**：v4.2
-**撰写日期**：2026年6月12日
+**文档版本**：v4.3
+**撰写日期**：2026年6月14日
 **状态**：定稿
