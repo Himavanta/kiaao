@@ -28,6 +28,17 @@ export const LOCAL_EFFECTS = Symbol("local_effects");
 /** 挂载 SSR 变体的唯一键 */
 export const SSR_COMPONENT = Symbol("kiaao.ssr");
 
+// ── Directive Symbols ────────────────────────────────
+
+/** 标记指令函数 */
+export const DIRECT_KEY = Symbol("direct");
+
+/** 挂载在 DOM 节点上，存储指令的 onMount 回调集合 */
+export const DIRECTIVE_MOUNT = Symbol("directive_mount");
+
+/** 挂载在 DOM 节点上，存储指令的 onUnmount 回调集合 */
+export const DIRECTIVE_UNMOUNT = Symbol("directive_unmount");
+
 // ── Public API Types ───────────────────────────────────
 
 /** @internal 用于类型层面区分信号和普通函数的 brand */

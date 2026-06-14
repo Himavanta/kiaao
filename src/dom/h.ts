@@ -17,6 +17,8 @@ import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 import { createElement, createComment } from "./dom-utils.ts";
+import { isDirective, createDirectiveContext } from "./directive.ts";
+import type { DirectiveFunction } from "./directive.ts";
 
 // ── Context ───────────────────────────────────
 
@@ -113,8 +115,36 @@ export function h(
     return createComment("") as unknown as Element;
   }
 
-  // ── 组件模式 ──
+  // ── 指令模式 / 组件模式 ──
   if (typeof tag === "function") {
+    // —— 指令模式 ——
+    if (isDirective(tag)) {
+      const dirProps = { ...props };
+      if (children.length > 0) {
+        dirProps.children = children.length === 1 ? children[0] : children;
+      }
+
+      const flatChildren = children.flat(Infinity);
+
+      for (const child of flatChildren) {
+        if (child instanceof Element) {
+          const ctx = createDirectiveContext(child);
+          (tag as DirectiveFunction)(child, dirProps, ctx);
+        } else if (process.env.NODE_ENV !== "production") {
+          if (child != null && typeof child !== "boolean") {
+            console.warn("[kiaao] directive skipped non-Element child:", child);
+          }
+        }
+      }
+
+      // 单子节点展开：单个 Node 直接返回，保持消费者兼容性
+      if (flatChildren.length === 1 && flatChildren[0] instanceof Node) {
+        return flatChildren[0] as unknown as Element;
+      }
+      return children as unknown as Element;
+    }
+
+    // —— 组件模式 ——
     const instance = createComponentInstance();
     const context = createContext(instance);
 
@@ -171,6 +201,17 @@ export function h(
     if (result instanceof Node) {
       attachInstance(result, instance);
       return result as unknown as Element;
+    } else if (Array.isArray(result)) {
+      // 指令/多根元素返回值 → Fragment 包裹
+      const wrapper = createElement("div") as HTMLElement;
+      wrapper.style.display = "contents";
+      attachInstance(wrapper, instance);
+      for (const child of result) {
+        if (child instanceof Node) {
+          wrapper.appendChild(child);
+        }
+      }
+      return wrapper as unknown as Element;
     } else {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[kiaao] component returned non-Node value:", result);

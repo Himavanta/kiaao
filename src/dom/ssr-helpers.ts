@@ -1,7 +1,7 @@
 // kiaao v4 — SSR helper functions shared between h.ts and components
 
 import { isUse, toValue } from "../reactive/core.ts";
-import { SSR_COMPONENT } from "../reactive/types.ts";
+import { SSR_COMPONENT, DIRECT_KEY } from "../reactive/types.ts";
 import { escapeHtml, escapeAttr, FORCE_ATTRIBUTE, stripPrefix, splitSet } from "./dom-utils.ts";
 
 const SSR_MARKER = Symbol("kiaao.ssr.safe");
@@ -107,6 +107,19 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
     return ssr("");
   }
   if (typeof tag === "function") {
+    // 指令在 SSR 模式下跳过执行，直接渲染 children（指令本身无 DOM 表现）
+    if (tag[DIRECT_KEY]) {
+      let inner = "";
+      for (const child of children) {
+        if (Array.isArray(child)) {
+          for (const c of child) inner += renderSSRChild(c);
+        } else {
+          inner += renderSSRChild(child);
+        }
+      }
+      return ssr(inner);
+    }
+
     const ssrVariant = (tag as any)[SSR_COMPONENT];
     if (ssrVariant) {
       const result = ssrVariant(props || {});
