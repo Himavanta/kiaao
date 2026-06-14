@@ -1,3 +1,4 @@
+import { isNode } from "../utils/type-guards.ts";
 // kiaao — Child node processing for h()
 
 import { isUse, use } from "../reactive/core.ts";
@@ -17,7 +18,7 @@ export function processChildren(children: any[]): Node[] {
     if (child == null || typeof child === "boolean") continue;
 
     // Node 是最常见的子节点类型（JSX 编译结果），优先检查
-    if (child instanceof Node) {
+    if (isNode(child)) {
       result.push(child);
       continue;
     }

@@ -1,3 +1,4 @@
+import { isNode } from "../utils/type-guards.ts";
 // kiaao — SSR helper functions shared between h.ts and components
 // Types and simple utilities kept here; serialize/render logic split into
 // ssr-serialize.ts and ssr-render.ts respectively.
@@ -21,6 +22,10 @@ export function isSSRSafe(v: any): v is SSRSafe {
 }
 
 /** 判断是否为纯对象（用于映射表模式检测） */
+/**
+ * 判断是否为纯对象（用于映射表模式检测）。
+ * 排除 SSR 安全对象（{ html: string }），防止误判为映射表。
+ */
 export function isPlainObject(v: any): boolean {
   return !!v && v.constructor === Object && !isSSRSafe(v);
 }
@@ -39,6 +44,6 @@ export function renderSSRChild(child: any): string {
   if (typeof child === "string" || typeof child === "number") return escapeHtml(String(child));
   if (isUse(child)) return escapeHtml(String(child()));
   if (typeof child === "function") return renderSSRChild(child());
-  if (child instanceof Node) return "";
+  if (isNode(child)) return "";
   return "";
 }

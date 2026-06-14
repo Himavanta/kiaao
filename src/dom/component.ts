@@ -1,3 +1,4 @@
+import { isPromise } from "../utils/type-guards.ts";
 // kiaao — Component model & lifecycle (DOM)
 // Component instance creation, lifecycle hooks (via context), mount/unmount, dispose.
 
@@ -51,7 +52,7 @@ export function createComponentInstance(): ComponentInstance {
 export function safeCall(fn: () => void | Promise<void>, label: string): void {
   try {
     const result = fn();
-    if (result instanceof Promise) {
+    if (isPromise(result)) {
       result.catch((err) => console.error(`[kiaao] ${label}:`, err));
     }
   } catch (err) {

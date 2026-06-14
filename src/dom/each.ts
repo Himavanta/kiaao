@@ -1,3 +1,4 @@
+import { isNode } from "../utils/type-guards.ts";
 // kiaao — each directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
@@ -134,7 +135,7 @@ function syncItemDOM(
     console.error("[kiaao] each item render error:", err);
     return prevNode;
   }
-  if (node instanceof Node) {
+  if (isNode(node)) {
     anchor.before(node);
     if (isConnected(container)) triggerMount(node);
     if (nodeType(node) !== Node.DOCUMENT_FRAGMENT_NODE) {

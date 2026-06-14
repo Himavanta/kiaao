@@ -1,3 +1,4 @@
+import { isNode } from "../utils/type-guards.ts";
 // kiaao — when directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
@@ -72,13 +73,13 @@ function renderWhenMappingMode(
   const branchFn = mappingTable[showRaw];
   if (branchFn) {
     const node = branchFn();
-    if (node instanceof Node) {
+    if (isNode(node)) {
       el.append(node);
       triggerMountIfConnected(el, node);
     }
   } else if (elseFn) {
     const node = elseFn();
-    if (node instanceof Node) {
+    if (isNode(node)) {
       el.append(node);
       triggerMountIfConnected(el, node);
     }
@@ -95,7 +96,7 @@ function renderWhenLazyMode(
   if (!show) {
     if (elseFn) {
       const node = elseFn();
-      if (node instanceof Node) {
+      if (isNode(node)) {
         el.append(node);
         triggerMountIfConnected(el, node);
       }
@@ -103,7 +104,7 @@ function renderWhenLazyMode(
     return;
   }
   const result = childFn();
-  if (result instanceof Node) {
+  if (isNode(result)) {
     el.append(result);
     triggerMountIfConnected(el, result);
   }
@@ -122,7 +123,7 @@ function renderWhenStaticMode(
   if (!show) {
     if (elseFn) {
       const node = elseFn();
-      if (node instanceof Node) {
+      if (isNode(node)) {
         el.append(node);
         triggerMountIfConnected(el, node);
       }

@@ -1,3 +1,4 @@
+import { isElement, isNode, isPromise } from "../utils/type-guards.ts";
 // kiaao — h() function: creates real DOM or dispatches to hSSR in SSR mode
 // Component mode supports both sync and async components via context-based lifecycle.
 
@@ -5,6 +6,7 @@ import { getRenderMode, isUse, registerSignalStop } from "../reactive/core.ts";
 import { REACTIVE, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
 import type { UseFunction } from "../reactive/core.ts";
 import type { ComponentInstance } from "../reactive/types.ts";
+import { normalizeChildren } from "../utils/helpers.ts";
 import {
   createComponentInstance,
   createDisposeFn,
@@ -94,13 +96,13 @@ function createContext(instance: ComponentInstance): Context {
 function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
   const dirProps = { ...props };
   if (children.length > 0) {
-    dirProps.children = children.length === 1 ? children[0] : children;
+    dirProps.children = normalizeChildren(children);
   }
 
   const flatChildren = children.flat(Infinity);
 
   for (const child of flatChildren) {
-    if (child instanceof Element) {
+    if (isElement(child)) {
       const ctx = createDirectiveContext(child);
       (tag as DirectiveFunction)(child, dirProps, ctx);
     } else if (process.env.NODE_ENV !== "production") {
@@ -111,7 +113,7 @@ function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
   }
 
   // 单子节点展开：单个 Node 直接返回，保持消费者兼容性
-  if (flatChildren.length === 1 && flatChildren[0] instanceof Node) {
+  if (flatChildren.length === 1 && isNode(flatChildren[0])) {
     return flatChildren[0] as unknown as Element;
   }
   return children as unknown as Element;
@@ -135,7 +137,7 @@ function handleAsyncComponentResult(result: Promise<any>, instance: ComponentIns
     .then((realDOM: any) => {
       if (disposed) return;
 
-      if (!(realDOM instanceof Node)) {
+      if (!isNode(realDOM)) {
         if (process.env.NODE_ENV !== "production") {
           console.warn("[kiaao] async component resolved with non-Node value:", realDOM);
         }
@@ -166,7 +168,7 @@ function handleAsyncComponentResult(result: Promise<any>, instance: ComponentIns
 /** 处理同步组件结果：Node / 多根数组 / 非法值 */
 function handleSyncComponentResult(result: any, instance: ComponentInstance): Element {
   // Node → 直接关联实例
-  if (result instanceof Node) {
+  if (isNode(result)) {
     attachInstance(result, instance);
     return result as unknown as Element;
   }
@@ -177,7 +179,7 @@ function handleSyncComponentResult(result: any, instance: ComponentInstance): El
     wrapper.style.display = "contents";
     attachInstance(wrapper, instance);
     for (const child of result) {
-      if (child instanceof Node) {
+      if (isNode(child)) {
         wrapper.appendChild(child);
       }
     }
@@ -273,13 +275,13 @@ export function h(
 
     let compProps = props ?? {};
     if (children.length > 0) {
-      compProps = { ...compProps, children: children.length === 1 ? children[0] : children };
+      compProps = { ...compProps, children: normalizeChildren(children) };
     }
 
     const result = (tag as (props: any, context?: any) => any)(compProps, context);
 
     // 异步组件
-    if (result instanceof Promise) {
+    if (isPromise(result)) {
       return handleAsyncComponentResult(result, instance);
     }
 

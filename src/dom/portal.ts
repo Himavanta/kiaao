@@ -1,3 +1,4 @@
+import { isNode } from "../utils/type-guards.ts";
 // kiaao — Portal component
 // Renders content into a specified DOM container outside the component tree.
 
@@ -17,7 +18,7 @@ export function Portal(
   const nodes = Array.isArray(props.children) ? props.children : [props.children];
 
   for (const node of nodes) {
-    if (node instanceof Node) {
+    if (isNode(node)) {
       target.append(node);
       triggerMount(node);
     }
@@ -25,7 +26,7 @@ export function Portal(
 
   onUnmount(() => {
     for (const node of nodes) {
-      if (node instanceof Node) {
+      if (isNode(node)) {
         disposeNode(node);
         (node as ChildNode).remove();
       }

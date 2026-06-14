@@ -1,3 +1,4 @@
+import { isPromise } from "../utils/type-guards.ts";
 // kiaao — SSR rendering functions
 
 import { toValue } from "../reactive/core.ts";
@@ -34,7 +35,7 @@ function hSSRFunctionTag(tag: any, props: any, children: any[]): SSRSafe {
   // SSR 下传入空 context，生命周期不触发
   const context = { onMount: () => {}, onUnmount: () => {} };
   const result = tag(props || {}, context);
-  if (result instanceof Promise) {
+  if (isPromise(result)) {
     throw new Error("[kiaao] Async components are not supported in SSR.");
   }
   if (isSSRSafe(result)) return result;
