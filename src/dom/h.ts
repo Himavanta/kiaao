@@ -98,6 +98,145 @@ function createContext(instance: ComponentInstance): Context {
   };
 }
 
+// ── Directive Mode ────────────────────────────────────
+
+/** 指令模式：遍历 children，对每个 Element 调用指令函数 */
+function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
+  const dirProps = { ...props };
+  if (children.length > 0) {
+    dirProps.children = children.length === 1 ? children[0] : children;
+  }
+
+  const flatChildren = children.flat(Infinity);
+
+  for (const child of flatChildren) {
+    if (child instanceof Element) {
+      const ctx = createDirectiveContext(child);
+      (tag as DirectiveFunction)(child, dirProps, ctx);
+    } else if (process.env.NODE_ENV !== "production") {
+      if (child != null && typeof child !== "boolean") {
+        console.warn("[kiaao] directive skipped non-Element child:", child);
+      }
+    }
+  }
+
+  // 单子节点展开：单个 Node 直接返回，保持消费者兼容性
+  if (flatChildren.length === 1 && flatChildren[0] instanceof Node) {
+    return flatChildren[0] as unknown as Element;
+  }
+  return children as unknown as Element;
+}
+
+// ── Async Component Result ────────────────────────────
+
+/** 处理异步组件：创建 wrapper，等待 Promise resolve 后挂载子节点 */
+function handleAsyncComponentResult(result: Promise<any>, instance: ComponentInstance): Element {
+  const wrapper = createElement("div") as HTMLElement;
+  wrapper.style.display = "contents";
+  (wrapper as any)[DISPOSE_KEY] = new Set<() => void>();
+  (wrapper as any)[DISPOSE_KEY].add(createDisposeFn(instance));
+
+  let disposed = false;
+  instance.unmountCallbacks.push(() => {
+    disposed = true;
+  });
+
+  result
+    .then((realDOM: any) => {
+      if (disposed) return;
+
+      if (!(realDOM instanceof Node)) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[kiaao] async component resolved with non-Node value:", realDOM);
+        }
+        realDOM = createComment("async component resolved with invalid value");
+      }
+
+      wrapper.appendChild(realDOM as Node);
+
+      // 先递归触发子树中已就位子组件的 onMount
+      triggerMount(realDOM);
+
+      // 再触发当前异步组件自身的 onMount
+      if (!(instance as any)[INITIALIZED_KEY]) {
+        (instance as any)[INITIALIZED_KEY] = true;
+        instance.mountCallbacks.forEach((fn) => safeCall(fn, "onMount"));
+      }
+    })
+    .catch((err: Error) => {
+      if (disposed) return;
+      console.error("[kiaao] async component error:", err);
+    });
+
+  return wrapper as unknown as Element;
+}
+
+// ── Sync Component Result ─────────────────────────────
+
+/** 处理同步组件结果：Node / 多根数组 / 非法值 */
+function handleSyncComponentResult(result: any, instance: ComponentInstance): Element {
+  // Node → 直接关联实例
+  if (result instanceof Node) {
+    attachInstance(result, instance);
+    return result as unknown as Element;
+  }
+
+  // 指令/多根元素返回值 → Fragment 包裹
+  if (Array.isArray(result)) {
+    const wrapper = createElement("div") as HTMLElement;
+    wrapper.style.display = "contents";
+    attachInstance(wrapper, instance);
+    for (const child of result) {
+      if (child instanceof Node) {
+        wrapper.appendChild(child);
+      }
+    }
+    return wrapper as unknown as Element;
+  }
+
+  // 非法值 → 注释占位
+  if (process.env.NODE_ENV !== "production") {
+    console.warn("[kiaao] component returned non-Node value:", result);
+  }
+  const placeholder = createComment("component returned invalid value");
+  attachInstance(placeholder, instance);
+  return placeholder as unknown as Element;
+}
+
+// ── DOM Mode ──────────────────────────────────────────
+
+/** DOM 模式：when/each 控制流指令或普通元素创建 */
+function handleDomMode(tag: string, props: any, children: any[]): Element {
+  // when 指令
+  if (props?.when !== undefined) {
+    const { when, each, key, else: elseFn, ...rest } = props;
+    return createWhenElement({
+      tag,
+      props: rest,
+      children,
+      whenFn: when,
+      eachFn: each,
+      keyFn: key,
+      elseFn,
+    });
+  }
+
+  // each 指令
+  if (props?.each !== undefined) {
+    const { each, key, ...rest } = props;
+    return createEachElement(tag, rest, children, each, key);
+  }
+
+  // 普通元素
+  const el = createElement(tag);
+  setProps(el, props && typeof props === "object" && !isUse(props) ? props : null);
+  const childNodes = processChildren(children);
+  for (const node of childNodes) {
+    el.append(node);
+  }
+  return el;
+}
+
 // ── h() ────────────────────────────────────────────────
 
 export function h(
@@ -120,36 +259,14 @@ export function h(
     return createComment("") as unknown as Element;
   }
 
-  // ── 指令模式 / 组件模式 ──
+  // 函数标签：指令 / 组件
   if (typeof tag === "function") {
-    // —— 指令模式 ——
+    // 指令模式
     if (isDirective(tag)) {
-      const dirProps = { ...props };
-      if (children.length > 0) {
-        dirProps.children = children.length === 1 ? children[0] : children;
-      }
-
-      const flatChildren = children.flat(Infinity);
-
-      for (const child of flatChildren) {
-        if (child instanceof Element) {
-          const ctx = createDirectiveContext(child);
-          (tag as DirectiveFunction)(child, dirProps, ctx);
-        } else if (process.env.NODE_ENV !== "production") {
-          if (child != null && typeof child !== "boolean") {
-            console.warn("[kiaao] directive skipped non-Element child:", child);
-          }
-        }
-      }
-
-      // 单子节点展开：单个 Node 直接返回，保持消费者兼容性
-      if (flatChildren.length === 1 && flatChildren[0] instanceof Node) {
-        return flatChildren[0] as unknown as Element;
-      }
-      return children as unknown as Element;
+      return handleDirectiveMode(tag, props, children);
     }
 
-    // —— 组件模式 ——
+    // 组件模式
     const instance = createComponentInstance();
     const context = createContext(instance);
 
@@ -160,101 +277,15 @@ export function h(
 
     const result = tag(compProps, context);
 
-    // —— 异步组件 ——
+    // 异步组件
     if (result instanceof Promise) {
-      const wrapper = createElement("div") as HTMLElement;
-      wrapper.style.display = "contents";
-      (wrapper as any)[DISPOSE_KEY] = new Set<() => void>();
-      (wrapper as any)[DISPOSE_KEY].add(createDisposeFn(instance));
-
-      let disposed = false;
-      instance.unmountCallbacks.push(() => {
-        disposed = true;
-      });
-
-      result
-        .then((realDOM: any) => {
-          if (disposed) return;
-
-          if (!(realDOM instanceof Node)) {
-            if (process.env.NODE_ENV !== "production") {
-              console.warn("[kiaao] async component resolved with non-Node value:", realDOM);
-            }
-            realDOM = createComment("async component resolved with invalid value");
-          }
-
-          wrapper.appendChild(realDOM as Node);
-
-          // 先递归触发子树中已就位子组件的 onMount
-          triggerMount(realDOM);
-
-          // 再触发当前异步组件自身的 onMount
-          if (!(instance as any)[INITIALIZED_KEY]) {
-            (instance as any)[INITIALIZED_KEY] = true;
-            instance.mountCallbacks.forEach((fn) => safeCall(fn, "onMount"));
-          }
-        })
-        .catch((err: Error) => {
-          if (disposed) return;
-          console.error("[kiaao] async component error:", err);
-        });
-
-      return wrapper as unknown as Element;
+      return handleAsyncComponentResult(result, instance);
     }
 
-    // —— 同步组件 ——
-    if (result instanceof Node) {
-      attachInstance(result, instance);
-      return result as unknown as Element;
-    } else if (Array.isArray(result)) {
-      // 指令/多根元素返回值 → Fragment 包裹
-      const wrapper = createElement("div") as HTMLElement;
-      wrapper.style.display = "contents";
-      attachInstance(wrapper, instance);
-      for (const child of result) {
-        if (child instanceof Node) {
-          wrapper.appendChild(child);
-        }
-      }
-      return wrapper as unknown as Element;
-    } else {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[kiaao] component returned non-Node value:", result);
-      }
-      const placeholder = createComment("component returned invalid value");
-      attachInstance(placeholder, instance);
-      return placeholder as unknown as Element;
-    }
+    // 同步组件
+    return handleSyncComponentResult(result, instance);
   }
 
-  // ── DOM 模式：控制流指令 ──
-  if (props?.when !== undefined) {
-    const { when, each, key, else: elseFn, ...rest } = props;
-    return createWhenElement({
-      tag,
-      props: rest,
-      children,
-      whenFn: when,
-      eachFn: each,
-      keyFn: key,
-      elseFn,
-    });
-  }
-  if (props?.each !== undefined) {
-    const { each, key, ...rest } = props;
-    return createEachElement(tag, rest, children, each, key);
-  }
-
-  // ── DOM 模式：普通元素 ──
-  const el = createElement(tag);
-
-  setProps(el, props && typeof props === "object" && !isUse(props) ? props : null);
-
-  const childNodes = processChildren(children);
-
-  for (const node of childNodes) {
-    el.append(node);
-  }
-
-  return el;
+  // DOM 模式
+  return handleDomMode(tag, props, children);
 }
