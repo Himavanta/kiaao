@@ -4,10 +4,6 @@ Client-side routing is provided as a standalone package `kiaao/router`. It is bu
 
 客户端路由作为独立包 `kiaao/router` 提供。它完全基于核心原语构建——用信号管理当前路径，用 `when` 进行路由匹配，用组件构建视图和链接。没有路由器专属的响应式系统。
 
-```bash
-npm install kiaao
-```
-
 The router is included in the `kiaao` package. Import it from `kiaao/router`.
 
 路由包含在 `kiaao` 包中。从 `kiaao/router` 导入即可。
@@ -33,22 +29,22 @@ const { RouterView, Link, navigate, currentPath, currentParams } = createRouter(
 | Option / 参数 | Type / 类型 | Description / 说明                                                                |
 | ------------- | ----------- | --------------------------------------------------------------------------------- |
 | `fallback`    | Component   | Component to render when no route matches. Defaults to a "404 Not Found" message. |
-| `fallback`    | 组件        | 无匹配时渲染的组件。默认为显示 "404 Not Found"。                                  |
+|               |             | 无匹配时渲染的组件。默认为显示 "404 Not Found"。                                  |
 
 ### Return Value / 返回值
 
 | Property / 属性 | Type / 类型                      | Description / 说明                                  |
 | --------------- | -------------------------------- | --------------------------------------------------- |
 | `RouterView`    | Component                        | The route view. Renders the matched component.      |
-|                 | 组件                             | 路由视图。渲染匹配的组件。                          |
+|                 |                                  | 路由视图。渲染匹配的组件。                          |
 | `Link`          | Component                        | Declarative navigation link.                        |
-|                 | 组件                             | 声明式导航链接。                                    |
+|                 |                                  | 声明式导航链接。                                    |
 | `navigate`      | `(path: string) => void`         | Programmatic navigation. Receives an absolute path. |
-|                 | `(path: string) => void`         | 编程式导航。接收完整绝对路径。                      |
+|                 |                                  | 编程式导航。接收完整绝对路径。                      |
 | `currentPath`   | `Getter<string>`                 | A signal holding the current pathname.              |
-|                 | `Getter<string>`                 | 保存当前路径名的信号。                              |
+|                 |                                  | 保存当前路径名的信号。                              |
 | `currentParams` | `Getter<Record<string, string>>` | A signal holding the current URL query parameters.  |
-|                 | `Getter<Record<string, string>>` | 保存当前 URL 查询参数的信号。                       |
+|                 |                                  | 保存当前 URL 查询参数的信号。                       |
 
 ---
 
@@ -63,11 +59,11 @@ const { RouterView, Link, navigate, currentPath, currentParams } = createRouter(
 | Prop / 属性 | Type / 类型 | Description / 说明                                                                               |
 | ----------- | ----------- | ------------------------------------------------------------------------------------------------ |
 | `routes`    | `Route[]`   | Array of route definitions.                                                                      |
-|             | `Route[]`   | 路由定义数组。                                                                                   |
+|             |             | 路由定义数组。                                                                                   |
 | `base`      | `string`    | Path prefix. The RouterView only responds to path changes within this base. Must start with `/`. |
-|             | `string`    | 路径前缀。该 RouterView 只响应 base 内的路径变化。必须以 `/` 开头。                              |
+|             |             | 路径前缀。该 RouterView 只响应 base 内的路径变化。必须以 `/` 开头。                              |
 | `fallback`  | Component   | Fallback when no route matches. Overrides the instance-level fallback.                           |
-|             | 组件        | 无匹配时的后备内容。覆盖实例级 fallback。                                                        |
+|             |             | 无匹配时的后备内容。覆盖实例级 fallback。                                                        |
 
 ### Route Definition / 路由定义
 
