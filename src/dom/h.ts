@@ -228,11 +228,16 @@ function handleDomMode(tag: string, props: any, children: any[]): Element {
 
 // ── h() ────────────────────────────────────────────────
 
+// 指令标签重载
+export function h(tag: DirectiveFunction, props?: any, ...children: any[]): Element;
+// 组件 / 字符串标签重载
 export function h(
   tag: string | ((props: any, context?: any) => any),
   props?: any,
   ...children: any[]
-): Element {
+): Element;
+// 实现
+export function h(tag: any, props?: any, ...children: any[]): Element {
   // SSR mode: delegate to hSSR
   if (getRenderMode() === "ssr") {
     return hSSR(tag, props, children) as any;

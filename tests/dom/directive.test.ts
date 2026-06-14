@@ -264,7 +264,7 @@ describe("directive lifecycle integration", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
     expect(mounted).toBe(false);
 
     mount(el, document.body);
@@ -281,7 +281,7 @@ describe("directive lifecycle integration", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
     mount(el, document.body);
 
     const span = el.querySelector("span")!;
@@ -300,7 +300,7 @@ describe("directive lifecycle integration", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
 
     mount(el, document.body);
     expect(unmounted).toBe(false);
@@ -322,7 +322,7 @@ describe("directive lifecycle integration", () => {
       onUnmount(() => {
         order.push("component");
       });
-      return h("div", null, h(TestDir as any, null, h("span", null, "child")));
+      return h("div", null, h(TestDir, null, h("span", null, "child")));
     }
 
     const el = h(Comp);
@@ -349,7 +349,7 @@ describe("directive lifecycle integration", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
     mount(el, document.body);
     expect(count).toBe(2);
     unmount(el);
@@ -366,7 +366,7 @@ describe("directive lifecycle integration", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
     mount(el, document.body);
     expect(signalValue).toBe(42);
     unmount(el);
@@ -383,7 +383,7 @@ describe("h() directive mode integration", () => {
     });
 
     const child = h("span", null, "hello");
-    h("div", null, h(TestDir as any, { duration: 0.5, from: { opacity: 0 } }, child));
+    h("div", null, h(TestDir, { duration: 0.5, from: { opacity: 0 } }, child));
 
     expect(receivedProps).toBeDefined();
     expect(receivedProps.duration).toBe(0.5);
@@ -394,7 +394,7 @@ describe("h() directive mode integration", () => {
     const TestDir = direct((_el, _props, _ctx) => {});
 
     const child = h("span", null, "single");
-    const result = h("div", null, h(TestDir as any, null, child));
+    const result = h("div", null, h(TestDir, null, child));
 
     // span 应直接作为 div 的子节点（单子节点展开）
     expect(result.children.length).toBe(1);
@@ -410,7 +410,7 @@ describe("h() directive mode integration", () => {
 
     const childA = h("span", null, "A");
     const childB = h("span", null, "B");
-    const result = h("div", null, h(TestDir as any, null, childA, childB));
+    const result = h("div", null, h(TestDir, null, childA, childB));
 
     // 指令被调用了两次
     expect(processed.length).toBe(2);
@@ -424,7 +424,7 @@ describe("h() directive mode integration", () => {
     const TestDir = direct((_el, _props, _ctx) => {});
 
     function Comp() {
-      return h(TestDir as any, null, h("p", null, "content"));
+      return h(TestDir, null, h("p", null, "content"));
     }
 
     const el = h(Comp);
@@ -437,7 +437,7 @@ describe("h() directive mode integration", () => {
     const TestDir = direct((_el, _props, _ctx) => {});
 
     function Comp() {
-      return h(TestDir as any, null, h("p", null, "A"), h("p", null, "B"));
+      return h(TestDir, null, h("p", null, "A"), h("p", null, "B"));
     }
 
     const el = h(Comp);
@@ -455,7 +455,7 @@ describe("h() directive mode integration", () => {
     });
 
     // 使用 when 在行内属性中
-    const el = h("section", { when: true }, h(TestDir as any, null, h("p", null, "visible")));
+    const el = h("section", { when: true }, h(TestDir, null, h("p", null, "visible")));
 
     expect(el.childNodes.length).toBeGreaterThan(0);
     const p = el.querySelector("p")!;
@@ -471,7 +471,7 @@ describe("h() directive mode integration", () => {
     });
 
     const [visible, setVisible] = use(true);
-    const el = h("section", { when: visible }, h(TestDir as any, null, h("p", null, "content")));
+    const el = h("section", { when: visible }, h(TestDir, null, h("p", null, "content")));
 
     mount(el as HTMLElement, document.body);
     expect(mounted).toBe(true);
@@ -490,7 +490,7 @@ describe("h() directive mode integration", () => {
 
     const [items] = use(["a", "b", "c"]);
     const el = h("ul", { each: items, key: (item: string) => item }, (item: () => string) =>
-      h(ItemDir as any, null, h("li", null, item)),
+      h(ItemDir, null, h("li", null, item)),
     );
 
     expect(el.children.length).toBe(3);
@@ -509,11 +509,7 @@ describe("h() directive mode integration", () => {
     });
 
     function Comp() {
-      return h(
-        "div",
-        null,
-        h(Outer as any, null, h(Inner as any, null, h("span", null, "nested"))),
-      );
+      return h("div", null, h(Outer, null, h(Inner, null, h("span", null, "nested"))));
     }
 
     const el = h(Comp);
@@ -535,7 +531,7 @@ describe("SSR directive skipping", () => {
     });
 
     function Comp() {
-      return h("div", null, h(TestDir as any, null, h("p", null, "ssr-content")));
+      return h("div", null, h(TestDir, null, h("p", null, "ssr-content")));
     }
 
     const html = renderToString(Comp);
@@ -553,7 +549,7 @@ describe("directive error handling", () => {
     });
 
     expect(() => {
-      h("div", null, h(BadDir as any, null, h("span", null, "child")));
+      h("div", null, h(BadDir, null, h("span", null, "child")));
     }).toThrow("directive error");
   });
 
@@ -566,7 +562,7 @@ describe("directive error handling", () => {
       });
     });
 
-    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    const el = h("div", null, h(TestDir, null, h("span", null, "child")));
     mount(el, document.body);
     unmount(el);
   });
