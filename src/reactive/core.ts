@@ -120,6 +120,61 @@ function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
   return createSignal(getter, setter, state);
 }
 
+// ── Derivation State Builder ──────────────────────────
+
+/**
+ * 构造派生节点的内部状态，注册到各依赖的 subs，创建统一清理函数。
+ */
+function buildDerivationState<T>(
+  func: (v?: any) => T,
+  validDeps: Getter<any>[],
+): DerivationState<T> {
+  const state: DerivationState<T> = {
+    deps: new Set(validDeps),
+    cachedValue: undefined as any,
+    subs: new Set(),
+    computeFn: func,
+    set: null as any,
+    stops: new Set(),
+    stop: null as any,
+  };
+
+  // 注册到各依赖的 subs
+  for (const dep of validDeps) {
+    const depState = (dep as any)[REACTIVE] as SignalState<any>;
+    depState.subs.add(state);
+
+    const cancel = () => {
+      depState.subs.delete(state);
+    };
+    state.stops.add(cancel);
+  }
+
+  // 统一清理函数
+  state.stop = () => {
+    for (const cancel of state.stops) {
+      cancel();
+    }
+    state.stops.clear();
+  };
+
+  return state;
+}
+
+// ── Initial Computation ───────────────────────────────
+
+/**
+ * 执行派生信号的初始计算，异常时缓存 undefined。
+ */
+function computeInitialDerivedValue<T>(state: DerivationState<T>): void {
+  try {
+    state.cachedValue = state.computeFn(undefined);
+  } catch (err) {
+    console.error("[kiaao] derive error during initial computation:", err);
+    state.cachedValue = undefined as any;
+  }
+}
+
 // ── Derivation Mode ────────────────────────────────────
 
 function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
@@ -157,42 +212,10 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
   }
 
   // ── 构造派生节点 ──
-  const state: DerivationState<T> = {
-    deps: new Set(validDeps),
-    cachedValue: undefined as any,
-    subs: new Set(),
-    computeFn: func,
-    set: null as any,
-    stops: new Set(),
-    stop: null as any,
-  };
-
-  // ── 注册到各依赖的 subs ──
-  for (const dep of validDeps) {
-    const depState = (dep as any)[REACTIVE] as SignalState<any>;
-    depState.subs.add(state);
-
-    const cancel = () => {
-      depState.subs.delete(state);
-    };
-    state.stops.add(cancel);
-  }
-
-  // ── 统一清理函数 ──
-  state.stop = () => {
-    for (const cancel of state.stops) {
-      cancel();
-    }
-    state.stops.clear();
-  };
+  const state = buildDerivationState<T>(func as (v?: any) => T, validDeps);
 
   // ── 初始计算 ──
-  try {
-    state.cachedValue = state.computeFn(undefined);
-  } catch (err) {
-    console.error("[kiaao] derive error during initial computation:", err);
-    state.cachedValue = undefined as any;
-  }
+  computeInitialDerivedValue(state);
 
   const getter = (() => state.cachedValue) as Getter<T>;
 
