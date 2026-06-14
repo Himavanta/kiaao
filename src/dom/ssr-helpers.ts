@@ -48,6 +48,58 @@ function stripDirectives(props: any): any {
   return rest;
 }
 
+// ── CSS Text Serialization ────────────────────────────
+
+/** 将 CSS 对象序列化为内联样式字符串 */
+function serializeCssText(styleObj: Record<string, string | number>): string {
+  return Object.entries(styleObj)
+    .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
+    .join("; ");
+}
+
+// ── Single Attribute Serialization ────────────────────
+
+/** 序列化单条属性为 HTML 属性字符串 */
+function serializeAttr(rawKey: string, val: any): string {
+  const { prefix, key } = stripPrefix(rawKey);
+
+  // prop: 前缀 → 不输出
+  if (prefix === "prop") return "";
+
+  // attr: 前缀 → 强制输出
+  if (prefix === "attr") {
+    if (val === true) return ` ${key}`;
+    return ` ${key}="${escapeAttr(String(val))}"`;
+  }
+
+  // 事件属性不输出
+  if (key.startsWith("on")) return "";
+
+  // style
+  if (key === "style") {
+    if (typeof val === "string") return ` style="${escapeAttr(val)}"`;
+    if (typeof val === "object" && val !== null) {
+      return ` style="${escapeAttr(serializeCssText(val))}"`;
+    }
+    return "";
+  }
+
+  // aria-* / data-*
+  if (key.startsWith("aria-") || key.startsWith("data-")) {
+    return ` ${key}="${escapeAttr(String(val))}"`;
+  }
+
+  // FORCE_ATTRIBUTE
+  if (FORCE_ATTRIBUTE.has(key)) {
+    if (val === true) return ` ${key}`;
+    return ` ${key}="${escapeAttr(String(val))}"`;
+  }
+
+  return "";
+}
+
+// ── serializeAttrs ────────────────────────────────────
+
 function serializeAttrs(props: any): string {
   if (!props || typeof props !== "object") return "";
   let html = "";
@@ -58,46 +110,7 @@ function serializeAttrs(props: any): string {
     if (isUse(val)) val = val();
     if (val == null || val === false) continue;
 
-    const { prefix, key } = stripPrefix(rawKey);
-
-    if (prefix === "prop") continue;
-
-    if (prefix === "attr") {
-      if (val === true) {
-        html += ` ${key}`;
-      } else {
-        html += ` ${key}="${escapeAttr(String(val))}"`;
-      }
-      continue;
-    }
-
-    if (key.startsWith("on")) continue;
-
-    if (key === "style") {
-      if (typeof val === "string") {
-        html += ` style="${escapeAttr(val)}"`;
-      } else if (typeof val === "object" && val !== null) {
-        const cssText = Object.entries(val as Record<string, string | number>)
-          .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
-          .join("; ");
-        html += ` style="${escapeAttr(cssText)}"`;
-      }
-      continue;
-    }
-
-    if (key.startsWith("aria-") || key.startsWith("data-")) {
-      html += ` ${key}="${escapeAttr(String(val))}"`;
-      continue;
-    }
-
-    if (FORCE_ATTRIBUTE.has(key)) {
-      if (val === true) {
-        html += ` ${key}`;
-      } else {
-        html += ` ${key}="${escapeAttr(String(val))}"`;
-      }
-      continue;
-    }
+    html += serializeAttr(rawKey, val);
   }
   return html;
 }
