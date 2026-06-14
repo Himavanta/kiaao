@@ -4,8 +4,6 @@ A component in kiaao is a function that returns JSX. It runs exactly once. There
 
 kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收 `context` 对象作为第二个参数，提供生命周期方法和组件级 `use`，在卸载时自动清理信号。
 
----
-
 ## A Basic Component / 基本组件
 
 A component function runs once when mounted. The DOM is created, signals are created, and JSX expressions like `{count}` bind signals to their text nodes. When a setter is called later, only the bound text node updates. The component function does not re-run.
@@ -26,8 +24,6 @@ function Counter() {
 
 mount(<Counter />, document.getElementById("app"));
 ```
-
----
 
 ## Props / 组件参数
 
@@ -64,8 +60,6 @@ function Display(props, { use }) {
 }
 ```
 
----
-
 ## Multiple Instances / 多实例隔离
 
 To create multiple independent instances of a component that share state, wrap the shared signals in a factory function. The factory's closure holds the signals. Each call to the factory produces a new component function with its own independent copy of those signals.
@@ -93,8 +87,6 @@ const CounterB = createCounter();
 
 `CounterA` 和 `CounterB` 拥有完全独立的 `count` 信号。更新其中一个不会影响另一个。
 
----
-
 ## Lifecycle / 生命周期
 
 Lifecycle hooks and component-level `use` are not imported — they come from the `context` object, the second argument to every component function. See the Lifecycle guide for full details.
@@ -114,8 +106,6 @@ function App(props, { onMount, onUnmount, use }) {
 
 - [Lifecycle / 生命周期](./lifecycle.md)
 
----
-
 ## Exposing the DOM / 暴露 DOM
 
 A component returns a real DOM element. There is no `ref` forwarding, no `forwardRef`, no `defineExpose`. You can interact with the returned element directly.
@@ -131,8 +121,6 @@ function TextInput() {
 const input = <TextInput />;
 input.focus(); // it's a real <input> / 它就是真实的 <input>
 ```
-
----
 
 ## Nesting Components / 组件嵌套
 
@@ -164,8 +152,6 @@ function Counter({ count, onUpdate }) {
 There is no `Context` or `provide/inject` in kiaao. Module-level signals, closures, and props are the three channels for sharing state across components.
 
 kiaao 中没有 `Context` 或 `provide/inject`。模块级信号、闭包和 props 是跨组件共享状态的三种通道。
-
----
 
 ## Fragment / 片段
 
@@ -205,8 +191,6 @@ JSX 的 `<></>` 语法在 kiaao 中会被渲染为一个 `<div style="display: c
 </div>
 ```
 
----
-
 ## Portal / 传送门
 
 `Portal` renders its children into a different location in the DOM, while keeping them logically inside the current component tree. The children remain connected to the component's signals, lifecycle, and cleanup. When the component unmounts, the portaled content is automatically removed from the target.
@@ -235,8 +219,6 @@ function Modal() {
 The `to` prop accepts a CSS selector string or a DOM element. If the target does not exist at mount time, `Portal` renders a placeholder comment node. The content is moved when the target becomes available, or cleaned up when the component unmounts.
 
 `to` 属性接受 CSS 选择器字符串或 DOM 元素。如果挂载时目标不存在，`Portal` 会渲染一个占位注释节点。当目标可用时内容被移入，或当组件卸载时被清理。
-
----
 
 ## `lazy` / 代码拆分
 
@@ -280,8 +262,6 @@ Because `LazyComponent` returns a Promise, the framework treats it as an async c
 
 `lazy` 的存在只是为了省去每次写这段样板代码。如果你需要将代码拆分和数据获取结合起来，直接编写异步组件——异步组件模式涵盖了这两种场景。`lazy` 不是一个独立的机制，只是一个快捷方式。
 
----
-
 ## Async Components / 异步组件
 
 A component function that returns a Promise is an async component. The framework automatically wraps it in a transparent container and defers `onMount` until the promise resolves. This covers data fetching, code splitting, or any other async work — all within a single, unified pattern.
@@ -302,7 +282,32 @@ See the full guide for details on wrapper behavior, mount order, error handling,
 
 - [Async Components / 异步组件](./async-components.md)
 
----
+## Directives / 自定义指令
+
+Custom directives allow reusable DOM behavior — animation, validation, gestures, ResizeObserver — to be attached directly to native elements. Directives have their own element-level lifecycle (`onMount`, `onUnmount`, `use`) independent of components. See the Directives guide for full details.
+
+自定义指令允许将可复用的 DOM 行为——动画、验证、手势、ResizeObserver——直接附加到原生元素上。指令拥有独立于组件的元素级生命周期（`onMount`、`onUnmount`、`use`）。详见指令引导文档。
+
+```jsx
+import { direct } from "kiaao";
+
+const FadeIn = direct((el, props, ctx) => {
+  Object.assign(el.style, { opacity: 0 });
+  ctx.onMount(() => {
+    animate(el, { opacity: 1 }, { duration: props.duration || 0.3 });
+  });
+});
+
+function Comp() {
+  return (
+    <FadeIn duration={0.5}>
+      <div class="content">我会淡入</div>
+    </FadeIn>
+  );
+}
+```
+
+- [Directives / 自定义指令](./directives.md)
 
 Now that you know how to build components, learn about control flow for conditional and list rendering. / 现在你知道了如何构建组件，继续了解条件渲染和列表渲染的控制流。
 
