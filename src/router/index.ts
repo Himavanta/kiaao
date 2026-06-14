@@ -78,26 +78,14 @@ function extractSegment(fullPath: string, base?: string): string | null {
   return relative.replace(/^\/+/, "").split("/")[0] || "";
 }
 
-// ── createRouter ───────────────────────────────────────
+// ── RouterView Factory ────────────────────────────────
 
-export function createRouter(options: RouterOptions = {}): Router {
-  const [currentPath, setPath] = use(getPathname());
-
-  addEvent(window, "popstate", () => {
-    setPath(getPathname());
-    updateParams();
-  });
-
-  function navigate(path: string): void {
-    const pathname = path.split("?")[0];
-    pushHistory(path);
-    setPath(pathname);
-    updateParams();
-  }
-
-  const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
-
-  function RouterView(props: RouterViewProps): Node {
+/** 创建 RouterView 组件：根据当前路径匹配路由并渲染对应组件 */
+function createRouterView(
+  defaultFallback: RouteComponent,
+  currentPath: Getter<string>,
+): (props: RouterViewProps) => Node {
+  return (props: RouterViewProps) => {
     const myRoutes = props.routes;
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
@@ -118,9 +106,14 @@ export function createRouter(options: RouterOptions = {}): Router {
       },
       routeMap,
     );
-  }
+  };
+}
 
-  function Link(props: RouterLinkProps): Node {
+// ── RouterLink Factory ────────────────────────────────
+
+/** 创建 Link 组件：点击时通过 navigate 导航，阻止默认跳转 */
+function createRouterLink(navigate: (path: string) => void): (props: RouterLinkProps) => Node {
+  return (props: RouterLinkProps) => {
     const { to, children, onClick: userOnClick, ...rest } = props;
 
     // 解析导航目标值（支持 getter）
@@ -139,23 +132,54 @@ export function createRouter(options: RouterOptions = {}): Router {
       },
       children,
     );
+  };
+}
+
+/** 从 URL 查询字符串中提取参数并更新信号 */
+function updateRouterParams(setCurrentParams: (params: Record<string, string>) => void): void {
+  const params: Record<string, string> = {};
+  const search = getSearch();
+  if (search) {
+    parseSearch(search).forEach((value, key) => {
+      params[key] = value;
+    });
   }
+  setCurrentParams(params);
+}
+
+// ── createRouter ───────────────────────────────────────
+
+export function createRouter(options: RouterOptions = {}): Router {
+  const [currentPath, setPath] = use(getPathname());
 
   const [currentParams, setCurrentParams] = use<Record<string, string>>({});
 
   function updateParams(): void {
-    const params: Record<string, string> = {};
-    const search = getSearch();
-    if (search) {
-      parseSearch(search).forEach((value, key) => {
-        params[key] = value;
-      });
-    }
-    setCurrentParams(params);
+    updateRouterParams(setCurrentParams);
   }
+
+  addEvent(window, "popstate", () => {
+    setPath(getPathname());
+    updateParams();
+  });
+
+  function navigate(path: string): void {
+    const pathname = path.split("?")[0];
+    pushHistory(path);
+    setPath(pathname);
+    updateParams();
+  }
+
+  const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
 
   // 初始化参数
   updateParams();
 
-  return { RouterView, navigate, currentPath, currentParams, Link };
+  return {
+    RouterView: createRouterView(defaultFallback, currentPath),
+    navigate,
+    currentPath,
+    currentParams,
+    Link: createRouterLink(navigate),
+  };
 }
