@@ -7,6 +7,7 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
+      "src/motion/index.ts",
       "src/router/index.ts",
       "src/server/index.ts",
       "src/astro/index.ts",
