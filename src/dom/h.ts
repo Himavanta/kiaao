@@ -15,7 +15,8 @@ import {
 import { hSSR } from "./ssr-render.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
-import { createWhenElement, createEachElement } from "./directives.ts";
+import { createWhenElement } from "./when.ts";
+import { createEachElement } from "./each.ts";
 import { createElement, createComment } from "./dom-utils.ts";
 import { isDirective, createDirectiveContext } from "./directive.ts";
 import type { DirectiveFunction } from "./directive.ts";
