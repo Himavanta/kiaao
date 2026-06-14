@@ -40,6 +40,10 @@ SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 
 
 **异步组件**：异步组件在 SSR 中**不受支持**。`renderToString` 是同步函数，无法等待 Promise。如果在 SSR 期间遇到异步组件，框架会抛出错误。对于 SSR 中的数据获取场景，应在组件外部获取数据，通过 props 传入同步组件。
 
+**Directives / 自定义指令**：Directives are **not executed** during SSR. `hSSR` skips directive logic entirely and renders the children directly. Directives operate on real DOM elements, which are not available during string rendering.
+
+**自定义指令**：SSR 期间指令**不执行**。`hSSR` 完全跳过指令逻辑，直接渲染 children。指令操作的是真实 DOM 元素，在字符串渲染期间不可用。
+
 **Control flow / 控制流**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
 
 **控制流**：`when` 和 `each` 指令将其初始状态渲染到 HTML 中。`when` 输出 truthy 分支（或 `else` 如果为 falsy，无 `else` 则无输出）。`each` 遍历数据源并渲染每个条目的节点。
