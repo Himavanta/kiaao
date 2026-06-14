@@ -101,6 +101,50 @@ export function triggerMount(node: Node): void {
   }
 }
 
+// ── Cleanup Steps ──────────────────────────────────────
+
+/** 清理节点上的 LOCAL_EFFECTS（包括指令的 context.use 创建的信号） */
+function disposeLocalEffects(node: Node): void {
+  const localStops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
+  if (!localStops) return;
+
+  for (const stop of localStops) {
+    stop();
+  }
+  localStops.clear();
+  delete (node as any)[LOCAL_EFFECTS];
+}
+
+/** 执行节点上指令的 onUnmount 回调 */
+function disposeDirectiveUnmounts(node: Node): void {
+  const directiveUnmounts = (node as any)[DIRECTIVE_UNMOUNT] as Set<() => void> | undefined;
+  if (!directiveUnmounts) return;
+
+  for (const fn of directiveUnmounts) {
+    safeCall(fn, "directive onUnmount");
+  }
+  directiveUnmounts.clear();
+  delete (node as any)[DIRECTIVE_UNMOUNT];
+}
+
+/** 清理节点上的 DISPOSE_KEY（组件 onUnmount）和 INSTANCE_KEY */
+function disposeComponentRefs(node: Node): void {
+  // 执行 DISPOSE_KEY（组件的 onUnmount）
+  const disposeFns = (node as any)[DISPOSE_KEY] as Set<() => void> | undefined;
+  if (disposeFns) {
+    disposeFns.forEach((fn: () => void) => fn());
+    disposeFns.clear();
+  }
+
+  // 清理 INSTANCE_KEY
+  const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
+  if (instances) {
+    instances.clear();
+  }
+}
+
+// ── disposeNode ────────────────────────────────────────
+
 export function disposeNode(node: Node): void {
   // 1. 递归处理子节点
   for (const child of node.childNodes) {
@@ -108,37 +152,13 @@ export function disposeNode(node: Node): void {
   }
 
   // 2. 清理 LOCAL_EFFECTS（包括指令的 context.use 创建的信号）
-  const localStops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
-  if (localStops) {
-    for (const stop of localStops) {
-      stop();
-    }
-    localStops.clear();
-    delete (node as any)[LOCAL_EFFECTS];
-  }
+  disposeLocalEffects(node);
 
   // 3. 执行指令的 onUnmount 回调
-  const directiveUnmounts = (node as any)[DIRECTIVE_UNMOUNT] as Set<() => void> | undefined;
-  if (directiveUnmounts) {
-    for (const fn of directiveUnmounts) {
-      safeCall(fn, "directive onUnmount");
-    }
-    directiveUnmounts.clear();
-    delete (node as any)[DIRECTIVE_UNMOUNT];
-  }
+  disposeDirectiveUnmounts(node);
 
-  // 4. 执行 DISPOSE_KEY（组件的 onUnmount）
-  const disposeFns = (node as any)[DISPOSE_KEY] as Set<() => void> | undefined;
-  if (disposeFns) {
-    disposeFns.forEach((fn: () => void) => fn());
-    disposeFns.clear();
-  }
-
-  // 5. 清理 INSTANCE_KEY
-  const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
-  if (instances) {
-    instances.clear();
-  }
+  // 4. 执行 DISPOSE_KEY + 清理 INSTANCE_KEY
+  disposeComponentRefs(node);
 }
 
 // ── mount / unmount ─────────────────────────────────────
