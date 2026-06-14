@@ -12,7 +12,7 @@ import {
   triggerMount,
   attachInstance,
 } from "./component.ts";
-import { hSSR } from "./ssr-helpers.ts";
+import { hSSR } from "./ssr-render.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
