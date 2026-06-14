@@ -123,8 +123,8 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
     const childFn = children[0];
     let html = `<${tag}${attrs}>`;
     if (isArray(items) && isFunction(childFn)) {
-      for (let i = 0; i < items.length; i++) {
-        const childResult = childFn(items[i], i);
+      for (const [i, item] of items.entries()) {
+        const childResult = childFn(item, i);
         html += renderSSRChild(childResult);
       }
     }

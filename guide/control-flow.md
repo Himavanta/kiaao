@@ -108,17 +108,15 @@ The `each` attribute renders a list of items inside its host element. It accepts
 
 `each` 属性在其宿主元素内部渲染列表。它接受一个数组（可以是普通数组或信号包裹的数组）。
 
-The `children` of an `each` element must be a render function with the signature `(item, index, key) => Node`.
+The `children` of an `each` element must be a render function with the signature `(item, index) => Node`.
 
 - `item` — A signal getter for the current item. You can call `item()` to read the value, or pass it to another `use` derivation.
 - `index` — The numeric position.
-- `key` — The identity key (defaults to array index, or the result of the `key` function).
 
-`each` 元素的 `children` 必须是一个渲染函数，签名为 `(item, index, key) => Node`。
+`each` 元素的 `children` 必须是一个渲染函数，签名为 `(item, index) => Node`。
 
 - `item` — 当前条目的信号 getter。可以调用 `item()` 读取值，或将其传入另一个 `use` 派生。
 - `index` — 数字序号。
-- `key` — 身份标识键（默认为数组索引，或 `key` 函数的结果）。
 
 ```jsx
 const [items, setItems] = use(["a", "b", "c"]);

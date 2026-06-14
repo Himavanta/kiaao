@@ -243,9 +243,9 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, S
 
 控制宿主元素内部按集合生成子节点。接受数组（信号或非信号），其他类型请用户自行转换后传入。
 
-`children` 渲染函数签名为 `(item: Signal, index: number, key: any) => Node`。框架为每个条目自动创建定义信号，实现同 key 增量更新。
+`children` 渲染函数签名为 `(item: Signal, index: number) => Node`。框架为每个条目自动创建定义信号，实现同 key 增量更新。
 
-**`key` 属性**：可选函数 `(item, index, entryKey) => any`，自定义身份标识。
+**`key` 属性**：可选函数 `(item, index) => any`，自定义身份标识。
 
 ### 3.2 组件模式（`tag` 为函数，且不带有 `DIRECT_KEY` 标记）
 

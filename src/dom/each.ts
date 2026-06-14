@@ -19,11 +19,9 @@ import { isVoidElement } from "./ssr-helpers.ts";
 
 // ── Data Source Normalization ──────────────────────────
 
-/** 将数组源标准化为条目列表，每个条目为 (index, value) */
-export function normalizeEachSource(source: unknown): Array<[any, any]> {
-  if (isArray(source)) {
-    return source.map((v: any, i: number) => [i, v] as [any, any]);
-  }
+/** 校验数据源是否为数组，非数组时在开发模式警告并返回空数组 */
+export function normalizeEachSource(source: unknown): any[] {
+  if (isArray(source)) return source;
   if (process.env.NODE_ENV !== "production") {
     console.warn(
       `[kiaao] each source must be an array. Received: ${typeof source}. ` +
@@ -99,17 +97,17 @@ function syncCleanupRemoved(
 /**
  * 复用或创建条目的 DOM 节点。返回更新后的 prevNode。
  */
-function syncItemDOM(
-  nodeMap: Map<any, Node>,
-  container: Element,
-  anchor: Comment,
-  identity: any,
-  childFn: (item: () => unknown, index: number, key: any) => any,
-  itemGetter: () => unknown,
-  i: number,
-  entryKey: any,
-  prevNode: Node | null,
-): Node | null {
+function syncItemDOM(options: {
+  nodeMap: Map<any, Node>;
+  container: Element;
+  anchor: Comment;
+  identity: any;
+  childFn: (item: () => unknown, index: number) => any;
+  itemGetter: () => unknown;
+  i: number;
+  prevNode: Node | null;
+}): Node | null {
+  const { nodeMap, container, anchor, identity, childFn, itemGetter, i, prevNode } = options;
   // 复用已有节点
   if (nodeMap.has(identity)) {
     const node = nodeMap.get(identity)!;
@@ -124,7 +122,7 @@ function syncItemDOM(
   // 创建新节点
   let node: unknown;
   try {
-    node = childFn(itemGetter, i, entryKey);
+    node = childFn(itemGetter, i);
   } catch (err) {
     console.error("[kiaao] each item render error:", err);
     return prevNode;
@@ -148,8 +146,8 @@ export function renderEach(
   /** 数据源：可以是信号 getter（响应式）或普通函数/数组 */
   eachFn: (() => unknown) | (() => unknown[]),
   /** item 是 each 框架创建的信号 getter，每次渲染传入当前值 */
-  childFn: (item: () => unknown, index: number, key: any) => any,
-  keyFn?: (item: any, index: number, entryKey: any) => any,
+  childFn: (item: () => unknown, index: number) => any,
+  keyFn?: (item: any, index: number) => any,
 ): { stop: () => void } {
   const anchor = createComment("each");
   container.append(anchor);
@@ -159,21 +157,20 @@ export function renderEach(
 
   const sync = () => {
     const source = toValue(eachFn);
-    const entries = normalizeEachSource(source);
+    const items = normalizeEachSource(source);
     const newKeys = new Set<any>();
 
     let prevNode: Node | null = null;
 
-    for (let i = 0; i < entries.length; i++) {
-      const [entryKey, rawValue] = entries[i];
-      const identity = keyFn ? keyFn(rawValue, i, entryKey) : entryKey;
+    for (const [i, rawValue] of items.entries()) {
+      const identity = keyFn ? keyFn(rawValue, i) : i;
       newKeys.add(identity);
 
       // 获取或创建响应式 item getter
       const itemGetter = syncItemSignal(itemSignalMap, identity, rawValue);
 
       // 复用或创建 DOM
-      const newPrev = syncItemDOM(
+      const newPrev = syncItemDOM({
         nodeMap,
         container,
         anchor,
@@ -181,9 +178,8 @@ export function renderEach(
         childFn,
         itemGetter,
         i,
-        entryKey,
         prevNode,
-      );
+      });
       if (newPrev !== prevNode) {
         prevNode = newPrev;
       }
@@ -223,7 +219,7 @@ export function createEachElement(
   props: any,
   children: any[],
   eachFn: (() => unknown[]) | (() => unknown),
-  keyFn?: (item: any, index: number, entryKey: any) => any,
+  keyFn?: (item: any, index: number) => any,
 ): Element {
   if (isVoidElement(tag)) {
     throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
