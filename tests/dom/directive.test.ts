@@ -253,6 +253,7 @@ describe("multiple contexts on same element", () => {
 
 import { h } from "../../src/dom/h.ts";
 import { mount, unmount, disposeNode } from "../../src/dom/component.ts";
+import { renderToString } from "../../src/server/index.ts";
 
 describe("directive lifecycle integration", () => {
   test("onMount fires when element is mounted", () => {
@@ -368,6 +369,205 @@ describe("directive lifecycle integration", () => {
     const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
     mount(el, document.body);
     expect(signalValue).toBe(42);
+    unmount(el);
+  });
+});
+
+// ── Integration: h() directive mode ──────────────────
+
+describe("h() directive mode integration", () => {
+  test("directive receives props passed in JSX", () => {
+    let receivedProps: any = null;
+    const TestDir = direct((el, props, _ctx) => {
+      receivedProps = { ...props };
+    });
+
+    const child = h("span", null, "hello");
+    h("div", null, h(TestDir as any, { duration: 0.5, from: { opacity: 0 } }, child));
+
+    expect(receivedProps).toBeDefined();
+    expect(receivedProps.duration).toBe(0.5);
+    expect(receivedProps.from).toEqual({ opacity: 0 });
+  });
+
+  test("single child unwrapping: directive returns Node not array", () => {
+    const TestDir = direct((_el, _props, _ctx) => {});
+
+    const child = h("span", null, "single");
+    const result = h("div", null, h(TestDir as any, null, child));
+
+    // span 应直接作为 div 的子节点（单子节点展开）
+    expect(result.children.length).toBe(1);
+    expect(result.children[0].tagName).toBe("SPAN");
+    expect(result.children[0].textContent).toBe("single");
+  });
+
+  test("multi-child: directive processes each Element", () => {
+    const processed: Element[] = [];
+    const TestDir = direct((el, _props, _ctx) => {
+      processed.push(el);
+    });
+
+    const childA = h("span", null, "A");
+    const childB = h("span", null, "B");
+    const result = h("div", null, h(TestDir as any, null, childA, childB));
+
+    // 指令被调用了两次
+    expect(processed.length).toBe(2);
+    expect(processed[0].textContent).toBe("A");
+    expect(processed[1].textContent).toBe("B");
+    // 两个 span 都是 div 的子节点
+    expect(result.children.length).toBe(2);
+  });
+
+  test("directive as component root with single child returns Element", () => {
+    const TestDir = direct((_el, _props, _ctx) => {});
+
+    function Comp() {
+      return h(TestDir as any, null, h("p", null, "content"));
+    }
+
+    const el = h(Comp);
+    // 单子节点展开：直接返回 p 元素
+    expect(el.tagName).toBe("P");
+    expect(el.textContent).toBe("content");
+  });
+
+  test("directive as component root with multiple children wraps in Fragment", () => {
+    const TestDir = direct((_el, _props, _ctx) => {});
+
+    function Comp() {
+      return h(TestDir as any, null, h("p", null, "A"), h("p", null, "B"));
+    }
+
+    const el = h(Comp);
+    // 多子节点：Fragment 包裹
+    expect(el.tagName).toBe("DIV");
+    expect((el as HTMLElement).style.display).toBe("contents");
+    expect(el.children.length).toBe(2);
+    expect(el.children[0].textContent).toBe("A");
+    expect(el.children[1].textContent).toBe("B");
+  });
+
+  test("directive wrapped inside when", () => {
+    const TestDir = direct((el, _props, _ctx) => {
+      el.setAttribute("data-dir", "applied");
+    });
+
+    // 使用 when 在行内属性中
+    const el = h("section", { when: true }, h(TestDir as any, null, h("p", null, "visible")));
+
+    expect(el.childNodes.length).toBeGreaterThan(0);
+    const p = el.querySelector("p")!;
+    expect(p.textContent).toBe("visible");
+  });
+
+  test("directive inside when toggling visibility", () => {
+    let mounted = false;
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onMount(() => {
+        mounted = true;
+      });
+    });
+
+    const [visible, setVisible] = use(true);
+    const el = h("section", { when: visible }, h(TestDir as any, null, h("p", null, "content")));
+
+    mount(el as HTMLElement, document.body);
+    expect(mounted).toBe(true);
+
+    setVisible(false);
+    expect(el.children.length).toBe(0);
+
+    unmount(el as HTMLElement);
+  });
+
+  test("directive inside each iterates over items", () => {
+    const processed: Element[] = [];
+    const ItemDir = direct((el, _props, _ctx) => {
+      processed.push(el);
+    });
+
+    const [items] = use(["a", "b", "c"]);
+    const el = h("ul", { each: items, key: (item: string) => item }, (item: () => string) =>
+      h(ItemDir as any, null, h("li", null, item)),
+    );
+
+    expect(el.children.length).toBe(3);
+    expect(processed.length).toBe(3);
+    expect(processed[0].textContent).toBe("a");
+  });
+
+  test("nested directives both register on the same element", () => {
+    const order: string[] = [];
+
+    const Outer = direct((el, _props, ctx) => {
+      ctx.onMount(() => order.push("outer"));
+    });
+    const Inner = direct((el, _props, ctx) => {
+      ctx.onMount(() => order.push("inner"));
+    });
+
+    function Comp() {
+      return h(
+        "div",
+        null,
+        h(Outer as any, null, h(Inner as any, null, h("span", null, "nested"))),
+      );
+    }
+
+    const el = h(Comp);
+    mount(el, document.body);
+
+    // inner 先注册，outer 后注册 → onMount 按注册顺序触发
+    expect(order).toEqual(["inner", "outer"]);
+
+    unmount(el);
+  });
+});
+
+// ── Integration: SSR ─────────────────────────────────
+
+describe("SSR directive skipping", () => {
+  test("directive is skipped in SSR mode and children are rendered", () => {
+    const TestDir = direct((_el, _props, _ctx) => {
+      throw new Error("should not be called in SSR");
+    });
+
+    function Comp() {
+      return h("div", null, h(TestDir as any, null, h("p", null, "ssr-content")));
+    }
+
+    const html = renderToString(Comp);
+    // 指令被跳过，子节点正常渲染
+    expect(html).toBe("<div><p>ssr-content</p></div>");
+  });
+});
+
+// ── Integration: Error handling ────────────────────
+
+describe("directive error handling", () => {
+  test("directive function throw propagates (same as component throw)", () => {
+    const BadDir = direct((_el, _props, _ctx) => {
+      throw new Error("directive error");
+    });
+
+    expect(() => {
+      h("div", null, h(BadDir as any, null, h("span", null, "child")));
+    }).toThrow("directive error");
+  });
+
+  test("context.use after element disposed is safe", () => {
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onUnmount(() => {
+        // 卸载后调用 ctx.use 应安全
+        const [v] = ctx.use(99);
+        expect(v()).toBe(99);
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    mount(el, document.body);
     unmount(el);
   });
 });
