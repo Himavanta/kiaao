@@ -162,6 +162,20 @@ function subscribeWhen(
   return { whenStop: undefined };
 }
 
+/** 注册 when 元素的清理函数：卸载时停止派生信号和 each */
+function registerWhenCleanup(
+  el: Element,
+  whenStop: (() => void) | undefined,
+  eachStop: (() => void) | undefined,
+): void {
+  const stop = () => {
+    if (whenStop) whenStop();
+    if (eachStop) eachStop();
+    removeLocalEffect(el, stop);
+  };
+  addLocalEffect(el, stop);
+}
+
 // ── createWhenElement ──────────────────────────────────
 
 export function createWhenElement(options: {
@@ -224,13 +238,8 @@ export function createWhenElement(options: {
   // 订阅 whenFn 变化或执行初始渲染
   const { whenStop } = subscribeWhen(whenFn, renderBranch);
 
-  const selfCleaningStop = () => {
-    if (whenStop) whenStop();
-    if (eachStop) eachStop();
-    removeLocalEffect(el, selfCleaningStop);
-  };
-
-  addLocalEffect(el, selfCleaningStop);
+  // 注册清理
+  registerWhenCleanup(el, whenStop, eachStop);
 
   return el;
 }

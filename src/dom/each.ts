@@ -94,6 +94,50 @@ function syncCleanupRemoved(
   }
 }
 
+/**
+ * 复用或创建条目的 DOM 节点。返回更新后的 prevNode。
+ */
+function syncItemDOM(
+  nodeMap: Map<any, Node>,
+  container: Element,
+  anchor: Comment,
+  identity: any,
+  childFn: (item: any, index: number, key: any) => any,
+  itemGetter: any,
+  i: number,
+  entryKey: any,
+  prevNode: Node | null,
+): Node | null {
+  // 复用已有节点
+  if (nodeMap.has(identity)) {
+    const node = nodeMap.get(identity)!;
+    const needsMove =
+      prevNode === null ? firstChild(container) !== node : prevSibling(node) !== prevNode;
+    if (needsMove) {
+      anchor.before(node);
+    }
+    return node;
+  }
+
+  // 创建新节点
+  let node: any;
+  try {
+    node = childFn(itemGetter, i, entryKey);
+  } catch (err) {
+    console.error("[kiaao] each item render error:", err);
+    return prevNode;
+  }
+  if (node instanceof Node) {
+    anchor.before(node);
+    if (isConnected(container)) triggerMount(node);
+    if (nodeType(node) !== Node.DOCUMENT_FRAGMENT_NODE) {
+      nodeMap.set(identity, node);
+    }
+    return node;
+  }
+  return prevNode;
+}
+
 // ── renderEach ─────────────────────────────────────────
 
 /** @internal 被 when.ts 和 createEachElement 调用 */
@@ -132,30 +176,19 @@ export function renderEach(
       const itemGetter = syncItemSignal(itemSignalMap, identity, rawValue);
 
       // 复用或创建 DOM
-      if (nodeMap.has(identity)) {
-        const node = nodeMap.get(identity)!;
-        const needsMove =
-          prevNode === null ? firstChild(container) !== node : prevSibling(node) !== prevNode;
-        if (needsMove) {
-          anchor.before(node);
-        }
-        prevNode = node;
-      } else {
-        let node: any;
-        try {
-          node = childFn(itemGetter, i, entryKey);
-        } catch (err) {
-          console.error("[kiaao] each item render error:", err);
-          continue;
-        }
-        if (node instanceof Node) {
-          anchor.before(node);
-          if (isConnected(container)) triggerMount(node);
-          if (nodeType(node) !== Node.DOCUMENT_FRAGMENT_NODE) {
-            nodeMap.set(identity, node);
-          }
-          prevNode = node;
-        }
+      const newPrev = syncItemDOM(
+        nodeMap,
+        container,
+        anchor,
+        identity,
+        childFn,
+        itemGetter,
+        i,
+        entryKey,
+        prevNode,
+      );
+      if (newPrev !== prevNode) {
+        prevNode = newPrev;
       }
     }
 
