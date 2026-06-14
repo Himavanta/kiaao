@@ -1,10 +1,10 @@
-import { isNode } from "../utils/type-guards.ts";
+import { isDefined, isFunction, isNode, isUndefined } from "../utils/type-guards.ts";
 // kiaao — when directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
 import { isUse, use, toValue } from "../reactive/core.ts";
 import { triggerMount, disposeNode } from "./component.ts";
-import { isVoidElement, isPlainObject } from "./ssr-helpers.ts";
+import { isVoidElement, isMappingTable } from "./ssr-helpers.ts";
 import { addLocalEffect, removeLocalEffect } from "./local-effect.ts";
 import { setProps } from "./props.ts";
 import { processChildren } from "./process-children.ts";
@@ -44,17 +44,17 @@ function detectWhenMode(
   hasEach: boolean;
   mappingTable: Record<string, () => any> | null;
 } {
-  const isMappingMode = children.length === 1 && isPlainObject(children[0]);
+  const isMappingMode = children.length === 1 && isMappingTable(children[0]);
   const mappingTable = isMappingMode ? children[0] : null;
   const isLazy =
     !isMappingMode &&
-    eachFn === undefined &&
+    isUndefined(eachFn) &&
     children.length === 1 &&
-    typeof children[0] === "function" &&
+    isFunction(children[0]) &&
     !isUse(children[0]);
-  const hasEach = !isMappingMode && eachFn !== undefined;
+  const hasEach = !isMappingMode && !isUndefined(eachFn);
 
-  if (isMappingMode && eachFn !== undefined && typeof console !== "undefined") {
+  if (isMappingMode && !isUndefined(eachFn) && isDefined(console)) {
     console.warn(`[kiaao] when using mapping table mode, the 'each' prop is ignored.`);
   }
 

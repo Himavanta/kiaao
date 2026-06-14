@@ -9,6 +9,7 @@ import {
   type DerivationState,
   type SignalState,
 } from "./types.ts";
+import { isFunction, isNotNil } from "../utils/type-guards.ts";
 
 // ── Render Mode ────────────────────────────────────────
 // 控制派生信号的运行模式。
@@ -33,7 +34,7 @@ export function getRenderMode(): RenderMode {
  * 原理：检查函数上是否挂载了 REACTIVE 标记。
  */
 export function isUse(v: any): v is Getter<any> {
-  return v !== null && v !== undefined && (v as any)[REACTIVE] !== undefined;
+  return isNotNil(v) && (v as any)[REACTIVE] !== undefined;
 }
 
 // ── Value Normalization ────────────────────────────────
@@ -70,7 +71,7 @@ export function registerSignalStop(args: any[], register: (stop: () => void) => 
 
   // 创建了新资源，注册 stop
   const stop = (getter as any)[REACTIVE]?.stop;
-  if (typeof stop === "function") {
+  if (isFunction(stop)) {
     register(stop);
   }
   return result;
@@ -136,8 +137,7 @@ function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
 
   const setter = ((updater: any): T => {
     const oldValue = state.value;
-    state.value =
-      typeof updater === "function" ? (updater as (prev: T) => T)(oldValue) : (updater as T);
+    state.value = isFunction(updater) ? (updater as (prev: T) => T)(oldValue) : (updater as T);
     if (state.value !== oldValue) {
       triggerDerivations(state);
     }
@@ -213,7 +213,7 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
 
   // ── 开发模式校验 ──
   if (process.env.NODE_ENV !== "production") {
-    if (typeof func !== "function") {
+    if (!isFunction(func)) {
       console.warn("[kiaao] use(...): last argument must be a function");
       return definitionMode(undefined) as any;
     }

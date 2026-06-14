@@ -1,9 +1,9 @@
-import { isPromise } from "../utils/type-guards.ts";
+import { isArray, isFunction, isObject, isPromise, isString } from "../utils/type-guards.ts";
 // kiaao — SSR rendering functions
 
 import { toValue } from "../reactive/core.ts";
 import { SSR_COMPONENT, DIRECT_KEY } from "../reactive/types.ts";
-import { isVoidElement, isPlainObject, renderSSRChild, ssr, isSSRSafe } from "./ssr-helpers.ts";
+import { isVoidElement, isMappingTable, renderSSRChild, ssr, isSSRSafe } from "./ssr-helpers.ts";
 import type { SSRSafe } from "./ssr-helpers.ts";
 import { serializeAttrs, stripDirectives } from "./ssr-serialize.ts";
 
@@ -15,7 +15,7 @@ function hSSRFunctionTag(tag: any, props: any, children: any[]): SSRSafe {
   if (tag[DIRECT_KEY]) {
     let inner = "";
     for (const child of children) {
-      if (Array.isArray(child)) {
+      if (isArray(child)) {
         for (const c of child) inner += renderSSRChild(c);
       } else {
         inner += renderSSRChild(child);
@@ -28,7 +28,7 @@ function hSSRFunctionTag(tag: any, props: any, children: any[]): SSRSafe {
   if (ssrVariant) {
     const result = ssrVariant(props || {});
     if (isSSRSafe(result)) return result;
-    if (typeof result === "string") return ssr(result);
+    if (isString(result)) return ssr(result);
     return ssr("");
   }
 
@@ -39,8 +39,8 @@ function hSSRFunctionTag(tag: any, props: any, children: any[]): SSRSafe {
     throw new Error("[kiaao] Async components are not supported in SSR.");
   }
   if (isSSRSafe(result)) return result;
-  if (typeof result === "string") return ssr(result);
-  if (result && typeof result === "object" && "html" in result) return ssr(result.html);
+  if (isString(result)) return ssr(result);
+  if (isObject(result) && "html" in result) return ssr((result as any).html);
   return ssr("");
 }
 
@@ -53,7 +53,7 @@ function hSSRWhenTag(tag: string, props: any, children: any[]): SSRSafe {
   const cleanProps = () => serializeAttrs(stripDirectives(props));
 
   // 映射表模式：children 为 { key: () => VNode }
-  if (children.length === 1 && isPlainObject(children[0])) {
+  if (children.length === 1 && isMappingTable(children[0])) {
     const map = children[0];
     const branchFn = map[whenVal];
     if (branchFn) {
@@ -93,12 +93,12 @@ function hSSRWhenTag(tag: string, props: any, children: any[]): SSRSafe {
 // ── hSSR ───────────────────────────────────────────────
 
 export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
-  if (typeof tag !== "string" && typeof tag !== "function") {
+  if (!isString(tag) && !isFunction(tag)) {
     return ssr("");
   }
 
   // 函数标签：指令 / SSR 变体 / 普通组件
-  if (typeof tag === "function") {
+  if (isFunction(tag)) {
     return hSSRFunctionTag(tag, props, children);
   }
 
@@ -115,7 +115,7 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
     const attrs = serializeAttrs(stripDirectives(props));
     const childFn = children[0];
     let html = `<${tag}${attrs}>`;
-    if (Array.isArray(items) && typeof childFn === "function") {
+    if (isArray(items) && isFunction(childFn)) {
       for (let i = 0; i < items.length; i++) {
         const childResult = childFn(items[i], i);
         html += renderSSRChild(childResult);
@@ -131,7 +131,7 @@ export function hSSR(tag: any, props: any, children: any[]): SSRSafe {
 
   let html = `<${tag}${attrs}>`;
   for (const child of children) {
-    if (Array.isArray(child)) {
+    if (isArray(child)) {
       for (const c of child) html += renderSSRChild(c);
     } else {
       html += renderSSRChild(child);

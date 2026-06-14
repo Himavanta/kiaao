@@ -1,4 +1,12 @@
-import { isNode } from "../utils/type-guards.ts";
+import {
+  isBoolean,
+  isFunction,
+  isNil,
+  isNode,
+  isNumber,
+  isPlainObject,
+  isString,
+} from "../utils/type-guards.ts";
 // kiaao — SSR helper functions shared between h.ts and components
 // Types and simple utilities kept here; serialize/render logic split into
 // ssr-serialize.ts and ssr-render.ts respectively.
@@ -18,16 +26,16 @@ export function ssr(text: string): SSRSafe {
 }
 
 export function isSSRSafe(v: any): v is SSRSafe {
-  return v && v[SSR_MARKER] === true && typeof v.html === "string";
+  return v && v[SSR_MARKER] === true && isString(v.html);
 }
 
 /** 判断是否为纯对象（用于映射表模式检测） */
 /**
- * 判断是否为纯对象（用于映射表模式检测）。
- * 排除 SSR 安全对象（{ html: string }），防止误判为映射表。
+ * 判断是否为 when 映射表。
+ * 纯对象 + 排除 SSR 安全对象（{ html: string }），防止 SSR 渲染时误判。
  */
-export function isPlainObject(v: any): boolean {
-  return !!v && v.constructor === Object && !isSSRSafe(v);
+export function isMappingTable(v: any): boolean {
+  return isPlainObject(v) && !isSSRSafe(v);
 }
 
 const VOID_ELEMENTS = splitSet(
@@ -39,11 +47,11 @@ export function isVoidElement(tag: string): boolean {
 }
 
 export function renderSSRChild(child: any): string {
-  if (child == null || typeof child === "boolean") return "";
+  if (isNil(child) || isBoolean(child)) return "";
   if (isSSRSafe(child)) return child.html;
-  if (typeof child === "string" || typeof child === "number") return escapeHtml(String(child));
+  if (isString(child) || isNumber(child)) return escapeHtml(String(child));
   if (isUse(child)) return escapeHtml(String(child()));
-  if (typeof child === "function") return renderSSRChild(child());
+  if (isFunction(child)) return renderSSRChild(child());
   if (isNode(child)) return "";
   return "";
 }

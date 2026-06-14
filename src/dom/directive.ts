@@ -4,6 +4,7 @@ import { DIRECT_KEY, DIRECTIVE_MOUNT, DIRECTIVE_UNMOUNT } from "../reactive/type
 import { registerSignalStop } from "../reactive/core.ts";
 import type { UseFunction } from "../reactive/core.ts";
 import { addLocalEffect } from "./local-effect.ts";
+import { isFunction } from "../utils/type-guards.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export function direct<T extends DirectiveFunction>(fn: T): T {
  * 判断一个函数是否是指令（检查 DIRECT_KEY 标记）。
  */
 export function isDirective(fn: any): boolean {
-  return typeof fn === "function" && fn[DIRECT_KEY] === true;
+  return isFunction(fn) && fn[DIRECT_KEY] === true;
 }
 
 // ── Directive Context Creator ──────────────────────────

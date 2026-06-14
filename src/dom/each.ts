@@ -1,4 +1,14 @@
-import { isNode } from "../utils/type-guards.ts";
+import {
+  isArray,
+  isMap,
+  isNil,
+  isNode,
+  isNotNil,
+  isNumber,
+  isObject,
+  isSet,
+  isString,
+} from "../utils/type-guards.ts";
 // kiaao — each directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
@@ -25,16 +35,16 @@ export type EachEntry = [key: any, value: any, index: number];
 // ── Data Source Normalization ──────────────────────────
 
 export function normalizeEachSource(source: unknown): EachEntry[] {
-  if (source instanceof Map) {
+  if (isMap(source)) {
     return [...source.entries()].map(([k, v], i) => [k, v, i]);
   }
-  if (source instanceof Set) {
+  if (isSet(source)) {
     return [...source].map((v, i) => [v, v, i]);
   }
-  if (typeof source === "number") {
+  if (isNumber(source)) {
     return Array.from({ length: source }, (_, i) => [String(i), undefined, i]);
   }
-  if (typeof source === "string") {
+  if (isString(source)) {
     return Array.from(source).map((v, i) => [String(i), v, i]);
   }
   const entries = Object.entries(source ?? {});
@@ -52,7 +62,7 @@ function syncItemSignal(
   identity: any,
   rawValue: unknown,
 ): () => unknown {
-  const isReactive = rawValue != null && isUse(rawValue);
+  const isReactive = isNotNil(rawValue) && isUse(rawValue);
 
   if (itemSignalMap.has(identity)) {
     if (isReactive) {
@@ -166,9 +176,9 @@ export function renderEach(
   const sync = () => {
     const source = toValue(eachFn);
     if (process.env.NODE_ENV !== "production") {
-      if (source == null) {
+      if (isNil(source)) {
         console.warn(new Error("[kiaao] each source is null or undefined."));
-      } else if (!Array.isArray(source) && typeof source !== "object") {
+      } else if (!isArray(source) && !isObject(source)) {
         console.warn(new Error("[kiaao] each source should be an array or iterable object."));
       }
     }

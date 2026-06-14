@@ -7,6 +7,7 @@
 import { h } from "../dom/h.ts";
 import { setRenderMode, getRenderMode } from "../reactive/core.ts";
 import { isSSRSafe } from "../dom/ssr-helpers.ts";
+import { isString } from "../utils/type-guards.ts";
 
 export function renderToString(
   component: (props: any) => any,
@@ -23,7 +24,7 @@ export function renderToString(
 
   try {
     const result = h(component, mergedProps);
-    return isSSRSafe(result) ? result.html : typeof result === "string" ? result : "";
+    return isSSRSafe(result) ? result.html : isString(result) ? result : "";
   } finally {
     setRenderMode(prevMode);
   }

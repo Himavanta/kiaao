@@ -4,6 +4,7 @@ import { isUse, use } from "../reactive/core.ts";
 import { REACTIVE } from "../reactive/types.ts";
 import { addLocalEffect } from "./local-effect.ts";
 import { addEvent, setAttr, removeAttr, FORCE_ATTRIBUTE, stripPrefix } from "./dom-utils.ts";
+import { isBoolean, isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
 export const EVENT_RE = /^on[A-Z]/;
@@ -27,11 +28,11 @@ function setPropByPrefix(el: Element, prefix: string | null, key: string, value:
 
 /** 处理 style 属性：字符串或对象 */
 function setStyleProp(el: Element, value: any): boolean {
-  if (typeof value === "string") {
+  if (isString(value)) {
     setAttr(el, "style", value);
     return true;
   }
-  if (value && typeof value === "object") {
+  if (isObject(value)) {
     removeAttr(el, "style");
     Object.assign((el as HTMLElement).style, value);
     return true;
@@ -69,7 +70,7 @@ function setAttributeProp(el: Element, key: string, value: any): boolean {
 
   // FORCE_ATTRIBUTE
   if (FORCE_ATTRIBUTE.has(key)) {
-    if (typeof value === "boolean") {
+    if (isBoolean(value)) {
       if (value) setAttr(el, key, "");
       else removeAttr(el, key);
     } else {
@@ -84,7 +85,7 @@ function setAttributeProp(el: Element, key: string, value: any): boolean {
 // ── setProp ────────────────────────────────────────────
 
 export function setProp(el: Element, rawKey: string, value: any): void {
-  if (value == null) return;
+  if (isNil(value)) return;
 
   const { prefix, key } = stripPrefix(rawKey);
 
@@ -109,7 +110,7 @@ export function setProp(el: Element, rawKey: string, value: any): void {
 
 /** 在元素上设置一组属性（事件/响应式/静态），effect 注册到 LOCAL_EFFECTS */
 export function setProps(el: Element, props: Record<string, any> | null | undefined): void {
-  if (!props || typeof props !== "object") return;
+  if (!isRecord(props)) return;
 
   for (const key of Object.keys(props)) {
     if (key === "children") continue;

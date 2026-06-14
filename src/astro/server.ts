@@ -1,6 +1,7 @@
 // kiaao — Astro server renderer
 
 import { renderToString } from "../server/index.ts";
+import { isFunction } from "../utils/type-guards.ts";
 
 export default {
   name: "kiaao",
@@ -10,7 +11,7 @@ export default {
     _slots?: Record<string, string>,
     _metadata?: any,
   ): boolean {
-    return typeof Component === "function";
+    return isFunction(Component);
   },
   async renderToStaticMarkup(
     Component: any,

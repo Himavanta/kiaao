@@ -5,6 +5,7 @@
 import type { ComponentFunction } from "./h.ts";
 import { h } from "./h.ts";
 import { getRenderMode } from "../reactive/core.ts";
+import { isDefined } from "../utils/type-guards.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
@@ -21,7 +22,7 @@ export function lazy<T extends ComponentFunction<any>>(
       })
       .catch((err: Error) => {
         console.error("[kiaao] lazy loading error:", err);
-        if (typeof document !== "undefined") {
+        if (isDefined(document)) {
           return document.createTextNode(String(err));
         }
         throw err;

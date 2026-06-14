@@ -5,15 +5,16 @@
 
 import { h } from "../dom/h.ts";
 import { Fragment } from "../dom/fragment.ts";
+import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 
 function normalizeChildren(children: any): any[] | undefined {
-  if (children == null) return undefined;
-  if (Array.isArray(children)) {
+  if (isNil(children)) return undefined;
+  if (isArray(children)) {
     const flat: any[] = [];
     for (const c of children) {
-      if (Array.isArray(c)) flat.push(...c);
+      if (isArray(c)) flat.push(...c);
       else flat.push(c);
     }
     return flat;
@@ -23,12 +24,12 @@ function normalizeChildren(children: any): any[] | undefined {
 
 function createJsxElement(type: any, props: Record<string, any> | null, _key?: any): any {
   // Normal element or component: forward props.children as rest args
-  if (props == null) return h(type);
+  if (isNil(props)) return h(type);
 
   const { children, ...rest } = props;
   const childList = normalizeChildren(children);
 
-  if (childList === undefined) {
+  if (isUndefined(childList)) {
     return h(type, rest);
   }
 

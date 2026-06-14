@@ -2,6 +2,7 @@
 
 import { isUse } from "../reactive/core.ts";
 import { escapeAttr, FORCE_ATTRIBUTE, stripPrefix } from "./dom-utils.ts";
+import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
 // ── CSS Text Serialization ────────────────────────────
 
@@ -32,9 +33,9 @@ export function serializeAttr(rawKey: string, val: any): string {
 
   // style
   if (key === "style") {
-    if (typeof val === "string") return ` style="${escapeAttr(val)}"`;
-    if (typeof val === "object" && val !== null) {
-      return ` style="${escapeAttr(serializeCssText(val))}"`;
+    if (isString(val)) return ` style="${escapeAttr(val)}"`;
+    if (isObject(val)) {
+      return ` style="${escapeAttr(serializeCssText(val as Record<string, string | number>))}"`;
     }
     return "";
   }
@@ -57,7 +58,7 @@ export function serializeAttr(rawKey: string, val: any): string {
  * 从 props 中移除 when/each/key/else 指令属性。
  */
 export function stripDirectives(props: any): any {
-  if (!props || typeof props !== "object") return props;
+  if (!isRecord(props)) return props;
   const { when: _when, each: _each, key: _key, else: _else, ...rest } = props;
   return rest;
 }
@@ -66,14 +67,14 @@ export function stripDirectives(props: any): any {
 
 /** 将 props 序列化为 HTML 属性字符串 */
 export function serializeAttrs(props: any): string {
-  if (!props || typeof props !== "object") return "";
+  if (!isRecord(props)) return "";
   let html = "";
   for (const rawKey of Object.keys(props)) {
     if (rawKey === "children") continue;
 
     let val = props[rawKey];
     if (isUse(val)) val = val();
-    if (val == null || val === false) continue;
+    if (isNil(val) || val === false) continue;
 
     html += serializeAttr(rawKey, val);
   }

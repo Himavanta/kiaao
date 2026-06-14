@@ -1,4 +1,14 @@
-import { isElement, isNode, isPromise } from "../utils/type-guards.ts";
+import {
+  isArray,
+  isBoolean,
+  isElement,
+  isFunction,
+  isNode,
+  isNotNil,
+  isObject,
+  isPromise,
+  isString,
+} from "../utils/type-guards.ts";
 // kiaao — h() function: creates real DOM or dispatches to hSSR in SSR mode
 // Component mode supports both sync and async components via context-based lifecycle.
 
@@ -106,7 +116,7 @@ function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
       const ctx = createDirectiveContext(child);
       (tag as DirectiveFunction)(child, dirProps, ctx);
     } else if (process.env.NODE_ENV !== "production") {
-      if (child != null && typeof child !== "boolean") {
+      if (isNotNil(child) && !isBoolean(child)) {
         console.warn("[kiaao] directive skipped non-Element child:", child);
       }
     }
@@ -174,7 +184,7 @@ function handleSyncComponentResult(result: any, instance: ComponentInstance): El
   }
 
   // 指令/多根元素返回值 → Fragment 包裹
-  if (Array.isArray(result)) {
+  if (isArray(result)) {
     const wrapper = createElement("div") as HTMLElement;
     wrapper.style.display = "contents";
     attachInstance(wrapper, instance);
@@ -221,7 +231,7 @@ function handleDomMode(tag: string, props: any, children: any[]): Element {
 
   // 普通元素
   const el = createElement(tag);
-  setProps(el, props && typeof props === "object" && !isUse(props) ? props : null);
+  setProps(el, isObject(props) && !isUse(props) ? props : null);
   const childNodes = processChildren(children);
   for (const node of childNodes) {
     el.append(node);
@@ -253,7 +263,7 @@ export function h(
   }
 
   // 无效 tag → 注释占位节点
-  if (typeof tag !== "string" && typeof tag !== "function") {
+  if (!isString(tag) && !isFunction(tag)) {
     if (process.env.NODE_ENV !== "production") {
       console.warn(
         new Error(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`),
@@ -263,7 +273,7 @@ export function h(
   }
 
   // 函数标签：指令 / 组件
-  if (typeof tag === "function") {
+  if (isFunction(tag)) {
     // 指令模式
     if (isDirective(tag)) {
       return handleDirectiveMode(tag, props, children);
