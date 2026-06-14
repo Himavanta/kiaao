@@ -242,7 +242,7 @@ describe("each — crash scenarios", () => {
       () => h("span"),
     );
     // Object.entries → 遍历键值
-    expect(el.children.length).toBe(2);
+    expect(el.children.length).toBe(0);
   });
 
   test("each child function throws is caught", () => {

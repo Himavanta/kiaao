@@ -104,21 +104,21 @@ const [status, setStatus] = use('idle')
 
 ## `each` — List Rendering / 列表渲染
 
-The `each` attribute renders a list of items inside its host element. It accepts a signal that returns any iterable data source: arrays, objects, Maps, Sets, numbers, and strings.
+The `each` attribute renders a list of items inside its host element. It accepts an array (either as a plain value or wrapped in a signal).
 
-`each` 属性在其宿主元素内部渲染列表。它接受一个返回任意可迭代数据源的信号：数组、对象、Map、Set、数字和字符串。
+`each` 属性在其宿主元素内部渲染列表。它接受一个数组（可以是普通数组或信号包裹的数组）。
 
 The `children` of an `each` element must be a render function with the signature `(item, index, key) => Node`.
 
 - `item` — A signal getter for the current item. You can call `item()` to read the value, or pass it to another `use` derivation.
 - `index` — The numeric position.
-- `key` — The key of the entry in the original data source (array index, object property name, etc.).
+- `key` — The identity key (defaults to array index, or the result of the `key` function).
 
 `each` 元素的 `children` 必须是一个渲染函数，签名为 `(item, index, key) => Node`。
 
 - `item` — 当前条目的信号 getter。可以调用 `item()` 读取值，或将其传入另一个 `use` 派生。
 - `index` — 数字序号。
-- `key` — 条目在原始数据源中的键（数组索引、对象属性名等）。
+- `key` — 身份标识键（默认为数组索引，或 `key` 函数的结果）。
 
 ```jsx
 const [items, setItems] = use(["a", "b", "c"]);
@@ -162,38 +162,6 @@ return (
 Using a stable key (like a database ID) ensures that DOM nodes are correctly reused even when the array is reordered or filtered. This minimizes DOM operations and preserves element state.
 
 使用稳定的 key（如数据库 ID）可以确保即使在数组重排序或过滤后，DOM 节点也能被正确复用。这最大程度减少了 DOM 操作并保持了元素状态。
-
----
-
-## Data Sources / 数据源
-
-`each` supports multiple data source types. Internally, they are normalized into key-value entries.
-
-`each` 支持多种数据源类型。内部会将它们统一转换为键值条目。
-
-```jsx
-// Array / 数组
-<each items={[10, 20, 30]}>{(v) => <span>{v}</span>}</each>
-
-// Object / 对象
-<each items={() => ({ name: 'kiaao', version: '4.0' })}>
-  {(v, i, key) => <dt>{key}: {v}</dt>}
-</each>
-
-// Map
-<each items={myMap}>{(v, i, key) => <span>{key}</span>}</each>
-
-// Set
-<each items={mySet}>{(v) => <span>{v}</span>}</each>
-
-// Number — renders that many items, index as value
-// 数字 —— 渲染指定数量的条目，值为索引
-<each items={5}>{(_, i) => <span>{i}</span>}</each>
-
-// String — iterates over characters
-// 字符串 —— 遍历每个字符
-<each items={'hello'}>{(c) => <span>{c}</span>}</each>
-```
 
 ---
 

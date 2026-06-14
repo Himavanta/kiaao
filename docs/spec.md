@@ -241,7 +241,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): [Getter<void>, S
 
 ##### `each` 指令
 
-控制宿主元素内部按集合生成子节点。支持数组、对象、Map、Set、数字、字符串等数据源。
+控制宿主元素内部按集合生成子节点。接受数组（信号或非信号），其他类型请用户自行转换后传入。
 
 `children` 渲染函数签名为 `(item: Signal, index: number, key: any) => Node`。框架为每个条目自动创建定义信号，实现同 key 增量更新。
 

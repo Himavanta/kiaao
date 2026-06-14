@@ -1,15 +1,4 @@
-import {
-  isArray,
-  isFunction,
-  isMap,
-  isNil,
-  isNode,
-  isNotNil,
-  isNumber,
-  isObject,
-  isSet,
-  isString,
-} from "../utils/type-guards.ts";
+import { isArray, isFunction, isNode, isNotNil } from "../utils/type-guards.ts";
 // kiaao — each directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
@@ -28,28 +17,20 @@ import {
 } from "./dom-utils.ts";
 import { isVoidElement } from "./ssr-helpers.ts";
 
-// ── Types ──────────────────────────────────────────────
-
-/** 标准化后的 each 数据源条目：(key, value, index) */
-export type EachEntry = [key: any, value: any, index: number];
-
 // ── Data Source Normalization ──────────────────────────
 
-export function normalizeEachSource(source: unknown): EachEntry[] {
-  if (isMap(source)) {
-    return [...source.entries()].map(([k, v], i) => [k, v, i]);
+/** 将数组源标准化为条目列表，每个条目为 (index, value) */
+export function normalizeEachSource(source: unknown): Array<[any, any]> {
+  if (isArray(source)) {
+    return source.map((v: any, i: number) => [i, v] as [any, any]);
   }
-  if (isSet(source)) {
-    return [...source].map((v, i) => [v, v, i]);
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(
+      `[kiaao] each source must be an array. Received: ${typeof source}. ` +
+        "Pass a signal that resolves to an array, or use Array.from() for other types.",
+    );
   }
-  if (isNumber(source)) {
-    return Array.from({ length: source }, (_, i) => [String(i), undefined, i]);
-  }
-  if (isString(source)) {
-    return Array.from(source).map((v, i) => [String(i), v, i]);
-  }
-  const entries = Object.entries(source ?? {});
-  return entries.map(([k, v], i) => [k, v, i]);
+  return [];
 }
 
 // ── Each Item Signal Sync ──────────────────────────────
@@ -178,13 +159,6 @@ export function renderEach(
 
   const sync = () => {
     const source = toValue(eachFn);
-    if (process.env.NODE_ENV !== "production") {
-      if (isNil(source)) {
-        console.warn(new Error("[kiaao] each source is null or undefined."));
-      } else if (!isArray(source) && !isObject(source)) {
-        console.warn(new Error("[kiaao] each source should be an array or iterable object."));
-      }
-    }
     const entries = normalizeEachSource(source);
     const newKeys = new Set<any>();
 

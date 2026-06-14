@@ -284,31 +284,28 @@ describe("each — basic rendering", () => {
     expect(el.children[1].textContent).toBe("20");
   });
 
-  test("renders from object", () => {
+  test("renders from object — no longer supported", () => {
     const el = h(
       "dl",
       { each: { a: 1, b: 2 } as any, key: (_v: any, _i: number, entryKey: string) => entryKey },
       (v: () => any, i: number, key: string) => h("div", null, `${key}: ${v()}`),
     );
-    expect(el.children.length).toBe(2);
-    expect(el.textContent).toContain("a: 1");
-    expect(el.textContent).toContain("b: 2");
+    expect(el.children.length).toBe(0);
   });
 
-  test("renders from number", () => {
+  test("renders from number — no longer supported", () => {
     const el = h("ul", { each: 3 }, () => h("li", null, "x"));
-    expect(el.children.length).toBe(3);
+    expect(el.children.length).toBe(0);
   });
 
-  test("renders from string", () => {
+  test("renders from string — no longer supported", () => {
     const el = h("ul", { each: "abc", key: (v: string) => v }, (item: () => string) =>
       h("li", null, item),
     );
-    expect(el.children.length).toBe(3);
-    expect(el.children[0].textContent).toBe("a");
+    expect(el.children.length).toBe(0);
   });
 
-  test("renders from Map", () => {
+  test("renders from Map — no longer supported", () => {
     const map = new Map([
       ["x", 1],
       ["y", 2],
@@ -318,13 +315,13 @@ describe("each — basic rendering", () => {
       { each: map, key: (_v: any, _i: number, entryKey: string) => entryKey },
       (v: () => any) => h("li", null, v),
     );
-    expect(el.children.length).toBe(2);
+    expect(el.children.length).toBe(0);
   });
 
-  test("renders from Set", () => {
+  test("renders from Set — no longer supported", () => {
     const set = new Set(["a", "b"]);
     const el = h("ul", { each: set, key: (v: string) => v }, (v: () => string) => h("li", null, v));
-    expect(el.children.length).toBe(2);
+    expect(el.children.length).toBe(0);
   });
 
   test("empty array renders nothing", () => {
