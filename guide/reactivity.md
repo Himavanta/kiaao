@@ -4,8 +4,6 @@
 
 `use` 是 kiaao 中创建响应式状态的唯一入口。根据传入参数的数量和类型，它会呈现不同的形式，但始终返回 `[getter, setter]` 元组。没有用于派生值、副作用或值规范化的单独 API——一切都是信号，一切都通过 `use`。
 
----
-
 ## Definition Mode / 定义模式
 
 When called with a single argument that is not a signal, `use` creates a writable signal. The initial value can be anything: a number, a string, an object, a function, a Promise — nothing is treated specially.
@@ -30,8 +28,6 @@ setUser((prev) => ({ ...prev, age: 19 }));
 
 **Getter** 返回当前存储的值。**Setter** 替换值，或接收一个更新函数，该函数接收当前值并返回新值。
 
----
-
 ## Referencing an Existing Signal / 引用已有信号
 
 When called with a single argument that is a signal (created by `use`), `use` returns the same signal's `[getter, setter]` directly. No new signal is created. This is useful for normalizing component props that might be either a plain value or an existing signal — just pass it through `use` and you always get back a `[getter, setter]`.
@@ -43,16 +39,14 @@ const [count, setCount] = use(0);
 const [sameCount, sameSetCount] = use(count); // sameCount === count
 
 // Practical use: component props normalization / 实际用途：组件 props 规范化
-function Slider(props) {
+function Slider(props, { use }) {
   const [value, setValue] = use(props.value);
-  // If props.value is 42 → creates a new signal
+  // If props.value is 42 → creates a new component-level signal
   // If props.value is a signal → returns [signal, signal's setter]
-  // 如果 props.value 是 42 → 创建新信号
+  // 如果 props.value 是 42 → 创建新的组件级信号
   // 如果 props.value 是信号 → 返回 [信号, 信号的 setter]
 }
 ```
-
----
 
 ## Derivation Mode / 派生模式
 
@@ -73,8 +67,6 @@ console.log(double()); // 10
 The compute function runs immediately when the derivation is created, and re-runs whenever any of its declared dependencies change. The result is cached. Calling the getter returns the cached value without re-running the computation.
 
 计算函数在派生创建时立即执行，并在任何声明的依赖发生变化时重新执行。结果会被缓存。调用 getter 返回缓存值，不会重新执行计算。
-
----
 
 ## Setter of a Derived Signal / 派生信号的 Setter
 
@@ -116,8 +108,6 @@ setScaled(3);
 console.log(scaled()); // 15 (5 * 3, factor is 3 / factor 为 3)
 ```
 
----
-
 ## Short-Circuit Behavior / 短路行为
 
 After the compute function runs, the new result is compared to the cached value using `===`. If they are the same, downstream subscribers are **not notified**. This prevents unnecessary updates from cascading through the dependency graph.
@@ -134,8 +124,6 @@ setCount(100);
 // stillFive recomputes, result is 5 — same as before / stillFive 重算，结果为 5 —— 与之前相同
 // No downstream notification / 不通知下游
 ```
-
----
 
 ## "Side Effects" / "副作用"
 
@@ -156,8 +144,6 @@ const [_, trigger] = use(count, () => {
 });
 trigger(); // manually triggers the compute function / 手动触发计算函数
 ```
-
----
 
 ## Explicit Dependencies / 显式依赖
 
@@ -183,8 +169,6 @@ setTimeout(() => {
 If a non-signal value appears in the dependency list, kiaao ignores it and emits a warning in development mode. If the last argument is not a function or is itself a signal, kiaao also warns.
 
 如果依赖列表中出现非信号值，kiaao 会忽略它并在开发模式下发出警告。如果最后一个参数不是函数或本身是信号，kiaao 同样会发出警告。
-
----
 
 ## Module-Level vs Component-Level `use` / 模块级与组件级 `use`
 
@@ -240,8 +224,6 @@ If `context.use` is called after the component has been disposed (e.g., inside a
 
 如果组件已销毁后调用 `context.use`（例如异步回调中组件已被卸载），它会返回一个安全的占位 `[getter, setter]`——getter 返回 `undefined`，setter 是空操作。开发模式下会发出警告。
 
----
-
 ## Helper Functions / 辅助函数
 
 ### `isUse(v)`
@@ -255,8 +237,6 @@ Returns `true` if `v` is a signal (a getter created by `use`). Works for both de
 Returns `v()` if `v` is a signal, otherwise returns `v` itself. A convenience for reading a value that might or might not be reactive.
 
 如果 `v` 是信号则返回 `v()`，否则返回 `v` 本身。用于读取可能是响应式的值。
-
----
 
 ## Cleanup / 清理
 
@@ -277,8 +257,6 @@ use(someSignal, () => {
 });
 // Later: alive = false / 之后：alive = false
 ```
-
----
 
 Now that you understand signals, learn how to use them inside components. / 现在你已经理解了信号，继续学习如何在组件中使用它们。
 
