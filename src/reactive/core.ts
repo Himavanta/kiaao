@@ -19,13 +19,11 @@ export type RenderMode = "dom" | "ssr" | "hydrate";
 
 let currentRenderMode: RenderMode = "dom";
 
-export function setRenderMode(mode: RenderMode): void {
+export const setRenderMode = (mode: RenderMode): void => {
   currentRenderMode = mode;
-}
+};
 
-export function getRenderMode(): RenderMode {
-  return currentRenderMode;
-}
+export const getRenderMode = (): RenderMode => currentRenderMode;
 
 // ── Signal Identity ────────────────────────────────────
 
@@ -33,9 +31,8 @@ export function getRenderMode(): RenderMode {
  * 判断一个值是否是 use() 创建的信号（getter 函数）。
  * 原理：检查函数上是否挂载了 REACTIVE 标记。
  */
-export function isUse(v: any): v is Getter<any> {
-  return isNotNil(v) && (v as any)[REACTIVE] !== undefined;
-}
+export const isUse = (v: any): v is Getter<any> =>
+  isNotNil(v) && (v as any)[REACTIVE] !== undefined;
 
 // ── Value Normalization ────────────────────────────────
 
@@ -46,9 +43,7 @@ export function isUse(v: any): v is Getter<any> {
  *
  * 只做一层解包，不递归，不处理返回值是函数的情况。
  */
-export function toValue(v: any): any {
-  return isUse(v) ? (v as any)() : v;
-}
+export const toValue = (v: any): any => (isUse(v) ? (v as any)() : v);
 
 // ── Signal Lifecycle ─────────────────────────────────
 

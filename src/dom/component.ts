@@ -38,13 +38,11 @@ export function attachInstance(node: Node, instance: ComponentInstance): void {
   (node as any)[DISPOSE_KEY].add(createDisposeFn(instance));
 }
 
-export function createComponentInstance(): ComponentInstance {
-  return {
-    id: nextComponentId++,
-    mountCallbacks: [],
-    unmountCallbacks: [],
-  };
-}
+export const createComponentInstance = (): ComponentInstance => ({
+  id: nextComponentId++,
+  mountCallbacks: [],
+  unmountCallbacks: [],
+});
 
 // ── Safe Call ──────────────────────────────────────────
 // 统一执行生命周期回调，捕获同步错误和异步 rejection。

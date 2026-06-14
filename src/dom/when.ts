@@ -13,11 +13,11 @@ import { createElement, createFragment, firstChild, isConnected } from "./dom-ut
 
 // ── Trigger Mount Helper ───────────────────────────────
 
-function triggerMountIfConnected(host: Node, node: Node): void {
+const triggerMountIfConnected = (host: Node, node: Node): void => {
   if (isConnected(host)) {
     triggerMount(node);
   }
-}
+};
 
 /** 清空元素的所有子节点并返回被移除的 fragment */
 function clearChildren(el: Element): DocumentFragment {

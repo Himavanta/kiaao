@@ -3,9 +3,7 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** 空格分隔字符串 → Set */
-function splitSet(str: string): Set<string> {
-  return new Set(str.trim().split(/\s+/));
-}
+const splitSet = (str: string): Set<string> => new Set(str.trim().split(/\s+/));
 
 /** 仅通过标签名即可确定为 SVG 的标签集合 */
 const SVG_TAGS = splitSet(
@@ -47,10 +45,10 @@ export { FORCE_ATTRIBUTE, splitSet };
 
 // ── Attribute Prefix ──────────────────────────────────
 
-export function stripPrefix(rawKey: string): { prefix: "attr" | "prop" | null; key: string } {
+export const stripPrefix = (rawKey: string): { prefix: "attr" | "prop" | null; key: string } => {
   const prefix = rawKey.startsWith("attr:") ? "attr" : rawKey.startsWith("prop:") ? "prop" : null;
   return { prefix, key: prefix ? rawKey.slice(5) : rawKey };
-}
+};
 
 // ── DOM Creation ──────────────────────────────────────
 
@@ -85,14 +83,8 @@ export const qs = <T extends Element>(selector: string) => document.querySelecto
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 
-export function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+export const escapeHtml = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export function escapeAttr(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+export const escapeAttr = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

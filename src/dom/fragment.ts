@@ -3,6 +3,5 @@
 
 import { h } from "./h.ts";
 
-export function Fragment(props: { children?: any }): Node {
-  return h("div", { style: { display: "contents" } }, props.children);
-}
+export const Fragment = (props: { children?: any }): Node =>
+  h("div", { style: { display: "contents" } }, props.children);

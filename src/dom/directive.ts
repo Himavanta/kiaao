@@ -26,19 +26,17 @@ export type DirectiveFunction = (
  * 创建一个自定义指令。
  * 为传入的函数添加 DIRECT_KEY 标记，h() 通过此标记区分指令和组件。
  */
-export function direct<T extends DirectiveFunction>(fn: T): T {
+export const direct = <T extends DirectiveFunction>(fn: T): T => {
   (fn as any)[DIRECT_KEY] = true;
   return fn;
-}
+};
 
 // ── isDirective ────────────────────────────────────────
 
 /**
  * 判断一个函数是否是指令（检查 DIRECT_KEY 标记）。
  */
-export function isDirective(fn: any): boolean {
-  return isFunction(fn) && fn[DIRECT_KEY] === true;
-}
+export const isDirective = (fn: any): boolean => isFunction(fn) && fn[DIRECT_KEY] === true;
 
 // ── Directive Context Creator ──────────────────────────
 
