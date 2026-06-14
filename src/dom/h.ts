@@ -39,10 +39,11 @@ function createSafeSignal(): [() => undefined, (v?: any) => void] {
   return [() => undefined, noop];
 }
 
-// ── Context Creator ─────────────────────────────────
+// ── Component Use Creator ────────────────────────────
 
-function createContext(instance: ComponentInstance): Context {
-  const contextUse = (...args: any[]): any => {
+/** 创建组件级的 use 函数，信号在组件卸载时自动清理 */
+function createContextUse(instance: ComponentInstance): UseFunction {
+  return ((...args: any[]): any => {
     if ((instance as any)[DISPOSED_KEY]) {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[kiaao] context.use called after component disposed");
@@ -64,8 +65,12 @@ function createContext(instance: ComponentInstance): Context {
       instance.unmountCallbacks.push(stop);
     }
     return result;
-  };
+  }) as UseFunction;
+}
 
+// ── Context Creator ─────────────────────────────────
+
+function createContext(instance: ComponentInstance): Context {
   return {
     onMount: (fn) => {
       if ((instance as any)[DISPOSED_KEY]) {
@@ -89,7 +94,7 @@ function createContext(instance: ComponentInstance): Context {
       }
       instance.unmountCallbacks.push(fn);
     },
-    use: contextUse,
+    use: createContextUse(instance),
   };
 }
 
