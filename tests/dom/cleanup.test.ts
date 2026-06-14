@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Cleanup & disposal edge cases
+// kiaao — Cleanup & disposal edge cases
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

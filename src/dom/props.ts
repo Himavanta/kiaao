@@ -1,4 +1,4 @@
-// kiaao v4 — DOM property/attribute/event handling
+// kiaao — DOM property/attribute/event handling
 
 import { isUse, use } from "../reactive/core.ts";
 import { REACTIVE } from "../reactive/types.ts";

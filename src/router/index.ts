@@ -85,7 +85,7 @@ function createRouterView(
     const myFallback = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
 
-    // v4.0: 显式创建派生信号替代自动依赖收集
+    // 显式创建派生信号替代自动依赖收集
     // 当 currentPath 变化时，extractSegment 自动重新计算
     const [segment] = use(currentPath, () => extractSegment(currentPath(), myBase));
 

@@ -1,4 +1,4 @@
-// kiaao v4 — lazy (async component loader)
+// kiaao — lazy (async component loader)
 // Returns a component that loads asynchronously and renders via the framework's
 // built-in async component mechanism (h() detects Promise return values).
 

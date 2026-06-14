@@ -1,4 +1,4 @@
-// kiaao v4 — Reactive core: use, isUse, toValue
+// kiaao — Reactive core: use, isUse, toValue
 // Platform-agnostic. No DOM dependencies.
 
 import {

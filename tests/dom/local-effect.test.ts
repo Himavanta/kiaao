@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — local-effect 极限测试
+// kiaao — local-effect 极限测试
 
 import { expect, test, describe } from "vite-plus/test";
 import { addLocalEffect, removeLocalEffect } from "../../src/dom/local-effect.ts";

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Extreme edge cases for DOM rendering
+// kiaao — Extreme edge cases for DOM rendering
 
 import { expect, test, describe } from "vite-plus/test";
 import { use, isUse, toValue } from "../../src/reactive/core.ts";

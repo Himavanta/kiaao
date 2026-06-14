@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Attribute / Property 处理策略测试
+// kiaao — Attribute / Property 处理策略测试
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../src/reactive/core.ts";

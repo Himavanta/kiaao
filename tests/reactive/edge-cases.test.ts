@@ -1,5 +1,5 @@
 // @vitest-environment node
-// kiaao v4 — Reactive core edge cases & stress tests
+// kiaao — Reactive core edge cases & stress tests
 
 import { expect, test, describe } from "vite-plus/test";
 import { use, isUse, toValue, setRenderMode, getRenderMode } from "../../src/reactive/core.ts";

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// kiaao v4 — registerSignalStop unit tests
+// kiaao — registerSignalStop unit tests
 
 import { expect, test, describe } from "vite-plus/test";
 import { use, registerSignalStop } from "../../src/reactive/core.ts";

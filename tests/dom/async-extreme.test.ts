@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Async component extreme edge case tests
+// kiaao — Async component extreme edge case tests
 
 import { expect, test, describe, beforeEach, afterEach } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

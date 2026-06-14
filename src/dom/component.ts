@@ -1,4 +1,4 @@
-// kiaao v4 — Component model & lifecycle (DOM)
+// kiaao — Component model & lifecycle (DOM)
 // Component instance creation, lifecycle hooks (via context), mount/unmount, dispose.
 
 import {

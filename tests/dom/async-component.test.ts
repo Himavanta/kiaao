@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Async component edge cases
+// kiaao — Async component edge cases
 
 import { expect, test, describe } from "vite-plus/test";
 import { h } from "../../src/dom/h.ts";

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Directive system: Phase 0 tests
+// kiaao — Directive system: Phase 0 tests
 // direct(), isDirective(), createDirectiveContext()
 
 import { expect, test, describe } from "vite-plus/test";

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — when/each 指令极限测试
+// kiaao — when/each 指令极限测试
 
 import { expect, test, describe, beforeEach, afterEach } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

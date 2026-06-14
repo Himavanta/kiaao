@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Advanced lifecycle scenarios
+// kiaao — Advanced lifecycle scenarios
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

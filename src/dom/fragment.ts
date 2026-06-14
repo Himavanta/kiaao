@@ -1,4 +1,4 @@
-// kiaao v4 — Fragment 组件
+// kiaao — Fragment 组件
 // 用 <div style="display:contents"> 包裹子节点，实现无额外 DOM 容器的效果。
 
 import { h } from "./h.ts";

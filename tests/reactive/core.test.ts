@@ -1,4 +1,4 @@
-// kiaao v4 — Reactive core tests
+// kiaao — Reactive core tests
 // Platform-agnostic: No DOM environment needed.
 
 import { expect, test, describe } from "vite-plus/test";

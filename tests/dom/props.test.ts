@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — props.ts 极限测试
+// kiaao — props.ts 极限测试
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

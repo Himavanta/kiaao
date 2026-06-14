@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Component lifecycle & cleanup tests
+// kiaao — Component lifecycle & cleanup tests
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

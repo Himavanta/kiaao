@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — dom-utils 极限测试
+// kiaao — dom-utils 极限测试
 
 import { expect, test, describe } from "vite-plus/test";
 import {

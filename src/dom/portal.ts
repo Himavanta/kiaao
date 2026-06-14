@@ -1,4 +1,4 @@
-// kiaao v4 — Portal component
+// kiaao — Portal component
 // Renders content into a specified DOM container outside the component tree.
 
 import { SSR_COMPONENT } from "../reactive/types.ts";

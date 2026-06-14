@@ -1,4 +1,4 @@
-// kiaao v4 — DOM utility wrappers + HTML escaping
+// kiaao — DOM utility wrappers + HTML escaping
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 

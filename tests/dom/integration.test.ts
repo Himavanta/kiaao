@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Multi-module integration tests
+// kiaao — Multi-module integration tests
 // Tests that combine reactive core, DOM rendering, lifecycle, and directives.
 
 import { expect, test, describe } from "vite-plus/test";

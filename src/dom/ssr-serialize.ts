@@ -1,4 +1,4 @@
-// kiaao v4 — SSR attribute serialization
+// kiaao — SSR attribute serialization
 
 import { isUse } from "../reactive/core.ts";
 import { escapeAttr, FORCE_ATTRIBUTE, stripPrefix } from "./dom-utils.ts";

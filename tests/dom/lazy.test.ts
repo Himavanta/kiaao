@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — lazy 极限测试
+// kiaao — lazy 极限测试
 
 import { expect, test, describe, beforeEach, afterEach } from "vite-plus/test";
 import { h } from "../../src/index.ts";

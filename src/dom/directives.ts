@@ -1,4 +1,4 @@
-// kiaao v4 — Directive re-exports (barrel)
+// kiaao — Directive re-exports (barrel)
 // when/each implementations split into when.ts and each.ts.
 
 export { createWhenElement } from "./when.ts";

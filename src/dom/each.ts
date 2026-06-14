@@ -1,4 +1,4 @@
-// kiaao v4 — each directive implementation (DOM)
+// kiaao — each directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
 import { isUse, use, toValue } from "../reactive/core.ts";

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// kiaao v4 — SSR serialize unit tests (pure functions, no DOM needed)
+// kiaao — SSR serialize unit tests (pure functions, no DOM needed)
 
 import { expect, test, describe } from "vite-plus/test";
 import { REACTIVE } from "../../src/reactive/types.ts";

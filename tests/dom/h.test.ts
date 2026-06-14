@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — h() DOM rendering integration tests
+// kiaao — h() DOM rendering integration tests
 
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";

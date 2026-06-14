@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// kiaao v4 — Fragment 组件测试
+// kiaao — Fragment 组件测试
 
 import { expect, test, describe } from "vite-plus/test";
 import { h, Fragment } from "../../src/index.ts";

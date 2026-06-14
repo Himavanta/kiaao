@@ -1,4 +1,4 @@
-// kiaao v4 — SSR helper functions shared between h.ts and components
+// kiaao — SSR helper functions shared between h.ts and components
 // Types and simple utilities kept here; serialize/render logic split into
 // ssr-serialize.ts and ssr-render.ts respectively.
 

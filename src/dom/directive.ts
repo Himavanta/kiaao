@@ -1,4 +1,4 @@
-// kiaao v4 — Directive system: direct() function, types, element-level context
+// kiaao — Directive system: direct() function, types, element-level context
 
 import { DIRECT_KEY, DIRECTIVE_MOUNT, DIRECTIVE_UNMOUNT } from "../reactive/types.ts";
 import { registerSignalStop } from "../reactive/core.ts";

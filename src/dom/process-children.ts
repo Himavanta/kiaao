@@ -1,4 +1,4 @@
-// kiaao v4 — Child node processing for h()
+// kiaao — Child node processing for h()
 
 import { isUse, use } from "../reactive/core.ts";
 import { REACTIVE } from "../reactive/types.ts";

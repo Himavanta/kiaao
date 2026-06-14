@@ -1,4 +1,4 @@
-// kiaao v4 — SSR rendering functions
+// kiaao — SSR rendering functions
 
 import { toValue } from "../reactive/core.ts";
 import { SSR_COMPONENT, DIRECT_KEY } from "../reactive/types.ts";

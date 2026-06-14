@@ -1,4 +1,4 @@
-// kiaao v4 — h() function: creates real DOM or dispatches to hSSR in SSR mode
+// kiaao — h() function: creates real DOM or dispatches to hSSR in SSR mode
 // Component mode supports both sync and async components via context-based lifecycle.
 
 import { getRenderMode, isUse, registerSignalStop } from "../reactive/core.ts";

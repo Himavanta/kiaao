@@ -1,4 +1,4 @@
-// kiaao v4 — Local effect registration and cleanup (DOM)
+// kiaao — Local effect registration and cleanup (DOM)
 
 import { LOCAL_EFFECTS } from "../reactive/types.ts";
 

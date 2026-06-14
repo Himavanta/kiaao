@@ -1,4 +1,4 @@
-// kiaao v4 — SSR tests (run in Node.js environment, no happy-dom needed)
+// kiaao — SSR tests (run in Node.js environment, no happy-dom needed)
 
 import { expect, test, describe } from "vite-plus/test";
 import { use, getRenderMode } from "../src/reactive/core.ts";

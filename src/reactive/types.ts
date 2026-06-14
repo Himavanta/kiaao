@@ -1,4 +1,4 @@
-// kiaao v4 — Reactive system types (platform-agnostic)
+// kiaao — Reactive system types (platform-agnostic)
 // Symbols are shared constants used across reactive core and platform layers.
 
 /** REACTIVE Symbol — 标记信号函数，指向内部状态对象 */
