@@ -2,6 +2,8 @@
 
 [GitHub](https://github.com/Himavanta/kiaao)
 
+---
+
 A framework is for expressing ideas, not hiding them.
 
 kiaao is a pure-runtime reactive UI framework. It does not proxy your data, does not collect dependencies for you, and does not re-run your component functions. It does exactly one thing: precisely update the DOM after you explicitly declare your dependencies.
@@ -9,6 +11,8 @@ kiaao is a pure-runtime reactive UI framework. It does not proxy your data, does
 All state is created by `use`. Every signal is a `[getter, setter]` tuple. There is no distinction between "writable" and "readonly" signals — you always get both, and you never need to check. There is no concept of "side effects" — a derivation that returns nothing is simply a derived signal whose value is `undefined`.
 
 If you have ever felt out of control because of your framework's "smartness", if you want transparency, predictability, and full control, kiaao is for you.
+
+---
 
 框架是用来表达思想的，不是用来隐藏它的。
 
@@ -101,10 +105,11 @@ console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，�
 
 - [Reactivity / 响应式系统](./guide/reactivity.md)
 - [Components / 组件](./guide/components.md)
-- [Async Components / 异步组件](./guide/async-components.md)
-- [Attributes / 属性处理](./guide/attributes.md)
-- [Control Flow / 控制流](./guide/control-flow.md)
 - [Lifecycle / 生命周期](./guide/lifecycle.md)
+- [Control Flow / 控制流](./guide/control-flow.md)
+- [Async Components / 异步组件](./guide/async-components.md)
+- [Directives / 自定义指令](./guide/directives.md)
+- [Attributes / 属性处理](./guide/attributes.md)
 - [SSR / 服务端渲染](./guide/ssr.md)
 - [Router / 路由](./guide/router.md)
 - [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
