@@ -1,7 +1,7 @@
 // kiaao v4 — Directive system: direct() function, types, element-level context
 
-import { DIRECT_KEY, DIRECTIVE_MOUNT, DIRECTIVE_UNMOUNT, REACTIVE } from "../reactive/types.ts";
-import { isUse, use as globalUse } from "../reactive/core.ts";
+import { DIRECT_KEY, DIRECTIVE_MOUNT, DIRECTIVE_UNMOUNT } from "../reactive/types.ts";
+import { registerSignalStop } from "../reactive/core.ts";
 import type { UseFunction } from "../reactive/core.ts";
 import { addLocalEffect } from "./local-effect.ts";
 
@@ -68,20 +68,9 @@ export function createDirectiveContext(el: Element): DirectiveContext {
     },
 
     use: ((...args: any[]): any => {
-      const result = (globalUse as (...a: any[]) => any)(...args);
-      const getter = result[0];
-
-      // 引用已有信号，不注册清理
-      if (args.length === 1 && isUse(args[0]) && result[0] === args[0]) {
-        return result;
-      }
-
-      // 创建了新资源，将 stop 注册到元素的 LOCAL_EFFECTS
-      const stop = (getter as any)[REACTIVE]?.stop;
-      if (typeof stop === "function") {
+      return registerSignalStop(args, (stop) => {
         addLocalEffect(el, stop);
-      }
-      return result;
+      });
     }) as UseFunction,
   };
 }

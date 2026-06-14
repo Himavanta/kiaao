@@ -49,6 +49,33 @@ export function toValue(v: any): any {
   return isUse(v) ? (v as any)() : v;
 }
 
+// ── Signal Lifecycle ─────────────────────────────────
+
+/**
+ * 调用 use 创建信号，若创建了新资源则将 stop 注册到指定的清理容器。
+ * 若引用已有信号则不重复注册。
+ *
+ * @param args use 的参数列表
+ * @param register 新信号 stop 函数的注册回调
+ * @returns use 的返回结果 [getter, setter]
+ */
+export function registerSignalStop(args: any[], register: (stop: () => void) => void): any {
+  const result = (use as (...a: any[]) => any)(...args);
+  const getter = result[0];
+
+  // 引用已有信号，不注册清理
+  if (args.length === 1 && isUse(args[0]) && result[0] === args[0]) {
+    return result;
+  }
+
+  // 创建了新资源，注册 stop
+  const stop = (getter as any)[REACTIVE]?.stop;
+  if (typeof stop === "function") {
+    register(stop);
+  }
+  return result;
+}
+
 // ── use ────────────────────────────────────────────────
 
 /**

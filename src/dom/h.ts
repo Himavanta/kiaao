@@ -1,7 +1,7 @@
 // kiaao v4 — h() function: creates real DOM or dispatches to hSSR in SSR mode
 // Component mode supports both sync and async components via context-based lifecycle.
 
-import { getRenderMode, isUse, use as globalUse } from "../reactive/core.ts";
+import { getRenderMode, isUse, registerSignalStop } from "../reactive/core.ts";
 import { REACTIVE, DISPOSE_KEY, INITIALIZED_KEY, DISPOSED_KEY } from "../reactive/types.ts";
 import type { UseFunction } from "../reactive/core.ts";
 import type { ComponentInstance } from "../reactive/types.ts";
@@ -51,20 +51,9 @@ function createContextUse(instance: ComponentInstance): UseFunction {
       return createSafeSignal();
     }
 
-    const result = (globalUse as (...a: any[]) => any)(...args);
-    const getter = result[0];
-
-    // 引用已有信号，不注册清理
-    if (args.length === 1 && isUse(args[0]) && result[0] === args[0]) {
-      return result;
-    }
-
-    // 创建了新资源，注册 stop 到组件实例
-    const stop = (getter as any)[REACTIVE].stop;
-    if (typeof stop === "function") {
+    return registerSignalStop(args, (stop) => {
       instance.unmountCallbacks.push(stop);
-    }
-    return result;
+    });
   }) as UseFunction;
 }
 
