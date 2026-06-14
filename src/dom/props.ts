@@ -8,51 +8,63 @@ import { addEvent, setAttr, removeAttr, FORCE_ATTRIBUTE, stripPrefix } from "./d
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
 export const EVENT_RE = /^on[A-Z]/;
 
-export function setProp(el: Element, rawKey: string, value: any): void {
-  if (value == null) return;
+// ── Prefix Property ───────────────────────────────────
 
-  const { prefix, key } = stripPrefix(rawKey);
-
-  // prop: 前缀 → 强制 property
+/** 处理 prop:/attr: 前缀强制属性 */
+function setPropByPrefix(el: Element, prefix: string | null, key: string, value: any): boolean {
   if (prefix === "prop") {
     (el as any)[key] = value;
-    return;
+    return true;
   }
-
-  // attr: 前缀 → 强制 setAttribute
   if (prefix === "attr") {
     setAttr(el, key, String(value));
-    return;
+    return true;
   }
+  return false;
+}
 
-  // style
-  if (key === "style") {
-    if (typeof value === "string") {
-      setAttr(el, "style", value);
-    } else if (value && typeof value === "object") {
-      removeAttr(el, "style");
-      Object.assign((el as HTMLElement).style, value);
-    }
-    return;
+// ── Style ──────────────────────────────────────────────
+
+/** 处理 style 属性：字符串或对象 */
+function setStyleProp(el: Element, value: any): boolean {
+  if (typeof value === "string") {
+    setAttr(el, "style", value);
+    return true;
   }
+  if (value && typeof value === "object") {
+    removeAttr(el, "style");
+    Object.assign((el as HTMLElement).style, value);
+    return true;
+  }
+  return false;
+}
 
-  // 事件
+// ── Event ──────────────────────────────────────────────
+
+/** 处理事件绑定：onXxx → addEventListener */
+function setEventProp(el: Element, key: string, value: any): boolean {
   if (EVENT_RE.test(key)) {
     const eventName = key.slice(2).toLowerCase();
     addEvent(el, eventName, value);
-    return;
+    return true;
   }
+  return false;
+}
 
+// ── Attribute Property ─────────────────────────────────
+
+/** 处理需要走 setAttribute 的属性：SVG、aria/data、FORCE_ATTRIBUTE */
+function setAttributeProp(el: Element, key: string, value: any): boolean {
   // SVG → setAttribute
   if (el instanceof SVGElement) {
     setAttr(el, key, String(value));
-    return;
+    return true;
   }
 
   // aria-* / data-*
   if (key.startsWith("aria-") || key.startsWith("data-")) {
     setAttr(el, key, String(value));
-    return;
+    return true;
   }
 
   // FORCE_ATTRIBUTE
@@ -63,8 +75,33 @@ export function setProp(el: Element, rawKey: string, value: any): void {
     } else {
       setAttr(el, key, String(value));
     }
+    return true;
+  }
+
+  return false;
+}
+
+// ── setProp ────────────────────────────────────────────
+
+export function setProp(el: Element, rawKey: string, value: any): void {
+  if (value == null) return;
+
+  const { prefix, key } = stripPrefix(rawKey);
+
+  // prop:/attr: 前缀
+  if (setPropByPrefix(el, prefix, key, value)) return;
+
+  // style
+  if (key === "style") {
+    setStyleProp(el, value);
     return;
   }
+
+  // 事件
+  if (setEventProp(el, key, value)) return;
+
+  // SVG / aria / data / FORCE_ATTRIBUTE
+  if (setAttributeProp(el, key, value)) return;
 
   // 默认：property
   (el as any)[key] = value;
