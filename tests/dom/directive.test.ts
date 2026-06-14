@@ -248,3 +248,126 @@ describe("multiple contexts on same element", () => {
     expect(unmounts.size).toBe(2);
   });
 });
+
+// ── Directive lifecycle via h() + mount/unmount ──
+
+import { h } from "../../src/dom/h.ts";
+import { mount, unmount, disposeNode } from "../../src/dom/component.ts";
+
+describe("directive lifecycle integration", () => {
+  test("onMount fires when element is mounted", () => {
+    let mounted = false;
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onMount(() => {
+        mounted = true;
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    expect(mounted).toBe(false);
+
+    mount(el, document.body);
+    expect(mounted).toBe(true);
+
+    unmount(el);
+  });
+
+  test("onUnmount fires when element is disposed via disposeNode", () => {
+    let unmounted = false;
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onUnmount(() => {
+        unmounted = true;
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    mount(el, document.body);
+
+    const span = el.querySelector("span")!;
+    expect(unmounted).toBe(false);
+    disposeNode(span);
+    expect(unmounted).toBe(true);
+
+    unmount(el);
+  });
+
+  test("onUnmount fires via unmount lifecycle", () => {
+    let unmounted = false;
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onUnmount(() => {
+        unmounted = true;
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+
+    mount(el, document.body);
+    expect(unmounted).toBe(false);
+
+    unmount(el);
+    expect(unmounted).toBe(true);
+  });
+
+  test("directive onUnmount fires before component onUnmount", () => {
+    const order: string[] = [];
+
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onUnmount(() => {
+        order.push("directive");
+      });
+    });
+
+    function Comp(_props: any, { onUnmount }: any) {
+      onUnmount(() => {
+        order.push("component");
+      });
+      return h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    }
+
+    const el = h(Comp);
+    mount(el, document.body);
+    unmount(el);
+
+    expect(order).toEqual(["directive", "component"]);
+  });
+
+  test("cleanup is safe on element without directive hooks", () => {
+    const el = h("div", null, "plain text");
+    mount(el, document.body);
+    expect(() => unmount(el)).not.toThrow();
+  });
+
+  test("multiple onMount callbacks all fire", () => {
+    let count = 0;
+    const TestDir = direct((el, _props, ctx) => {
+      ctx.onMount(() => {
+        count++;
+      });
+      ctx.onMount(() => {
+        count++;
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    mount(el, document.body);
+    expect(count).toBe(2);
+    unmount(el);
+  });
+
+  test("context.use signals are auto-cleaned on unmount", () => {
+    let signalValue = 0;
+    const TestDir = direct((el, _props, ctx) => {
+      const [val, _setVal] = ctx.use(42);
+      signalValue = val();
+      ctx.onUnmount(() => {
+        // 卸载后信号值仍可读（缓存值）
+        expect(val()).toBe(42);
+      });
+    });
+
+    const el = h("div", null, h(TestDir as any, null, h("span", null, "child")));
+    mount(el, document.body);
+    expect(signalValue).toBe(42);
+    unmount(el);
+  });
+});

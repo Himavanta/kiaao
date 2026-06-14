@@ -7,6 +7,8 @@ import {
   INITIALIZED_KEY,
   DISPOSED_KEY,
   LOCAL_EFFECTS,
+  DIRECTIVE_MOUNT,
+  DIRECTIVE_UNMOUNT,
   type ComponentInstance,
 } from "../reactive/types.ts";
 // ── Component Instance ─────────────────────────────────
@@ -73,6 +75,7 @@ export function createDisposeFn(instance: ComponentInstance): () => void {
 // ── Tree traversal ─────────────────────────────────────
 
 export function triggerMount(node: Node): void {
+  // 组件 onMount 回调
   const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
   if (instances) {
     instances.forEach((instance: ComponentInstance) => {
@@ -85,16 +88,26 @@ export function triggerMount(node: Node): void {
     });
   }
 
+  // 指令 onMount 回调（按注册顺序执行）
+  const directiveMounts = (node as any)[DIRECTIVE_MOUNT] as Set<() => void> | undefined;
+  if (directiveMounts) {
+    for (const fn of directiveMounts) {
+      safeCall(fn, "directive onMount");
+    }
+  }
+
   for (const child of node.childNodes) {
     triggerMount(child);
   }
 }
 
 export function disposeNode(node: Node): void {
+  // 1. 递归处理子节点
   for (const child of node.childNodes) {
     disposeNode(child);
   }
 
+  // 2. 清理 LOCAL_EFFECTS（包括指令的 context.use 创建的信号）
   const localStops = (node as any)[LOCAL_EFFECTS] as Set<() => void> | undefined;
   if (localStops) {
     for (const stop of localStops) {
@@ -104,12 +117,24 @@ export function disposeNode(node: Node): void {
     delete (node as any)[LOCAL_EFFECTS];
   }
 
+  // 3. 执行指令的 onUnmount 回调
+  const directiveUnmounts = (node as any)[DIRECTIVE_UNMOUNT] as Set<() => void> | undefined;
+  if (directiveUnmounts) {
+    for (const fn of directiveUnmounts) {
+      safeCall(fn, "directive onUnmount");
+    }
+    directiveUnmounts.clear();
+    delete (node as any)[DIRECTIVE_UNMOUNT];
+  }
+
+  // 4. 执行 DISPOSE_KEY（组件的 onUnmount）
   const disposeFns = (node as any)[DISPOSE_KEY] as Set<() => void> | undefined;
   if (disposeFns) {
     disposeFns.forEach((fn: () => void) => fn());
     disposeFns.clear();
   }
 
+  // 5. 清理 INSTANCE_KEY
   const instances = (node as any)[INSTANCE_KEY] as Set<ComponentInstance> | undefined;
   if (instances) {
     instances.clear();
