@@ -49,6 +49,67 @@ function clearChildren(el: Element): DocumentFragment {
   return removed;
 }
 
+// ── Each Item Signal Sync ──────────────────────────────
+
+/**
+ * 获取或创建条目的响应式 item getter。
+ * 已有条目更新值，新条目创建信号。
+ */
+function syncItemSignal(
+  itemSignalMap: Map<any, [() => any, (v: any) => void]>,
+  identity: any,
+  rawValue: any,
+): any {
+  const isReactive = rawValue != null && isUse(rawValue);
+
+  if (itemSignalMap.has(identity)) {
+    if (isReactive) {
+      const existing = itemSignalMap.get(identity)!;
+      if (existing[0] !== rawValue) {
+        itemSignalMap.set(identity, [rawValue, () => {}]);
+      }
+      return rawValue;
+    }
+    const [, setter] = itemSignalMap.get(identity)!;
+    setter(rawValue);
+    return itemSignalMap.get(identity)![0];
+  }
+
+  if (isReactive) {
+    itemSignalMap.set(identity, [rawValue, () => {}]);
+    return rawValue;
+  }
+  const [getter, setter] = use(rawValue);
+  itemSignalMap.set(identity, [getter, setter]);
+  return getter;
+}
+
+/**
+ * 批量清理已消失条目对应的 DOM 节点和信号。
+ */
+function syncCleanupRemoved(
+  nodeMap: Map<any, Node>,
+  itemSignalMap: Map<any, [() => any, (v: any) => void]>,
+  newKeys: Set<any>,
+): void {
+  const removedFragment = createFragment();
+  for (const [key, node] of nodeMap) {
+    if (!newKeys.has(key)) {
+      disposeNode(node);
+      removedFragment.append(node);
+      nodeMap.delete(key);
+    }
+  }
+
+  for (const [key] of itemSignalMap) {
+    if (!newKeys.has(key)) {
+      itemSignalMap.delete(key);
+    }
+  }
+}
+
+// ── renderEach ─────────────────────────────────────────
+
 function renderEach(
   container: Element,
   eachFn: (() => any[]) | (() => any),
@@ -81,31 +142,7 @@ function renderEach(
       newKeys.add(identity);
 
       // 获取或创建响应式 item getter
-      let itemGetter: any;
-      const isReactive = rawValue != null && isUse(rawValue);
-
-      if (itemSignalMap.has(identity)) {
-        if (isReactive) {
-          const existing = itemSignalMap.get(identity)!;
-          if (existing[0] !== rawValue) {
-            itemSignalMap.set(identity, [rawValue, () => {}]);
-          }
-          itemGetter = rawValue;
-        } else {
-          const [, setter] = itemSignalMap.get(identity)!;
-          setter(rawValue);
-          itemGetter = itemSignalMap.get(identity)![0];
-        }
-      } else {
-        if (isReactive) {
-          itemSignalMap.set(identity, [rawValue, () => {}]);
-          itemGetter = rawValue;
-        } else {
-          const [getter, setter] = use(rawValue);
-          itemSignalMap.set(identity, [getter, setter]);
-          itemGetter = getter;
-        }
-      }
+      const itemGetter = syncItemSignal(itemSignalMap, identity, rawValue);
 
       // 复用或创建 DOM
       if (nodeMap.has(identity)) {
@@ -136,20 +173,7 @@ function renderEach(
     }
 
     // 批量清理消失的节点
-    const removedFragment = createFragment();
-    for (const [key, node] of nodeMap) {
-      if (!newKeys.has(key)) {
-        disposeNode(node);
-        removedFragment.append(node);
-        nodeMap.delete(key);
-      }
-    }
-
-    for (const [key] of itemSignalMap) {
-      if (!newKeys.has(key)) {
-        itemSignalMap.delete(key);
-      }
-    }
+    syncCleanupRemoved(nodeMap, itemSignalMap, newKeys);
   };
 
   // 订阅 eachFn 变化（如果 eachFn 是信号）
