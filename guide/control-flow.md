@@ -6,17 +6,15 @@ In kiaao, conditional rendering and list rendering are achieved through `when` a
 
 `when` and `each` work only on native HTML elements (string tags). They cannot be used on component functions. If you need conditional or list rendering inside a component, apply the attribute to an element returned by that component.
 
-**Important:** In kiaao, only signal getters (created by `use`) are callable. Plain functions passed as prop values are treated as static values — they are never called automatically. To create a reactive `when` condition or `each` source, always use a signal, not a plain function.
-
-**重要：** 在 kiaao 中，只有信号 getter（由 `use` 创建）是可调用的。普通函数作为 prop 值传入时被视为静态值——永远不会被自动调用。要创建响应式的 `when` 条件或 `each` 数据源，始终使用信号而非普通函数。
+`when` 和 `each` 仅对原生 HTML 元素（字符串标签）生效，不能在组件函数上使用。如果需要在组件内部进行条件或列表渲染，请将指令应用在组件返回的元素上。
 
 ---
 
 ## `when` — Conditional Rendering / 条件渲染
 
-The `when` attribute controls whether the host element's children are rendered. The host element itself stays in the DOM regardless of the condition. `when` accepts a signal (a getter created by `use`) or any static value. If a signal is passed, changes to that signal automatically update the rendered children. Static values (including plain functions) are used as-is — a plain function is treated as a truthy value, never called.
+The `when` attribute controls whether the host element's children are rendered. The host element itself stays in the DOM regardless of the condition. `when` accepts a signal (a getter created by `use`) or a plain function. If a signal is passed, changes to that signal automatically update the rendered children. If a plain function is passed, it is evaluated once at initialization and will not be reactive.
 
-`when` 属性控制宿主元素的子节点是否渲染。宿主元素本身始终存在于 DOM 中，不受条件影响。`when` 接受一个信号（由 `use` 创建的 getter）或任何静态值。如果传入信号，该信号的变化会自动更新渲染的子节点。静态值（包括普通函数）直接使用——普通函数作为 truthy 值处理，不会被执行。
+`when` 属性控制宿主元素的子节点是否渲染。宿主元素本身始终存在于 DOM 中，不受条件影响。`when` 接受一个信号（由 `use` 创建的 getter）或一个普通函数。如果传入信号，该信号的变化会自动更新渲染的子节点。如果传入普通函数，它只在初始化时执行一次，不会产生响应式更新。
 
 ### Boolean Mode / 布尔模式
 
@@ -108,13 +106,13 @@ const [status, setStatus] = use('idle')
 
 The `each` attribute renders a list of items inside its host element. It accepts a signal that returns any iterable data source: arrays, objects, Maps, Sets, numbers, and strings.
 
+`each` 属性在其宿主元素内部渲染列表。它接受一个返回任意可迭代数据源的信号：数组、对象、Map、Set、数字和字符串。
+
 The `children` of an `each` element must be a render function with the signature `(item, index, key) => Node`.
 
 - `item` — A signal getter for the current item. You can call `item()` to read the value, or pass it to another `use` derivation.
 - `index` — The numeric position.
 - `key` — The key of the entry in the original data source (array index, object property name, etc.).
-
-`each` 属性在其宿主元素内部渲染列表。它接受一个返回任意可迭代数据源的信号：数组、对象、Map、Set、数字和字符串。
 
 `each` 元素的 `children` 必须是一个渲染函数，签名为 `(item, index, key) => Node`。
 
@@ -202,13 +200,18 @@ Using a stable key (like a database ID) ensures that DOM nodes are correctly reu
 ## Notes / 注意事项
 
 - `when` and `each` cannot be used on void elements (`<br>`, `<input>`, `<hr>`, etc.). An error is thrown in development mode.
-- Both attributes only work on native HTML elements. Using them on a component function has no effect.
-- If both `when` and `each` are present on the same element, `when` takes priority. In map mode, `each` is ignored with a warning. In boolean mode, `when` acts as a guard — the list is only rendered when the condition is truthy.
-- To avoid leaving a wrapper element in the DOM, apply `style="display: contents"` on the host element. This makes the element invisible in layout while preserving lifecycle management.
-
-<br/>
-
 - `when` 和 `each` 不能在 void 元素（`<br>`、`<input>`、`<hr>` 等）上使用。开发模式下会抛出错误。
+- Both attributes only work on native HTML elements. Using them on a component function has no effect.
 - 这两个属性仅对原生 HTML 元素生效。在组件函数上使用无效。
+- If both `when` and `each` are present on the same element, `when` takes priority. In map mode, `each` is ignored with a warning. In boolean mode, `when` acts as a guard — the list is only rendered when the condition is truthy.
 - 如果同一元素上同时存在 `when` 和 `each`，`when` 优先。映射表模式下，`each` 会被忽略并发出警告。布尔模式下，`when` 作为守卫——列表仅在条件为 truthy 时渲染。
+- To avoid leaving a wrapper element in the DOM, apply `style="display: contents"` on the host element. This makes the element invisible in layout while preserving lifecycle management.
 - 为避免在 DOM 中留下包裹元素，可在宿主元素上设置 `style="display: contents"`。这使得该元素在布局中不可见，同时保留生命周期管理。
+
+---
+
+Now that you understand control flow, learn about component lifecycle. / 现在你了解了控制流，继续学习组件生命周期。
+
+- [Lifecycle / 生命周期](./lifecycle.md)
+- [SSR / 服务端渲染](./ssr.md)
+- [Router / 路由](./router.md)
