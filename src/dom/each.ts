@@ -109,7 +109,7 @@ function syncItemDOM(
   container: Element,
   anchor: Comment,
   identity: any,
-  childFn: (item: any, index: number, key: any) => any,
+  childFn: (item: () => unknown, index: number, key: any) => any,
   itemGetter: () => unknown,
   i: number,
   entryKey: any,
@@ -150,8 +150,10 @@ function syncItemDOM(
 /** @internal 被 when.ts 和 createEachElement 调用 */
 export function renderEach(
   container: Element,
+  /** 数据源：可以是信号 getter（响应式）或普通函数/数组 */
   eachFn: (() => unknown) | (() => unknown[]),
-  childFn: (item: any, index: number, key: any) => any,
+  /** item 是 each 框架创建的信号 getter，每次渲染传入当前值 */
+  childFn: (item: () => unknown, index: number, key: any) => any,
   keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
   const anchor = createComment("each");
@@ -232,7 +234,7 @@ export function createEachElement(
   tag: string,
   props: any,
   children: any[],
-  eachFn: (() => any[]) | (() => any),
+  eachFn: (() => unknown[]) | (() => unknown),
   keyFn?: (item: any, index: number, entryKey: any) => any,
 ): Element {
   if (isVoidElement(tag)) {
