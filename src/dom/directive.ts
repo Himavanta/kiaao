@@ -20,15 +20,20 @@ export type DirectiveFunction = (
   context: DirectiveContext,
 ) => void;
 
+// ── JSX component signature ────────────────────────────
+
+/** JSX 组件调用签名——表示此函数可作为 JSX 标签使用 */
+type JSXComponentSignature = (props: Record<string, any>) => Node;
+
 // ── direct() ───────────────────────────────────────────
 
 /**
  * 创建一个自定义指令。
  * 为传入的函数添加 DIRECT_KEY 标记，h() 通过此标记区分指令和组件。
  */
-export const direct = <T extends DirectiveFunction>(fn: T): T => {
+export const direct = <T extends DirectiveFunction>(fn: T): T & JSXComponentSignature => {
   (fn as any)[DIRECT_KEY] = true;
-  return fn;
+  return fn as T & JSXComponentSignature;
 };
 
 // ── isDirective ────────────────────────────────────────

@@ -27,6 +27,33 @@ The directive function is called once per child element when the element is crea
 
 指令函数在每个子元素创建时调用一次。props 变化时不会重新执行。如需响应式更新，在指令内部使用 `ctx.use` 订阅信号。
 
+### TypeScript Support / TypeScript 支持
+
+Directives created with `direct` use an intersection type so they can be used as JSX tags without type errors:
+
+通过 `direct` 创建的指令使用交叉类型，因此可以直接用作 JSX 标签而不会产生类型错误：
+
+```ts
+type DirectiveFunction = (
+  el: Element,
+  props: Record<string, any>,
+  context: DirectiveContext,
+) => void;
+
+// direct() 返回交叉类型：既保留指令函数签名，又提供 JSX 所需的组件签名
+declare function direct<T extends DirectiveFunction>(
+  fn: T,
+): T & ((props: Record<string, any>) => Node);
+```
+
+This means `<Motion from={...} to={...}>` type-checks correctly under JSX, while `h()` internally detects the `DIRECT_KEY` symbol and dispatches to the directive path. The extra `(props) => Node` signature is purely for TypeScript — it has no runtime effect.
+
+这意味着 `<Motion from={...} to={...}>` 在 JSX 下可以通过类型检查，而 `h()` 内部通过 `DIRECT_KEY` 符号检测到指令函数并调度到指令路径。额外的 `(props) => Node` 签名仅用于 TypeScript，不影响运行时行为。
+
+This follows the same pattern as React's `forwardRef`, where the component type exposes only the JSX-relevant signature while keeping the internal render function signature hidden.
+
+这与 React 的 `forwardRef` 模式相同——组件类型只暴露与 JSX 相关的签名，同时隐藏内部渲染函数的签名。
+
 ## Element-Level Lifecycle / 元素级生命周期
 
 ### `ctx.onMount(fn)`

@@ -4,12 +4,14 @@
 // to kiaao's h(tag, props, ...children).
 
 import { h } from "../dom/h.ts";
+import type { Context } from "../dom/h.ts";
 import { Fragment } from "../dom/fragment.ts";
 import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
+import type { DirectiveContext } from "../dom/directive.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 
-function normalizeChildren(children: any): any[] | undefined {
+function normalizeChildren(children: unknown): unknown[] | undefined {
   if (isNil(children)) return undefined;
   if (isArray(children)) {
     const flat: any[] = [];
@@ -22,7 +24,7 @@ function normalizeChildren(children: any): any[] | undefined {
   return [children];
 }
 
-function createJsxElement(type: any, props: Record<string, any> | null, _key?: any): any {
+function createJsxElement(type: any, props: Record<string, any> | null, _key?: any): Node {
   // Normal element or component: forward props.children as rest args
   if (isNil(props)) return h(type);
 
@@ -33,7 +35,7 @@ function createJsxElement(type: any, props: Record<string, any> | null, _key?: a
     return h(type, rest);
   }
 
-  return (h as any)(type, rest, ...childList);
+  return h(type as any, rest, ...childList);
 }
 
 // ── Exports for automatic JSX runtime ──────────────────
@@ -48,12 +50,13 @@ export { createJsxElement as jsxDEV };
 export namespace JSX {
   export interface Element extends Node {}
   export interface ElementClass {
-    (props: any): Node;
+    (props: Record<string, any>, context?: Context): Node;
+    (el: Element, props: Record<string, any>, ctx: DirectiveContext): void;
   }
   export interface ElementChildrenAttribute {
     children: any;
   }
   export interface IntrinsicElements {
-    [elem: string]: any;
+    [elem: string]: Record<string, any>;
   }
 }

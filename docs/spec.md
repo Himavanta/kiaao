@@ -327,6 +327,15 @@ interface DirectiveContext {
 - **`props`**：JSX 中写在指令上的属性，包含一个特殊的 `children` 属性。
 - **`context`**：元素级生命周期上下文，直接绑定到当前 `el`。方法始终作用于当前正在处理的元素。
 
+```ts
+// direct 函数的类型签名
+declare function direct<T extends DirectiveFunction>(
+  fn: T,
+): T & ((props: Record<string, any>) => Node);
+```
+
+> `direct` 返回的指令函数类型通过交叉类型 `T & ((props: Record<string, any>) => Node)` 使得指令可以作为 JSX 标签使用。JSX 编译器会检查 `(props) => Node` 签名，而 `h()` 在运行时通过 `DIRECT_KEY` 识别指令的真实身份并调用 `DirectiveFunction` 签名。额外的 JSX 签名仅用于 TypeScript 类型检查，对运行时无影响。
+
 #### 3.3.2 指令模式流程
 
 1. 计算 `props`（合并 rest children 到 `props.children`）。
