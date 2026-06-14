@@ -16,9 +16,14 @@ import {
 } from "./dom-utils.ts";
 import { isVoidElement } from "./ssr-helpers.ts";
 
+// ── Types ──────────────────────────────────────────────
+
+/** 标准化后的 each 数据源条目：(key, value, index) */
+export type EachEntry = [key: any, value: any, index: number];
+
 // ── Data Source Normalization ──────────────────────────
 
-export function normalizeEachSource(source: any): Array<[any, any, number]> {
+export function normalizeEachSource(source: any): EachEntry[] {
   if (source instanceof Map) {
     return [...source.entries()].map(([k, v], i) => [k, v, i]);
   }

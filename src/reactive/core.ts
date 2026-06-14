@@ -286,12 +286,9 @@ function recomputeDerivation(state: DerivationState<any>, setterValue?: any): vo
   if (newResult !== state.cachedValue) {
     state.cachedValue = newResult;
 
-    // 通知下游
     const subs = [...state.subs];
     for (const sub of subs) {
       recomputeDerivation(sub, undefined);
     }
   }
-
-  // 短路：值未变则不通知下游
 }

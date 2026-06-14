@@ -3,13 +3,8 @@
 import { use, toValue } from "../reactive/core.ts";
 import { type Getter } from "../reactive/types.ts";
 import { h } from "../dom/h.ts";
-import {
-  addEvent,
-  getPathname,
-  pushState as pushHistory,
-  getSearch,
-  parseSearch,
-} from "../dom/dom-utils.ts";
+import { addEvent } from "../dom/dom-utils.ts";
+import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────
 

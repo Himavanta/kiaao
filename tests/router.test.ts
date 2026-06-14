@@ -5,6 +5,41 @@ import { expect, test, describe, beforeEach } from "vite-plus/test";
 import { use } from "../src/reactive/core.ts";
 import { h } from "../src/index.ts";
 import { createRouter } from "../src/router/index.ts";
+import { getPathname, getSearch, pushState, parseSearch } from "../src/router/utils.ts";
+
+// ── Router 工具函数 ──────────────────────────────────
+
+describe("router utilities", () => {
+  test("getPathname returns current pathname", () => {
+    expect(getPathname()).toBe("/");
+  });
+
+  test("getSearch returns query string", () => {
+    expect(getSearch()).toBe("");
+  });
+
+  test("pushState changes URL", () => {
+    pushState("/test-path");
+    expect(getPathname()).toBe("/test-path");
+    pushState("/");
+  });
+
+  test("parseSearch parses query string", () => {
+    const params = parseSearch("?a=1&b=2");
+    expect(params.get("a")).toBe("1");
+    expect(params.get("b")).toBe("2");
+  });
+
+  test("parseSearch handles empty string", () => {
+    const params = parseSearch("");
+    expect(params.toString()).toBe("");
+  });
+
+  test("parseSearch handles string without leading ?", () => {
+    const params = parseSearch("a=1");
+    expect(params.get("a")).toBe("1");
+  });
+});
 
 // 每次测试前重置路径
 beforeEach(() => {

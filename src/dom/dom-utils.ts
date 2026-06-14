@@ -79,12 +79,8 @@ export const prevSibling = (el: Node): Node | null => el.previousSibling;
 export const isConnected = (el: Node): boolean => el.isConnected;
 export const nodeType = (el: Node): number => el.nodeType;
 
-// ── Location / Query ──────────────────────────────────
+// ── Query Selector ────────────────────────────────────
 
-export const getPathname = (): string => window.location.pathname;
-export const getSearch = (): string => window.location.search;
-export const pushState = (path: string) => history.pushState(null, "", path);
-export const parseSearch = (search: string): URLSearchParams => new URLSearchParams(search);
 export const qs = <T extends Element>(selector: string) => document.querySelector<T>(selector);
 
 // ── HTML Escaping (SSR) ───────────────────────────────

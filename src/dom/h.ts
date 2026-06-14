@@ -238,7 +238,11 @@ export function h(
   ...children: any[]
 ): Element;
 // 实现
-export function h(tag: any, props?: any, ...children: any[]): Element {
+export function h(
+  tag: string | DirectiveFunction | ((props: any, context?: any) => any),
+  props?: any,
+  ...children: any[]
+): Element {
   // SSR mode: delegate to hSSR
   if (getRenderMode() === "ssr") {
     return hSSR(tag, props, children) as any;
@@ -270,7 +274,7 @@ export function h(tag: any, props?: any, ...children: any[]): Element {
       compProps = { ...compProps, children: children.length === 1 ? children[0] : children };
     }
 
-    const result = tag(compProps, context);
+    const result = (tag as (props: any, context?: any) => any)(compProps, context);
 
     // 异步组件
     if (result instanceof Promise) {

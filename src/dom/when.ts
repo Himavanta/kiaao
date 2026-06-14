@@ -54,7 +54,7 @@ function detectWhenMode(
   const hasEach = !isMappingMode && eachFn !== undefined;
 
   if (isMappingMode && eachFn !== undefined && typeof console !== "undefined") {
-    console.warn(`[kiaao] When using mapping table mode, the 'each' prop is ignored.`);
+    console.warn(`[kiaao] when using mapping table mode, the 'each' prop is ignored.`);
   }
 
   return { isMappingMode, isLazy, hasEach, mappingTable };

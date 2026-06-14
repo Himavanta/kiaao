@@ -19,10 +19,6 @@ import {
   stripPrefix,
   splitSet,
   FORCE_ATTRIBUTE,
-  getPathname,
-  getSearch,
-  pushState,
-  parseSearch,
   qs,
   escapeHtml,
   escapeAttr,
@@ -236,29 +232,9 @@ describe("DOM traversal", () => {
   });
 });
 
-// ── Location / Query ─────────────────────────────────
+// ── Query ─────────────────────────────────────────────
 
-describe("location utilities", () => {
-  test("getPathname returns current pathname", () => {
-    expect(getPathname()).toBe("/");
-  });
-
-  test("getSearch returns query string", () => {
-    expect(getSearch()).toBe("");
-  });
-
-  test("pushState changes URL", () => {
-    pushState("/test-path");
-    expect(getPathname()).toBe("/test-path");
-    pushState("/");
-  });
-
-  test("parseSearch parses query string", () => {
-    const params = parseSearch("?a=1&b=2");
-    expect(params.get("a")).toBe("1");
-    expect(params.get("b")).toBe("2");
-  });
-
+describe("query selector", () => {
   test("qs returns null for non-existent selector", () => {
     expect(qs("#nonexistent")).toBeNull();
   });
