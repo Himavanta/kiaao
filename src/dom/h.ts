@@ -245,7 +245,9 @@ export function h(
 ): Element {
   // SSR mode: delegate to hSSR
   if (getRenderMode() === "ssr") {
-    return hSSR(tag, props, children) as any;
+    // hSSR 返回 SSRSafe（字符串），与 DOM 模式返回 Element 类型不同
+    // 调用方（renderToString）通过 isSSRSafe 区分
+    return hSSR(tag, props, children) as unknown as Element;
   }
 
   // 无效 tag → 注释占位节点

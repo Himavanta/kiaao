@@ -149,7 +149,7 @@ function renderWhenStaticMode(
  * 非信号时只执行一次初始渲染。
  */
 function subscribeWhen(
-  whenFn: any,
+  whenFn: unknown,
   renderBranch: () => void,
 ): { whenStop: (() => void) | undefined } {
   if (isUse(whenFn)) {
@@ -182,9 +182,9 @@ export function createWhenElement(options: {
   tag: string;
   props: any;
   children: any[];
-  whenFn: any;
-  eachFn?: any;
-  keyFn?: any;
+  whenFn: unknown;
+  eachFn?: unknown;
+  keyFn?: unknown;
   elseFn?: () => any;
 }): Element {
   const { tag, props, children, whenFn, eachFn, keyFn, elseFn } = options;

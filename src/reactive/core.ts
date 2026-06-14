@@ -32,7 +32,7 @@ export function getRenderMode(): RenderMode {
  * 判断一个值是否是 use() 创建的信号（getter 函数）。
  * 原理：检查函数上是否挂载了 REACTIVE 标记。
  */
-export function isUse(v: any): boolean {
+export function isUse(v: any): v is Getter<any> {
   return v !== null && v !== undefined && (v as any)[REACTIVE] !== undefined;
 }
 
@@ -274,8 +274,8 @@ function triggerDerivations<T>(state: DefinitionState<T>): void {
  * @param state 派生节点状态
  * @param setterValue 由 setter 传入的值（上游变化触发时为 undefined）
  */
-function recomputeDerivation(state: DerivationState<any>, setterValue?: any): void {
-  let newResult: any;
+function recomputeDerivation<T>(state: DerivationState<T>, setterValue?: any): void {
+  let newResult: T;
   try {
     newResult = state.computeFn(setterValue);
   } catch (err) {

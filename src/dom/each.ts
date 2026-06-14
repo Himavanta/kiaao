@@ -23,7 +23,7 @@ export type EachEntry = [key: any, value: any, index: number];
 
 // ── Data Source Normalization ──────────────────────────
 
-export function normalizeEachSource(source: any): EachEntry[] {
+export function normalizeEachSource(source: unknown): EachEntry[] {
   if (source instanceof Map) {
     return [...source.entries()].map(([k, v], i) => [k, v, i]);
   }
@@ -49,17 +49,18 @@ export function normalizeEachSource(source: any): EachEntry[] {
 function syncItemSignal(
   itemSignalMap: Map<any, [() => any, (v: any) => void]>,
   identity: any,
-  rawValue: any,
-): any {
+  rawValue: unknown,
+): () => unknown {
   const isReactive = rawValue != null && isUse(rawValue);
 
   if (itemSignalMap.has(identity)) {
     if (isReactive) {
+      const getter = rawValue as () => any;
       const existing = itemSignalMap.get(identity)!;
-      if (existing[0] !== rawValue) {
-        itemSignalMap.set(identity, [rawValue, () => {}]);
+      if (existing[0] !== getter) {
+        itemSignalMap.set(identity, [getter, () => {}]);
       }
-      return rawValue;
+      return getter;
     }
     const [, setter] = itemSignalMap.get(identity)!;
     setter(rawValue);
@@ -67,8 +68,9 @@ function syncItemSignal(
   }
 
   if (isReactive) {
-    itemSignalMap.set(identity, [rawValue, () => {}]);
-    return rawValue;
+    const getter = rawValue as () => any;
+    itemSignalMap.set(identity, [getter, () => {}]);
+    return getter;
   }
   const [getter, setter] = use(rawValue);
   itemSignalMap.set(identity, [getter, setter]);
@@ -108,7 +110,7 @@ function syncItemDOM(
   anchor: Comment,
   identity: any,
   childFn: (item: any, index: number, key: any) => any,
-  itemGetter: any,
+  itemGetter: () => unknown,
   i: number,
   entryKey: any,
   prevNode: Node | null,
@@ -125,7 +127,7 @@ function syncItemDOM(
   }
 
   // 创建新节点
-  let node: any;
+  let node: unknown;
   try {
     node = childFn(itemGetter, i, entryKey);
   } catch (err) {
@@ -148,7 +150,7 @@ function syncItemDOM(
 /** @internal 被 when.ts 和 createEachElement 调用 */
 export function renderEach(
   container: Element,
-  eachFn: (() => any[]) | (() => any),
+  eachFn: (() => unknown) | (() => unknown[]),
   childFn: (item: any, index: number, key: any) => any,
   keyFn?: (item: any, index: number, entryKey: any) => any,
 ): { stop: () => void } {
