@@ -1,5 +1,6 @@
 import {
   isArray,
+  isFunction,
   isMap,
   isNil,
   isNode,
@@ -105,8 +106,10 @@ function syncCleanupRemoved(
     }
   }
 
-  for (const [key] of itemSignalMap) {
+  for (const [key, [getter]] of itemSignalMap) {
     if (!newKeys.has(key)) {
+      const stop = (getter as any)[REACTIVE]?.stop;
+      if (isFunction(stop)) stop();
       itemSignalMap.delete(key);
     }
   }
