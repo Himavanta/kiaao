@@ -12,6 +12,7 @@ import {
   DIRECTIVE_UNMOUNT,
   type ComponentInstance,
 } from "../reactive/types.ts";
+import { isNotEmpty } from "../utils/type-guards.ts";
 // ── Component Instance ─────────────────────────────────
 
 let nextComponentId = 0;
@@ -164,7 +165,7 @@ export function disposeNode(node: Node): void {
 
 export function mount(root: Element, container: Element): void {
   if (process.env.NODE_ENV !== "production") {
-    if (container.children.length > 0) {
+    if (isNotEmpty(container.children)) {
       console.warn(
         new Error(
           `[kiaao] mount target already has ${container.children.length} child node(s). Existing content will be preserved.`,

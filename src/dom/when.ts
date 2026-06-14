@@ -1,4 +1,4 @@
-import { isDefined, isFunction, isNode, isUndefined } from "../utils/type-guards.ts";
+import { isDefined, isFunction, isNode, isSingle, isUndefined } from "../utils/type-guards.ts";
 // kiaao — when directive implementation (DOM)
 
 import { REACTIVE } from "../reactive/types.ts";
@@ -44,12 +44,12 @@ function detectWhenMode(
   hasEach: boolean;
   mappingTable: Record<string, () => any> | null;
 } {
-  const isMappingMode = children.length === 1 && isMappingTable(children[0]);
+  const isMappingMode = isSingle(children) && isMappingTable(children[0]);
   const mappingTable = isMappingMode ? children[0] : null;
   const isLazy =
     !isMappingMode &&
     isUndefined(eachFn) &&
-    children.length === 1 &&
+    isSingle(children) &&
     isFunction(children[0]) &&
     !isUse(children[0]);
   const hasEach = !isMappingMode && !isUndefined(eachFn);

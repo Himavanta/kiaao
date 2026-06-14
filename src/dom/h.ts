@@ -4,8 +4,10 @@ import {
   isElement,
   isFunction,
   isNode,
+  isNotEmpty,
   isNotNil,
   isObject,
+  isSingle,
   isPromise,
   isString,
 } from "../utils/type-guards.ts";
@@ -105,7 +107,7 @@ function createContext(instance: ComponentInstance): Context {
 /** 指令模式：遍历 children，对每个 Element 调用指令函数 */
 function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
   const dirProps = { ...props };
-  if (children.length > 0) {
+  if (isNotEmpty(children)) {
     dirProps.children = normalizeChildren(children);
   }
 
@@ -123,7 +125,7 @@ function handleDirectiveMode(tag: any, props: any, children: any[]): Element {
   }
 
   // 单子节点展开：单个 Node 直接返回，保持消费者兼容性
-  if (flatChildren.length === 1 && isNode(flatChildren[0])) {
+  if (isSingle(flatChildren) && isNode(flatChildren[0])) {
     return flatChildren[0] as unknown as Element;
   }
   return children as unknown as Element;
@@ -284,7 +286,7 @@ export function h(
     const context = createContext(instance);
 
     let compProps = props ?? {};
-    if (children.length > 0) {
+    if (isNotEmpty(children)) {
       compProps = { ...compProps, children: normalizeChildren(children) };
     }
 

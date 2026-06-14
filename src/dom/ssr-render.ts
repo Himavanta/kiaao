@@ -1,4 +1,11 @@
-import { isArray, isFunction, isObject, isPromise, isString } from "../utils/type-guards.ts";
+import {
+  isArray,
+  isFunction,
+  isObject,
+  isPromise,
+  isSingle,
+  isString,
+} from "../utils/type-guards.ts";
 // kiaao — SSR rendering functions
 
 import { toValue } from "../reactive/core.ts";
@@ -53,7 +60,7 @@ function hSSRWhenTag(tag: string, props: any, children: any[]): SSRSafe {
   const cleanProps = () => serializeAttrs(stripDirectives(props));
 
   // 映射表模式：children 为 { key: () => VNode }
-  if (children.length === 1 && isMappingTable(children[0])) {
+  if (isSingle(children) && isMappingTable(children[0])) {
     const map = children[0];
     const branchFn = map[whenVal];
     if (branchFn) {

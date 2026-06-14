@@ -23,7 +23,16 @@ export const isDefined = <T>(v: T): v is Exclude<T, undefined> => v !== undefine
 export const isMap = (v: any): v is Map<any, any> => v instanceof Map;
 export const isSet = (v: any): v is Set<any> => v instanceof Set;
 
-// ── Object ────────────────────────────────────────────
+// ── Array / Length ───────────────────────────────────
+
+/** 检查类数组对象是否为空（length === 0） */
+export const isEmpty = (arr: { length: number }): boolean => arr.length === 0;
+
+/** 检查类数组对象是否非空（length > 0） */
+export const isNotEmpty = (arr: { length: number }): boolean => arr.length > 0;
+
+/** 检查数组是否恰好包含一个元素 */
+export const isSingle = <T>(arr: T[]): arr is [T] => arr.length === 1;
 
 /** 纯对象：constructor === Object（排除类实例、Map、Set 等） */
 export const isPlainObject = (v: any): v is Record<string, any> => !!v && v.constructor === Object;

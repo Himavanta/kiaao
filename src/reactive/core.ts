@@ -9,7 +9,7 @@ import {
   type DerivationState,
   type SignalState,
 } from "./types.ts";
-import { isFunction, isNotNil } from "../utils/type-guards.ts";
+import { isFunction, isNotEmpty, isNotNil, isSingle } from "../utils/type-guards.ts";
 
 // ── Render Mode ────────────────────────────────────────
 // 控制派生信号的运行模式。
@@ -60,7 +60,7 @@ export function registerSignalStop(args: any[], register: (stop: () => void) => 
   const getter = result[0];
 
   // 引用已有信号，不注册清理
-  if (args.length === 1 && isUse(args[0]) && result[0] === args[0]) {
+  if (isSingle(args) && isUse(args[0]) && result[0] === args[0]) {
     return result;
   }
 
@@ -97,7 +97,7 @@ export type UseFunction = {
 };
 
 export const use: UseFunction = (...args: any[]): any => {
-  if (args.length === 1) {
+  if (isSingle(args)) {
     const val = args[0];
     if (isUse(val)) {
       const state = (val as any)[REACTIVE] as { set: Setter<any> };
@@ -217,7 +217,7 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
       return definitionMode(undefined) as any;
     }
     const nonSignals = deps.filter((d: any) => !isUse(d));
-    if (nonSignals.length > 0) {
+    if (isNotEmpty(nonSignals)) {
       console.warn(
         "[kiaao] use(...): dependencies must be signals. Non-signal values will be filtered out.",
       );
