@@ -216,3 +216,8 @@ SSR 期间，只有对静态 HTML 有意义的属性会被序列化：
 - `aria-*` / `data-*` → 原样输出
 - FORCE_ATTRIBUTE 成员 → 作为 HTML 属性输出
 - 其他 → 忽略
+
+Now that you understand attributes, learn about SSR and component lifecycle. / 现在你了解了属性处理，继续学习服务端渲染和组件生命周期。
+
+- [SSR / 服务端渲染](./ssr.md)
+- [Lifecycle / 生命周期](./lifecycle.md)

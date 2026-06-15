@@ -38,9 +38,9 @@ function App(props, { onMount, onUnmount }) {
 **What "mount complete" means / "挂载完成"的含义：**
 
 - For **sync components**, mount is complete when `mount(root, container)` calls `triggerMount`, which recursively traverses the DOM tree and fires `onMount` callbacks on every node with an `INSTANCE_KEY`. The DOM is fully inserted at this point. Callbacks fire in depth-first pre-order — parent before children.
-- 对于**同步组件**，挂载完成指 `mount(root, container)` 调用 `triggerMount` 递归遍历 DOM 树，在每个带 `INSTANCE_KEY` 的节点上触发 `onMount` 回调。此时 DOM 已完全插入。回调以深度优先前序触发——父组件先于子组件。
-
 - For **async components**, mount is complete when the returned Promise resolves, the real DOM is inserted into the transparent wrapper, `triggerMount(realDOM)` recursively mounts all sync children in the subtree, and then the async component's own `mountCallbacks` are fired manually. Children fire before the async parent.
+
+- 对于**同步组件**，挂载完成指 `mount(root, container)` 调用 `triggerMount` 递归遍历 DOM 树，在每个带 `INSTANCE_KEY` 的节点上触发 `onMount` 回调。此时 DOM 已完全插入。回调以深度优先前序触发——父组件先于子组件。
 - 对于**异步组件**，挂载完成指返回的 Promise resolve 后，真实 DOM 插入透明 wrapper，`triggerMount(realDOM)` 递归挂载子树中所有同步子组件，然后手动触发异步组件自身的 `mountCallbacks`。子组件先于异步父组件触发。
 
 **This ordering difference is intentional.** In both cases, a parent's `onMount` callback is guaranteed to run only after all _ready_ children in its subtree have mounted. For async components, a child that hasn't resolved yet is not "ready", so the parent does not wait for it.
@@ -235,3 +235,8 @@ This means you can freely create derivations anywhere without worrying about mem
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `mount(root, container)` | Insert into DOM and trigger `onMount` callbacks / 插入 DOM 并触发 `onMount` 回调                                            |
 | `unmount(root)`          | Trigger `onUnmount` callbacks, recursively cleanup, then remove from DOM / 触发 `onUnmount` 回调，递归清理，然后从 DOM 移除 |
+
+Now that you understand lifecycle, learn about server-side rendering and routing. / 现在你了解了生命周期，继续学习服务端渲染和路由。
+
+- [SSR / 服务端渲染](./ssr.md)
+- [Router / 路由](./router.md)

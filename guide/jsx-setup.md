@@ -90,3 +90,8 @@ mount(<App />, document.getElementById("app"));
 No Babel plugins, no Vite plugins, no custom pragma comments. Just standard JSX transform with `kiaao` as the import source.
 
 无需 Babel 插件、无需 Vite 插件、无需自定义 pragma 注释。只需将 `kiaao` 设为 JSX import source 的标准 JSX 转换。
+
+Now that you have JSX set up, start building components. / 现在你已经配置好 JSX，可以开始构建组件了。
+
+- [Components / 组件](./components.md)
+- [Reactivity / 响应式系统](./reactivity.md)
