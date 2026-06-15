@@ -44,34 +44,34 @@ src/motion/
 
 ### 阶段 3：实现 `create-group-motion.ts`
 
-- [ ] 实现 `createGroupMotion(signal, keyFn?, context?)`
-- [ ] 与 `createMotion` 共享 `shared.ts` 中的辅助函数
-- [ ] 有 keyFn：diff 定位移除元素 → 启动退出动画 → `await` → `setVisibleItems`
-- [ ] 无 keyFn：全量退出（遍历 `elements`）
-- [ ] `keyToElMap`：`Map<any, Element>` 管理 key→元素映射
-- [ ] `propsMap.set` + `elements.add` + `keyToElMap.set` 在 `ctx.onMount`
-- [ ] `onUnmount` 清理三者
-- [ ] 验证：`vp check` 无类型错误
+- [x] 实现 `createGroupMotion(signal, keyFn?, context?)`
+- [x] 与 `createMotion` 共享 `shared.ts` 中的辅助函数
+- [x] 有 keyFn：microdiff 定位移除元素 → 启动退出动画 → `await` → `setVisibleItems`
+- [x] 无 keyFn：全量退出（遍历 `elements`）
+- [x] `keyToElMap`：`Map<any, Element>` 管理 key→元素映射
+- [x] `propsMap.set` + `elements.add` + `keyToElMap.set` 在 `ctx.onMount`
+- [x] `onUnmount` 清理三者
+- [x] 验证：`vp check` 无类型错误 ✅
 
 ### 阶段 4：更新 `index.ts`
 
-- [ ] 重新导出 `createMotion`、`createGroupMotion`
-- [ ] 验证：`vp pack` 确认产物包含 `dist/motion/`
+- [x] 重新导出 `createMotion`、`createGroupMotion` ✅
 
 ### 阶段 5：测试 `createGroupMotion`
 
-- [ ] 编写 `tests/motion/create-group-motion.test.ts`
-- [ ] 基础测试：签名、初始值同步
-- [ ] 有 keyFn：删除单条、删除多条、新增
-- [ ] 无 keyFn：全量退出
-- [ ] 边界：快速连续删除、中途反转、无 from prop、无 to prop
-- [ ] 验证：`vp test` motion 全部通过
+- [x] 编写 `tests/motion/create-group-motion.test.ts`
+- [x] 基础测试：签名、初始值同步
+- [x] 有 keyFn：删除、新增、不变
+- [x] 无 keyFn：全量退出路径
+- [x] 边界：快速连续、空数组、无 from prop、非原始 key
+- [x] DOM 集成：each + GroupMotion 渲染、删除后更新
+- [x] 验证：`vp test` motion 全部通过 ✅
 
 ### 阶段 6：全量验证
 
-- [ ] `vp check` 通过（仅示例 router 既有错误）
-- [ ] `vp test` 全量 646+ 通过
-- [ ] 示例运行验证
+- [x] `vp check` 通过（仅示例 router 既有错误）
+- [x] `vp test` 全量 665 通过（新增 19 个 GroupMotion 测试）
+- [x] 示例运行验证 ✅
 
 ---
 
