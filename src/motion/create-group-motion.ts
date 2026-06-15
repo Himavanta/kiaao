@@ -131,7 +131,7 @@ export function createGroupMotion(
   signal: Getter<any>,
   keyFn?: (item: any, index: number) => any,
   context?: { use: typeof use },
-): [visibleItems: () => any, GroupMotion: ReturnType<typeof direct>] {
+): [visibleItems: Getter<any>, GroupMotion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
   const keyToElMap = new Map<any, Element>();

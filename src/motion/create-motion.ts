@@ -71,7 +71,7 @@ async function handleSignalChange(
 export function createMotion(
   signal: Getter<any>,
   context?: { use: typeof use },
-): [visible: () => any, Motion: ReturnType<typeof direct>] {
+): [visible: Getter<any>, Motion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
   const generation: Generation = { tick: 0 };
