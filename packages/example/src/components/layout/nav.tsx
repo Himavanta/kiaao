@@ -44,7 +44,7 @@ function MenuItem({ item }: { item: Getter<MainNavItem> }) {
 
 export default function () {
   return (
-    <nav class="h-14 w-full flex border-b border-gray-200 justify-between items-center px-4">
+    <nav class="h-14 w-full flex border-b border-gray-200 justify-between items-center px-4 z-1">
       <Logo />
 
       <section each={menus} key={(v: MainNavItem) => v.path} class="flex items-center gap-4 ">
