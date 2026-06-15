@@ -10,34 +10,24 @@ export const MOTION_STATE = Symbol("kiaao.motion.state");
 
 export type MotionState = "idle" | "entering" | "exiting" | "exited";
 
-/**
- * 读取元素的动画状态。未初始化时默认为 "idle"。
- */
 export function getMotionState(el: Element): MotionState {
   return (el as any)[MOTION_STATE] ?? "idle";
 }
 
-/**
- * 设置元素的动画状态。
- */
 export function setMotionState(el: Element, state: MotionState): void {
   (el as any)[MOTION_STATE] = state;
 }
 
 // ── Types ──────────────────────────────────────────────
 
-/** Motion 指令的动画属性 */
-export interface MotionProps {
-  from?: Record<string, string | number>;
-  to?: Record<string, string | number>;
-  duration?: number;
-}
-
 /** 每个元素持久化的动画配置 */
 export interface ElementMotionConfig {
+  /** 退出动画目标值，进入动画起始值 */
   from?: Record<string, string | number>;
+  /** 进入动画目标值 */
   to?: Record<string, string | number>;
-  duration: number;
+  /** 透传给 motion animate() 的选项（duration, easing, delay 等） */
+  options: Record<string, any>;
 }
 
 /** 代际标记，用于中途反转判断 */
@@ -62,7 +52,7 @@ export function collectExitAnimations(
     if (isNil(config) || isNil(config.from) || getMotionState(el) === "exiting") continue;
 
     setMotionState(el, "exiting");
-    anims.push(animate(el, config.from, { duration: config.duration }).finished);
+    anims.push(animate(el, config.from, config.options).finished);
   }
 
   return anims;
@@ -73,6 +63,7 @@ export function collectExitAnimations(
 /**
  * 元素挂载时的进入动画处理。
  * 注册元素到 elements 集合，若无 to 配置则跳过动画。
+ * 使用原生 WAAPI 避免 motion 引擎在 keyframe 数组上的限制。
  */
 export function playEnterAnimation(
   el: Element,
@@ -80,18 +71,16 @@ export function playEnterAnimation(
   elements: Set<Element>,
 ): void {
   elements.add(el);
-
   if (isNil(config.to)) return;
 
   setMotionState(el, "entering");
 
-  // 使用原生 WAAPI 处理进入动画（[from, to] 数组），
-  // 避免 motion 引擎在 keyframe 数组上的 CSSStyleDeclaration 限制
   try {
     const keyframes = config.from ? [config.from, config.to] : [config.to];
 
     const anim = (el as any).animate(keyframes as any, {
-      duration: config.duration * 1000,
+      ...config.options,
+      duration: (config.options.duration ?? 0.3) * 1000,
       fill: "forwards",
     });
 
@@ -102,7 +91,6 @@ export function playEnterAnimation(
       },
     );
   } catch {
-    // WAAPI 不可用时（如测试环境）直接设置目标样式
     setMotionState(el, "idle");
   }
 }
@@ -110,9 +98,12 @@ export function playEnterAnimation(
 // ── Motion Prop Parser ────────────────────────────────
 
 /**
- * 从指令 props 中提取动画配置，duration 默认 0.3s。
+ * 从指令 props 中提取动画配置。
+ * - from → 退出/进入起始
+ * - to → 进入目标
+ * - 其余 props 全部作为 options 透传给 animate()（duration, easing, delay 等）
  */
 export function parseMotionProps(props: Record<string, any>): ElementMotionConfig {
-  const { from, to, duration = 0.3 } = props as MotionProps;
-  return { from, to, duration };
+  const { from, to, children: _, key: __, ...options } = props;
+  return { from, to, options };
 }

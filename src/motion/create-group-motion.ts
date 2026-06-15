@@ -61,9 +61,9 @@ function collectRemovedKeyAnimations(
 
     setMotionState(el, "exiting");
     try {
-      anims.push(animate(el, config.from, { duration: config.duration }).finished);
+      anims.push(animate(el, config.from, config.options).finished);
     } catch {
-      // animate 在不支持 WAAPI 的环境（如测试）中可能抛出异常
+      /* animate not available */
     }
   }
 
@@ -72,24 +72,28 @@ function collectRemovedKeyAnimations(
 
 // ── Signal Change Handler ─────────────────────────────
 
+interface HandleGroupSignalChangeOptions {
+  oldArray: any[];
+  newArray: any[];
+  generation: Generation;
+  elements: Set<Element>;
+  propsMap: Map<Element, ElementMotionConfig>;
+  keyToElMap: Map<any, Element>;
+  keyFn: ((item: any, index: number) => any) | undefined;
+  setVisibleItems: (v: any) => void;
+}
+
 /**
  * 响应业务数组信号变化的异步处理函数。
  *
- * - 有 keyFn：通过 microdiff 定位被移除元素，启动退出动画。
+ * - 有 keyFn：通过 diff 定位被移除元素，启动退出动画。
  * - 无 keyFn：全量退出，所有已注册元素播放退出动画。
  *
  * 代际标记确保快速连续切换时只有最后一次调用生效。
  */
-async function handleGroupSignalChange(
-  oldArray: any[],
-  newArray: any[],
-  generation: Generation,
-  elements: Set<Element>,
-  propsMap: Map<Element, ElementMotionConfig>,
-  keyToElMap: Map<any, Element>,
-  keyFn: ((item: any, index: number) => any) | undefined,
-  setVisibleItems: (v: any) => void,
-): Promise<void> {
+async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions): Promise<void> {
+  const { oldArray, newArray, generation, elements, propsMap, keyToElMap, keyFn, setVisibleItems } =
+    options;
   const myTick = ++generation.tick;
 
   const anims: Promise<any>[] = [];
@@ -142,22 +146,21 @@ export function createGroupMotion(
   const [visibleItems, setVisibleItems] = useFn(signal());
 
   useFn(signal, () => {
-    void handleGroupSignalChange(
-      visibleItems(), // 旧值：派生触发时尚未更新
-      signal(), // 新值
+    void handleGroupSignalChange({
+      oldArray: visibleItems(),
+      newArray: signal(),
       generation,
       elements,
       propsMap,
       keyToElMap,
       keyFn,
       setVisibleItems,
-    );
+    });
   });
 
   const GroupMotion = direct((el: Element, props: Record<string, any>, ctx: DirectiveContext) => {
     const config = parseMotionProps(props);
 
-    // 每次挂载注册：props、元素引用、key 映射
     ctx.onMount(() => {
       propsMap.set(el, config);
       elements.add(el);

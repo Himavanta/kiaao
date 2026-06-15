@@ -17,6 +17,14 @@ import {
 
 // ── Signal Change Handler ─────────────────────────────
 
+interface HandleSignalChangeOptions {
+  newValue: any;
+  generation: Generation;
+  elements: Set<Element>;
+  propsMap: Map<Element, ElementMotionConfig>;
+  setVisible: (v: any) => void;
+}
+
 /**
  * 响应业务信号变化的异步处理函数。
  *
@@ -25,13 +33,8 @@ import {
  *
  * 代际标记确保快速连续切换时只有最后一次调用生效。
  */
-async function handleSignalChange(
-  newValue: any,
-  generation: Generation,
-  elements: Set<Element>,
-  propsMap: Map<Element, ElementMotionConfig>,
-  setVisible: (v: any) => void,
-): Promise<void> {
+async function handleSignalChange(options: HandleSignalChangeOptions): Promise<void> {
+  const { newValue, generation, elements, propsMap, setVisible } = options;
   const myTick = ++generation.tick;
 
   if (newValue === true) {
@@ -81,15 +84,18 @@ export function createMotion(
   const [visible, setVisible] = useFn(signal());
 
   useFn(signal, () => {
-    void handleSignalChange(signal(), generation, elements, propsMap, setVisible);
+    void handleSignalChange({
+      newValue: signal(),
+      generation,
+      elements,
+      propsMap,
+      setVisible,
+    });
   });
 
   const Motion = direct((el: Element, props: Record<string, any>, ctx: DirectiveContext) => {
     const config = parseMotionProps(props);
 
-    // propsMap/elements 在 onMount 注册（每次重挂载重新建立），
-    // 解决 when 模式复用元素引用导致的跨周期失效问题。
-    // onUnmount 清理两者——onMount 会在下次挂载时重新注册。
     ctx.onMount(() => {
       propsMap.set(el, config);
       playEnterAnimation(el, config, elements);
