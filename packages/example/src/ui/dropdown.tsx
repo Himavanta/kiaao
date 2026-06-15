@@ -6,8 +6,10 @@
 //   </Dropdown>
 //
 // 点击 trigger 区域切换面板显隐，点击面板外部或按 Escape 关闭。
+// 面板进入/退出使用 Motion 指令驱动，退出动画播放完毕后 DOM 才移除。
 
-import type { Context } from "kiaao";
+import { type Context } from "kiaao";
+import { createMotion } from "kiaao/motion";
 
 type Placement = "bottom-left" | "bottom-right" | "top-left" | "top-right";
 
@@ -31,8 +33,11 @@ const PLACEMENT_CLASS: Record<Placement, string> = {
   "top-right": "right-0 bottom-full mb-1 origin-bottom-right",
 };
 
-export default function Dropdown(props: DropdownProps, { onUnmount, use }: Context) {
+export default function Dropdown(props: DropdownProps, context: Context) {
+  const { use } = context;
   const [open, setOpen] = use<boolean>(false);
+  const [visible, Motion] = createMotion(open, context);
+
   const toggle = () => setOpen((v) => !v);
   const close = () => setOpen(false);
 
@@ -49,20 +54,26 @@ export default function Dropdown(props: DropdownProps, { onUnmount, use }: Conte
     <div class="relative inline-block">
       <div onClick={toggle}>{trigger}</div>
 
-      <div when={open} class="contents">
-        <div
-          class={`animate-[kd-drop-in_150ms_ease-out] absolute ${PLACEMENT_CLASS[placement]}`}
-          onClick={(e: MouseEvent) => e.stopPropagation()}
+      <div when={visible} class="contents">
+        <Motion
+          from={{ opacity: 0, transform: "scale(0.95)" }}
+          to={{ opacity: 1, transform: "scale(1)" }}
+          duration={0.15}
         >
-          {children}
-        </div>
+          <div
+            class={`absolute ${PLACEMENT_CLASS[placement]}`}
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+          >
+            {children}
+          </div>
+        </Motion>
       </div>
     </div>
   );
 
-  // ── 事件监听：直接在组件创建时注册 ──────────────────────
+  // ── 事件监听 ─────────────────────────────────────────
   //
-  // 不在 onMount 中注册，避免嵌套 onUnmount 丢失 context 的问题。
+  // 直接在组件创建时注册，不使用 onMount/onUnmount 嵌套。
   // 使用 window 的 click 捕获阶段，composedPath 检测点击源。
 
   const cleanups: (() => void)[] = [];
@@ -70,7 +81,6 @@ export default function Dropdown(props: DropdownProps, { onUnmount, use }: Conte
   // 点击外部关闭（捕获阶段）
   if (closeOnOutsideClick) {
     const onClick = (e: MouseEvent) => {
-      // 点击在 rootEl 内部 → 不处理
       if (rootEl.contains(e.target as Node)) return;
       if (!open()) return;
       close();
@@ -88,8 +98,7 @@ export default function Dropdown(props: DropdownProps, { onUnmount, use }: Conte
     cleanups.push(() => window.removeEventListener("keydown", onKey));
   }
 
-  // 统一清理
-  onUnmount(() => {
+  context.onUnmount(() => {
     for (const fn of cleanups) fn();
   });
 

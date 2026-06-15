@@ -6,7 +6,7 @@ import { use } from "../reactive/core.ts";
 import { type Getter } from "../reactive/types.ts";
 import { direct } from "../dom/directive.ts";
 import type { DirectiveContext } from "../dom/directive.ts";
-import { isEmpty } from "../utils/type-guards.ts";
+import { isEmpty, isNotEmpty } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -44,7 +44,7 @@ async function handleSignalChange(options: HandleSignalChangeOptions): Promise<v
 
   const anims = collectExitAnimations(elements, propsMap);
 
-  if (isEmpty(anims) && process.env.NODE_ENV !== "production") {
+  if (isEmpty(anims) && isNotEmpty(Array.from(elements)) && process.env.NODE_ENV !== "production") {
     console.warn(
       "[kiaao] createMotion: no exit animations to await. " +
         "Did you forget to pass `from` prop to <Motion>?",
