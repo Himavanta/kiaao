@@ -16,6 +16,7 @@ import {
   collectExitAnimations,
   parseMotionProps,
   playEnterAnimation,
+  applyFromStyle,
 } from "./shared.ts";
 
 // ── Diff Helpers ──────────────────────────────────────
@@ -160,6 +161,9 @@ export function createGroupMotion(
 
   const GroupMotion = direct((el: Element, props: Record<string, any>, ctx: DirectiveContext) => {
     const config = parseMotionProps(props);
+
+    // 在元素挂载前设 from 初始样式，onMount 时 animate(el, to) 过渡
+    applyFromStyle(el, config.from);
 
     ctx.onMount(() => {
       propsMap.set(el, config);

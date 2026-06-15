@@ -76,15 +76,9 @@ function createMotion(signal, context?): [visible, Motion];
 
   进入动画目标值。若不传，无进入动画。
 
-- **`duration`**
+- All other props (including `duration`, `easing`, `delay`, etc.) are forwarded directly to motion's `animate()` options.
 
-  Animation duration in seconds. Default `0.3`.
-
-  动画时长（秒）。默认 `0.3`。
-
-- Other props are forwarded to motion's `animate()` options (e.g. `easing`, `delay`).
-
-  其他属性透传给 motion 的 `animate()` 选项（如 `easing`、`delay` 等）。
+  其余所有属性（包括 `duration`、`easing`、`delay` 等）直接透传给 motion 的 `animate()` 选项。
 
 ### Example / 示例
 
@@ -93,15 +87,15 @@ import { use } from "kiaao";
 import { createMotion } from "kiaao/motion";
 
 function Comp(_, context) {
-  const [state] = use(true);
+  const [state, setState] = use(true);
   const [visible, Motion] = createMotion(state, context);
+  const [text] = use(state, () => (state() ? "开" : "关"));
 
   return (
     <div>
-      <button onClick={() => state(false)}>关闭</button>
-      <span>当前状态：{state ? "开" : "关"}</span> {/* 立刻变化 */}
+      <button onClick={() => setState(false)}>关闭</button>
+      <span>当前状态：{text}</span> {/* 立刻变化 */}
       <div when={visible}>
-        {" "}
         {/* 绑定动画信号 */}
         <Motion
           from={{ opacity: 0, transform: "translateY(20px)" }}
@@ -189,7 +183,7 @@ import { use } from "kiaao";
 import { createGroupMotion } from "kiaao/motion";
 
 function Comp(_, context) {
-  const [items] = use([
+  const [items, setItems] = use([
     { id: 1, text: "任务一" },
     { id: 2, text: "任务二" },
     { id: 3, text: "任务三" },
@@ -198,7 +192,7 @@ function Comp(_, context) {
   const [visibleItems, GroupMotion] = createGroupMotion(items, keyFn, context);
 
   const removeItem = (id) => {
-    items(items().filter((i) => i.id !== id));
+    setItems(items().filter((i) => i.id !== id));
   };
 
   return (
@@ -244,9 +238,9 @@ function Comp(_, context) {
 
   **中途反转由代际标记保护。** 快速切换信号时，只有最后一次的状态会生效。
 
-- **Enter animations use the Web Animations API (WAAPI) natively.** Exit animations are driven by the `motion` library.
+- **Enter and exit animations are both driven by `motion/mini`.** No WAAPI is involved.
 
-  **进入动画使用原生 Web Animations API（WAAPI）。** 退出动画由 `motion` 库驱动。
+  **进入和退出动画都由 `motion/mini` 驱动。**
 
 ---
 

@@ -74,25 +74,12 @@ export function playEnterAnimation(
   if (isNil(config.to)) return;
 
   setMotionState(el, "entering");
-
-  try {
-    const keyframes = config.from ? [config.from, config.to] : [config.to];
-
-    const anim = (el as any).animate(keyframes as any, {
-      ...config.options,
-      duration: (config.options.duration ?? 0.3) * 1000,
-      fill: "forwards",
-    });
-
-    void anim.finished.then(
-      () => setMotionState(el, "idle"),
-      () => {
-        /* animate interrupted */
-      },
-    );
-  } catch {
-    setMotionState(el, "idle");
-  }
+  void animate(el, config.to, config.options).finished.then(
+    () => setMotionState(el, "idle"),
+    () => {
+      /* animate interrupted */
+    },
+  );
 }
 
 // ── Motion Prop Parser ────────────────────────────────
@@ -106,4 +93,19 @@ export function playEnterAnimation(
 export function parseMotionProps(props: Record<string, any>): ElementMotionConfig {
   const { from, to, children: _, key: __, ...options } = props;
   return { from, to, options };
+}
+
+// ── From Style Applicator ─────────────────────────────
+
+/**
+ * 在元素挂载前设置 from 初始样式。
+ * motion 的 keyframe 数组不兼容某些引擎，
+ * 故将 from 样式直接写到元素上，onMount 时 animate(el, to) 从中过渡。
+ * 元素此时尚未插入 DOM，设样式无视觉闪烁。
+ */
+export function applyFromStyle(el: Element, from?: Record<string, string | number>): void {
+  if (isNil(from)) return;
+  for (const [key, value] of Object.entries(from)) {
+    ((el as HTMLElement).style as any)[key] = value;
+  }
 }
