@@ -107,6 +107,7 @@ console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，�
 - [Components / 组件](./guide/components.md)
 - [Lifecycle / 生命周期](./guide/lifecycle.md)
 - [Control Flow / 控制流](./guide/control-flow.md)
+- [Motion / 动画](./guide/motion.md)
 - [Async Components / 异步组件](./guide/async-components.md)
 - [Directives / 自定义指令](./guide/directives.md)
 - [Attributes / 属性处理](./guide/attributes.md)

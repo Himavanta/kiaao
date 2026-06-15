@@ -1,14 +1,14 @@
-# kiaao 框架规范 v4.3
+# kiaao 框架规范 v4.4
 
 **宣传语**：更少的概念，更少的编译，更多的控制，更高的性能。
 
-**设计哲学**：把响应式的本质从框架的隐性机制变成开发者的显性声明。所有状态通过单一 API 创建，所有信号在 API 层面完全同构。组件只运行一次，DOM 更新精确到节点。
+**设计哲学**：把响应式的本质从框架的隐性机制变成开发者的显性声明。所有状态通过单一 API 创建，所有信号在 API 层面完全同构。组件只运行一次，DOM 更新精确到节点。机制在核心，策略在扩展。
 
 ## 零、架构原则
 
 ### 数据平权
 
-所有数据都是信号，所有信号都由 `use` 产生，所有消费都通过 `getter()` 完成。不存在"原始值"和"响应式值"的区分，不存在"可写信号"和"只读信号"在 API 层面的区分——所有信号都返回 `[getter, setter]`。
+所有数据都是信号，所有信号都由 `use` 产生，所有消费都通过 `getter()` 完成。不存在“原始值”和“响应式值”的区分，不存在“可写信号”和“只读信号”在 API 层面的区分——所有信号都返回 `[getter, setter]`。
 
 ### 一切皆派生
 
@@ -36,7 +36,7 @@
 
 ### 机制在核心，策略在扩展
 
-框架核心提供最小化的原语（信号创建、DOM 渲染、元素级生命周期），具体的行为策略（动画、验证、手势等）通过自定义指令系统由外部库或用户代码实现。
+框架核心提供最小化的原语（信号创建、DOM 渲染、元素级生命周期），具体的行为策略（动画、验证、手势等）通过自定义指令系统由外部库或用户代码实现。动画扩展包 `kiaao/motion` 便是这一原则的典型体现。
 
 ## 一、核心 API：`use`
 
@@ -99,7 +99,7 @@ const [count, setCount] = use(0);
 const [sameCount, sameSetCount] = use(count); // sameCount === count
 ```
 
-这一行为吸收了 `toUse` 的能力，使 `use` 成为统一的"规范化入口"。
+这一行为吸收了 `toUse` 的能力，使 `use` 成为统一的“规范化入口”。
 
 ### 1.4 派生模式：`use(...deps, computeFn)`
 
@@ -327,14 +327,7 @@ interface DirectiveContext {
 - **`props`**：JSX 中写在指令上的属性，包含一个特殊的 `children` 属性。
 - **`context`**：元素级生命周期上下文，直接绑定到当前 `el`。方法始终作用于当前正在处理的元素。
 
-```ts
-// direct 函数的类型签名
-declare function direct<T extends DirectiveFunction>(
-  fn: T,
-): T & ((props: Record<string, any>) => Node);
-```
-
-> `direct` 返回的指令函数类型通过交叉类型 `T & ((props: Record<string, any>) => Node)` 使得指令可以作为 JSX 标签使用。JSX 编译器会检查 `(props) => Node` 签名，而 `h()` 在运行时通过 `DIRECT_KEY` 识别指令的真实身份并调用 `DirectiveFunction` 签名。额外的 JSX 签名仅用于 TypeScript 类型检查，对运行时无影响。
+**TypeScript 支持**：`direct()` 返回的类型为交叉类型 `DirectiveFunction & ((props: Record<string, any>) => Node)`，以便指令可以作为 JSX 标签使用而不会引发类型错误。额外的 `(props) => Node` 签名仅用于 TypeScript 类型检查，不改变运行时行为。
 
 #### 3.3.2 指令模式流程
 
@@ -386,7 +379,7 @@ function attachInstance(node, instance) {
 
 ### 3.5 退出动画
 
-退出动画的异步时序控制由用户态代码处理。框架核心保持信号模型的纯粹性和可预测性，不引入任何信号层面的异步机制。推荐的实现模式是通过工厂函数将动画任务收集与信号触发分离，利用指令系统收集动画任务。详见《动画方案探索与 Motion 指令实现》文档。
+退出动画的异步时序控制由用户态代码处理。框架核心保持信号模型的纯粹性和可预测性，不引入任何信号层面的异步机制。推荐的实现模式是通过 `kiaao/motion` 扩展包，利用业务信号与动画信号分离的模式实现退出动画。详见[动画扩展](#七动画扩展)章节。
 
 ## 四、生命周期
 
@@ -432,7 +425,7 @@ function attachInstance(node, instance) {
 
 ## 五、内置组件
 
-### `<Portal to={...}>`
+### `Portal to={...}`
 
 将子内容渲染到指定 DOM 容器，逻辑上仍属于当前组件树，卸载时自动清除。需从 `context` 参数中解构生命周期 API。
 
@@ -463,23 +456,152 @@ function attachInstance(node, instance) {
   - 指令的 `context.use` 创建的信号 → `LOCAL_EFFECTS`
   - 组件销毁 → `DISPOSE_KEY` Set
 
-## 七、内部标记
+## 七、动画扩展（`kiaao/motion`）
 
-| Symbol              | 挂载位置               | 用途                                                              |
-| ------------------- | ---------------------- | ----------------------------------------------------------------- |
-| `REACTIVE`          | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set`/`stop` 等） |
-| `LOCAL_EFFECTS`     | DOM 节点               | 存储该节点上的匿名派生停止函数集合                                |
-| `DISPOSE_KEY`       | DOM 节点               | 存储 `Set<() => void>`（组件销毁回调集合）                        |
-| `INSTANCE_KEY`      | DOM 节点               | 存储 `Set<ComponentInstance>`（关联的组件实例集合）               |
-| `INITIALIZED_KEY`   | 组件实例               | 标记挂载已完成                                                    |
-| `DISPOSED_KEY`      | 组件实例               | 标记已销毁                                                        |
-| `DIRECT_KEY`        | 指令函数               | 标记指令函数，供 `h()` 区分指令和组件                             |
-| `DIRECTIVE_MOUNT`   | DOM 节点               | 存储指令注册的 `onMount` 回调集合                                 |
-| `DIRECTIVE_UNMOUNT` | DOM 节点               | 存储指令注册的 `onUnmount` 回调集合                               |
+`kiaao/motion` 是基于自定义指令系统构建的独立动画扩展包。它利用框架核心的信号派生和指令机制，通过**业务信号与动画信号分离**的模式，提供声明式的进入/退出动画支持。
 
-## 八、与 v3.4 的差异对照
+### 7.1 `createMotion(signal, context?)`
 
-| 维度           | v3.4                            | v4.3                                           |
+处理 `when` 模式（布尔值信号）的动画工厂函数。
+
+**签名**：
+
+```ts
+function createMotion(
+  signal: Getter<boolean>,
+  context?: { use: typeof use },
+): [visible: Getter<boolean>, Motion: DirectiveFunction];
+```
+
+**参数**：
+
+- `signal`：业务信号的 getter（布尔值）。用户直接操作此信号控制显隐。
+- `context`（可选）：组件 context。传入时信号清理绑定到组件生命周期；否则使用全局 `use`。
+
+**返回值**：
+
+- `visible`：动画信号。是 `signal` 的派生信号，**会在退出动画完成后才更新为 `false`**。该信号应绑定到 `when` 指令上，从而确保退出动画播完后再移除 DOM。
+- `Motion`：指令组件，包裹需要动画的元素。接收以下 props：
+  - `from`：退出动画的目标值 / 进入动画的起始值（可选，若不传则无退出动画）
+  - `to`：进入动画的目标值（可选，若不传则无进入动画）
+  - `duration`：动画时长（秒），默认 `0.3`
+  - 其他属性透传给 motion 的 `animate()` 选项（如 `easing`、`delay` 等）
+
+**行为**：
+
+- **进入动画**：元素挂载时，若提供了 `to`，从 `from`（若有）或当前样式动画到 `to`。
+- **退出动画**：当业务信号变为 `false` 时，`Motion` 指令内部自动播放从当前样式到 `from` 的退出动画。所有注册元素的退出动画并行执行，`visible` 信号在所有动画完成后才更新为 `false`。
+- **中途反转**：若退出动画进行中业务信号又变回 `true`，框架通过代际标记（tick）保证不会错误更新 `visible`，元素保持可见。
+
+**使用示例**：
+
+```jsx
+function Comp(_, context) {
+  const [state] = use(true);
+  const [visible, Motion] = createMotion(state, context);
+
+  return (
+    <div>
+      <button onClick={() => state(false)}>关闭</button>
+      <span>当前状态：{state ? "开" : "关"}</span> {/* 立刻变化 */}
+      <div when={visible}>
+        {" "}
+        {/* 绑定动画信号 */}
+        <Motion from={{ opacity: 0 }} to={{ opacity: 1 }} duration={0.5}>
+          <div class="content">动画内容</div>
+        </Motion>
+      </div>
+    </div>
+  );
+}
+```
+
+### 7.2 `createGroupMotion(signal, keyFn?, context?)`
+
+处理 `each` 模式（数组信号）的动画工厂函数。
+
+**签名**：
+
+```ts
+function createGroupMotion(
+  signal: Getter<any[]>,
+  keyFn?: (item: any, index: number) => any,
+  context?: { use: typeof use },
+): [visibleItems: Getter<any[]>, GroupMotion: DirectiveFunction];
+```
+
+**参数**：
+
+- `signal`：业务数组信号的 getter。用户直接操作此信号更新列表数据。
+- `keyFn`（可选）：身份标识函数，与 `each` 的 `key` 保持一致。用于内部 diff 精确识别被移除的条目。若不传，则走全量退出路径（所有旧元素播放退出动画）。
+- `context`（可选）：组件 context。
+
+**返回值**：
+
+- `visibleItems`：动画信号。是 `signal` 的派生信号，**会在退出动画完成后才更新为新的数组**。该信号应绑定到 `each` 指令上。
+- `GroupMotion`：指令组件，包裹列表项元素。接收与 `Motion` 相同的 props（`from`、`to`、`duration` 等），另外需要传入 `key` prop（与 `keyFn` 对应）。
+
+**行为**：
+
+- **进入动画**：列表项挂载时，若提供了 `to`，播放进入动画。
+- **退出动画**：当业务数组信号更新导致某些条目被移除时，内部通过 `keyFn` 进行 diff，精确找出被移除的条目，仅对这些条目的元素播放退出动画。所有退出动画完成后才更新 `visibleItems` 信号。
+- **无 keyFn 时**：全量退出，所有当前挂载的元素播放退出动画。
+- **中途反转**：同样受代际标记保护，不会出现状态错乱。
+
+**使用示例**：
+
+```jsx
+function Comp(_, context) {
+  const [items] = use([
+    { id: 1, text: "A" },
+    { id: 2, text: "B" },
+  ]);
+  const keyFn = (v) => v.id;
+  const [visibleItems, GroupMotion] = createGroupMotion(items, keyFn, context);
+
+  const removeItem = (id) => items(items().filter((i) => i.id !== id));
+
+  return (
+    <ul each={visibleItems} key={keyFn}>
+      {(item) => (
+        <GroupMotion
+          key={keyFn(item())}
+          from={{ opacity: 0, transform: "translateX(-20px)" }}
+          to={{ opacity: 1, transform: "translateX(0)" }}
+        >
+          <li>
+            {item().text} <button onClick={() => removeItem(item().id)}>删除</button>
+          </li>
+        </GroupMotion>
+      )}
+    </ul>
+  );
+}
+```
+
+### 7.3 内部机制说明
+
+- **业务信号与动画信号分离**：用户直接操作业务信号，业务 UI 立即响应；`when`/`each` 绑定动画信号，由动画扩展内部通过派生延迟更新，确保退出动画完成后才从 DOM 中移除元素。
+- **代际标记**：通过递增的 `tick` 计数器防止快速连续切换导致的竞态。每次派生回调执行时记录当前代际，异步等待后检查是否过期。
+- **元素状态追踪**：在元素上通过 `Symbol("kiaao.motion.state")` 维护动画状态（`idle`/`entering`/`exiting`/`exited`），防止同一元素的退出动画被重复触发。
+- **进入动画实现**：使用原生 WAAPI（`Element.animate`）播放 keyframe 动画，兼容性好且性能优异。退出动画由 motion 库驱动。
+
+## 八、内部标记
+
+| Symbol            | 挂载位置               | 用途                                                              |
+| ----------------- | ---------------------- | ----------------------------------------------------------------- |
+| `REACTIVE`        | 所有信号的 getter 函数 | 标记信号，其值为内部状态对象（含 `value`/`subs`/`set`/`stop` 等） |
+| `LOCAL_EFFECTS`   | DOM 节点               | 存储该节点上的匿名派生停止函数集合                                |
+| `DISPOSE_KEY`     | DOM 节点               | 存储 `Set<() => void>`（组件销毁回调集合）                        |
+| `INSTANCE_KEY`    | DOM 节点               | 存储 `Set<ComponentInstance>`（关联的组件实例集合）               |
+| `INITIALIZED_KEY` | 组件实例               | 标记挂载已完成                                                    |
+| `DISPOSED_KEY`    | 组件实例               | 标记已销毁                                                        |
+| `DIRECT_KEY`      | 指令函数               | 标记指令函数，供 `h()` 区分指令和组件                             |
+| `MOTION_STATE`    | 动画元素               | 存储元素当前动画状态（`idle`/`entering`/`exiting`/`exited`）      |
+
+## 九、与 v3.4 的差异对照
+
+| 维度           | v3.4                            | v4.4                                           |
 | -------------- | ------------------------------- | ---------------------------------------------- |
 | 创建可写信号   | `define(init)` → `[get, set]`   | `use(init)` → `[get, set]`                     |
 | 创建派生信号   | `derive(fn)` → `getter`         | `use(...deps, fn)` → `[get, set]`              |
@@ -492,10 +614,11 @@ function attachInstance(node, instance) {
 | 组件函数签名   | `(props)`                       | `(props, context)`                             |
 | 异步组件       | 不支持                          | 返回 Promise 即为异步组件                      |
 | 自定义指令     | 不支持                          | `direct` 创建，元素级生命周期                  |
+| 动画扩展       | 无                              | `kiaao/motion`，业务与动画信号分离             |
 | 多实例共享节点 | 覆盖（导致清理丢失）            | 追加到 Set（共存）                             |
 | Fragment       | 不支持                          | `Fragment` 组件渲染为 `display: contents` 容器 |
 
-## 九、附录：属性处理策略摘要
+## 十、附录：属性处理策略摘要
 
 - **FORCE_ATTRIBUTE**：标准 HTML 属性走 `setAttribute`；`value`、`checked` 等走 property 赋值
 - **前缀机制**：`attr:` 强制 setAttribute，`prop:` 强制 property
@@ -503,6 +626,6 @@ function attachInstance(node, instance) {
 - **事件**：`onXxx` 转为 `addEventListener`
 - **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性
 
-**文档版本**：v4.3
-**撰写日期**：2026年6月14日
+**文档版本**：v4.4  
+**撰写日期**：2026年6月15日  
 **状态**：定稿
