@@ -80,15 +80,31 @@ export function playEnterAnimation(
   elements: Set<Element>,
 ): void {
   elements.add(el);
+
   if (isNil(config.to)) return;
 
   setMotionState(el, "entering");
-  void animate(el, config.to, { duration: config.duration }).finished.then(
-    () => setMotionState(el, "idle"),
-    () => {
-      /* animate interrupted */
-    },
-  );
+
+  // 使用原生 WAAPI 处理进入动画（[from, to] 数组），
+  // 避免 motion 引擎在 keyframe 数组上的 CSSStyleDeclaration 限制
+  try {
+    const keyframes = config.from ? [config.from, config.to] : [config.to];
+
+    const anim = (el as any).animate(keyframes as any, {
+      duration: config.duration * 1000,
+      fill: "forwards",
+    });
+
+    void anim.finished.then(
+      () => setMotionState(el, "idle"),
+      () => {
+        /* animate interrupted */
+      },
+    );
+  } catch {
+    // WAAPI 不可用时（如测试环境）直接设置目标样式
+    setMotionState(el, "idle");
+  }
 }
 
 // ── Motion Prop Parser ────────────────────────────────

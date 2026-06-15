@@ -2,31 +2,33 @@ import { use, type Context } from "kiaao";
 import { createMotion } from "kiaao/motion";
 
 export default function (_: any, context: Context) {
-  // 业务信号：直接操作，状态文案立即响应
   const [state, setState] = use(true);
-  // 动画信号：延迟更新，绑定到 when
   const [visible, Motion] = createMotion(state, context);
-
-  const [text] = use(state, () => (state() ? "关闭" : "打开"));
+  const [text] = use(state, () => (state() ? "收起" : "展开"));
 
   return (
-    <div class="h-full w-full gap-4">
+    <div class="h-full w-full flex flex-col gap-4 p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-gray-900">when 模式</h2>
+        <span class="text-sm text-gray-500">业务状态：{text}</span>
+      </div>
+
       <button
         onClick={() => setState(!state())}
-        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        class="self-start px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
       >
         {text}
       </button>
 
       <div when={visible}>
         <Motion
-          from={{ opacity: 0, transform: "translateY(20px)" }}
+          from={{ opacity: 0, transform: "translateY(16px)" }}
           to={{ opacity: 1, transform: "translateY(0)" }}
           duration={0.3}
         >
-          <div class="p-8 bg-white rounded-xl shadow-lg text-center text-lg">
-            <p>👋 你好，kiaao Motion！</p>
-            <p class="text-sm text-gray-500 mt-2">点击按钮触发退出动画</p>
+          <div class="p-6 bg-linear-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+            <p class="text-lg">🎉 进入动画</p>
+            <p class="text-sm text-gray-500 mt-1">退出动画播放完毕后，此卡片才会移除</p>
           </div>
         </Motion>
       </div>
