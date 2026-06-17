@@ -1,7 +1,7 @@
 import { use, type Getter } from "kiaao";
 import { Link } from "/src/router";
-import Icon from "../icon";
-import Dropdown from "../../ui/dropdown";
+import Icon from "/src/ui/icon";
+import Dropdown from "/src/ui/dropdown";
 
 // ── 菜单行组件 ────────────────────────────────────────
 const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");

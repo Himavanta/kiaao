@@ -1,6 +1,6 @@
 import { use, type Getter } from "kiaao";
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
-import Icon from "../icon";
+import Icon from "/src/ui/icon";
 import { UserCard } from "./user";
 
 const [menus] = use<MainNavItem[]>(mainNavs);
