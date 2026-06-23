@@ -62,16 +62,20 @@ export const browserAdapter: RenderAdapter = {
     return document.createComment(text);
   },
 
-  insertBefore(parent: Node, child: Node, ref: Node | null): void {
-    parent.insertBefore(child, ref);
+  before(ref: Node, child: Node): void {
+    (ref as ChildNode).before(child);
   },
 
-  removeElement(el: Node): void {
-    el.parentNode?.removeChild(el);
+  append(parent: Node, child: Node): void {
+    (parent as ParentNode).append(child);
+  },
+
+  remove(node: Node): void {
+    (node as ChildNode).remove();
   },
 
   replaceWith(oldNode: Node, ...newNodes: Node[]): void {
-    (oldNode as any).replaceWith(...newNodes);
+    (oldNode as ChildNode).replaceWith(...newNodes);
   },
 
   setAttribute(el: Element, key: string, value: string): void {

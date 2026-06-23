@@ -73,8 +73,9 @@ export interface RenderAdapter {
   createElement(tag: string): unknown;
   createTextNode(text: string): unknown;
   createComment(text: string): unknown;
-  insertBefore(parent: unknown, child: unknown, ref: unknown): void;
-  removeElement(el: unknown): void;
+  before(ref: unknown, child: unknown): void;
+  append(parent: unknown, child: unknown): void;
+  remove(node: unknown): void;
   replaceWith(oldNode: unknown, ...newNodes: unknown[]): void;
   setAttribute(el: unknown, key: string, value: string): void;
   removeAttribute(el: unknown, key: string): void;
@@ -102,6 +103,6 @@ export function getAdapter(): RenderAdapter {
 }
 
 /** 内部使用的 element 移除函数，无 adapter 时静默跳过 */
-export function removeElement(el: unknown): void {
-  _adapter?.removeElement(el);
+export function removeNode(node: unknown): void {
+  _adapter?.remove(node);
 }

@@ -2,7 +2,7 @@
 // kiaao — Browser adapter and props tests
 
 import { expect, test, describe } from "vite-plus/test";
-import { setAdapter, removeElement } from "../../src/core/types.ts";
+import { setAdapter, removeNode } from "../../src/core/types.ts";
 import { browserAdapter } from "../../src/dom/adapter.ts";
 import { setProp, setProps, stripPrefix } from "../../src/dom/props.ts";
 import { use } from "../../src/core/signal.ts";
@@ -64,46 +64,46 @@ describe("browserAdapter.createComment", () => {
   });
 });
 
-describe("browserAdapter.insertBefore", () => {
+describe("browserAdapter.before", () => {
   test("inserts child before reference node", () => {
     const parent = browserAdapter.createElement("div") as HTMLElement;
     const child1 = browserAdapter.createElement("span") as HTMLElement;
     const child2 = browserAdapter.createElement("p") as HTMLElement;
 
-    parent.appendChild(child1);
-    browserAdapter.insertBefore(parent, child2, child1);
+    parent.append(child1);
+    browserAdapter.before(child1, child2);
 
     expect(parent.children[0]).toBe(child2);
     expect(parent.children[1]).toBe(child1);
   });
 
-  test("inserts at end when ref is null", () => {
+  test("inserts at end when no ref", () => {
     const parent = browserAdapter.createElement("div") as HTMLElement;
     const child1 = browserAdapter.createElement("span") as HTMLElement;
     const child2 = browserAdapter.createElement("p") as HTMLElement;
 
-    parent.appendChild(child1);
-    browserAdapter.insertBefore(parent, child2, null);
+    parent.append(child1);
+    browserAdapter.append(parent, child2);
 
     expect(parent.children[1]).toBe(child2);
   });
 });
 
-describe("browserAdapter.removeElement", () => {
+describe("browserAdapter.remove", () => {
   test("removes element from parent", () => {
     const parent = browserAdapter.createElement("div") as HTMLElement;
     const child = browserAdapter.createElement("span") as HTMLElement;
     parent.appendChild(child);
 
     expect(parent.children.length).toBe(1);
-    browserAdapter.removeElement(child);
+    browserAdapter.remove(child);
     expect(parent.children.length).toBe(0);
   });
 
   test("does nothing for already removed element", () => {
     const el = browserAdapter.createElement("div") as HTMLElement;
     // Element was never appended; remove shouldn't throw
-    expect(() => browserAdapter.removeElement(el)).not.toThrow();
+    expect(() => browserAdapter.remove(el)).not.toThrow();
   });
 });
 
@@ -190,15 +190,15 @@ describe("browserAdapter.setProperty", () => {
   });
 });
 
-// ── removeElement (core utility) ─────────────────────
+// ── removeNode (core utility) ─────────────────────
 
-describe("removeElement (core utility)", () => {
+describe("removeNode (core utility)", () => {
   test("removes element when adapter is registered", () => {
     const parent = document.createElement("div");
     const child = document.createElement("span");
     parent.appendChild(child);
     expect(parent.children.length).toBe(1);
-    removeElement(child);
+    removeNode(child);
     expect(parent.children.length).toBe(0);
   });
 });

@@ -3,7 +3,7 @@
 
 import { expect, test, describe } from "vite-plus/test";
 import { createOwner, disposeOwner, triggerMount, currentOwner } from "../../src/core/owner.ts";
-import { removeElement, setAdapter, type RenderAdapter } from "../../src/core/types.ts";
+import { removeNode, setAdapter, type RenderAdapter } from "../../src/core/types.ts";
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -180,9 +180,9 @@ describe("disposeOwner elements", () => {
     expect(owner.elements.size).toBe(0);
   });
 
-  test("removeElement is a no-op when no adapter registered", () => {
-    // removeElement checks _adapter internally and skips if null
-    expect(() => removeElement("anything")).not.toThrow();
+  test("removeNode is a no-op when no adapter registered", () => {
+    // removeNode checks _adapter internally and skips if null
+    expect(() => removeNode("anything")).not.toThrow();
   });
 });
 
@@ -420,8 +420,9 @@ describe("RenderAdapter type compatibility", () => {
       createComment(text: string) {
         return { type: "comment", value: text };
       },
-      insertBefore() {},
-      removeElement() {},
+      before() {},
+      append() {},
+      remove() {},
       replaceWith() {},
       setAttribute() {},
       removeAttribute() {},

@@ -2,7 +2,7 @@
 // Platform-agnostic. No DOM dependencies.
 
 import type { Owner } from "./types.ts";
-import { removeElement } from "./types.ts";
+import { removeNode } from "./types.ts";
 
 // ── CurrentOwner (getter/setter pattern) ──────────────
 // 模块级全局变量，仅在同步 h() 执行期间有效。
@@ -77,7 +77,7 @@ export function disposeOwner(owner: Owner): void {
 
   // 3. Remove all owned elements from the DOM (via adapter if registered)
   for (const el of owner.elements) {
-    removeElement(el);
+    removeNode(el);
   }
   owner.elements.clear();
 
