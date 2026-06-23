@@ -2,7 +2,7 @@
 // Platform-agnostic: No DOM environment needed.
 
 import { expect, test, describe } from "vite-plus/test";
-import { createOwner, disposeOwner, triggerMount, currentOwner } from "../../src/core/owner.ts";
+import { createOwner, disposeOwner, triggerMount } from "../../src/core/owner.ts";
 import { removeNode, setAdapter, type RenderAdapter } from "../../src/core/types.ts";
 
 // ── Helpers ────────────────────────────────────────────
@@ -67,53 +67,7 @@ describe("parent/child relationship", () => {
   });
 });
 
-// ── currentOwner ──────────────────────────────────────
-
-describe("currentOwner", () => {
-  test("initial state is null", () => {
-    expect(currentOwner.get()).toBe(null);
-  });
-
-  test("set and get round-trip", () => {
-    const owner = createOwner();
-    currentOwner.set(owner);
-    expect(currentOwner.get()).toBe(owner);
-    currentOwner.set(null);
-    expect(currentOwner.get()).toBe(null);
-  });
-
-  test("push/pop pattern preserves stack", () => {
-    const parent = createOwner();
-    const child = createOwner();
-
-    currentOwner.set(parent);
-    expect(currentOwner.get()).toBe(parent);
-
-    const prev = currentOwner.get();
-    currentOwner.set(child);
-    expect(currentOwner.get()).toBe(child);
-
-    currentOwner.set(prev);
-    expect(currentOwner.get()).toBe(parent);
-
-    currentOwner.set(null);
-    expect(currentOwner.get()).toBe(null);
-  });
-
-  test("nested push/pop restores correctly", () => {
-    const root = createOwner();
-    const a = createOwner();
-    const b = createOwner();
-
-    currentOwner.set(root);
-    currentOwner.set(a);
-    const prevA = currentOwner.get();
-    currentOwner.set(b);
-    currentOwner.set(prevA);
-    expect(currentOwner.get()).toBe(a);
-    currentOwner.set(null);
-  });
-});
+// ── currentOwner ── removed in Phase 4 (HResult scheme)
 
 // ── disposeOwner: Basic ────────────────────────────────
 
@@ -424,11 +378,9 @@ describe("RenderAdapter type compatibility", () => {
       append() {},
       remove() {},
       replaceWith() {},
-      setAttribute() {},
-      removeAttribute() {},
+      setProp() {},
       addEventListener() {},
       removeEventListener() {},
-      setProperty() {},
     };
 
     setAdapter(mockAdapter);

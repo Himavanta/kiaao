@@ -2,6 +2,7 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter, type HResult, createHResult, isHResult } from "./types.ts";
+import { createOwner } from "./owner.ts";
 import { handleComponent } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
@@ -72,6 +73,9 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
     dirProps.children = normalizeChildren(children);
   }
 
+  // 指令创建自己的 Owner，通过 HResult 由父组件接管
+  const owner = createOwner();
+
   // 解包 children 中的 HResult
   const flatChildren = children.flat(Infinity);
   const allNodes: Node[] = [];
@@ -86,7 +90,7 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
 
   for (const child of allNodes) {
     if (isElement(child)) {
-      const ctx = createDirectiveContext(child);
+      const ctx = createDirectiveContext(owner);
       (tag as DirectiveFunction)(child, dirProps, ctx);
     } else if (process.env.NODE_ENV !== "production") {
       if (isNotNil(child) && !isBoolean(child)) {
@@ -95,7 +99,7 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
     }
   }
 
-  return createHResult(null, allNodes);
+  return createHResult(owner, allNodes);
 }
 
 // ── h() ────────────────────────────────────────────────

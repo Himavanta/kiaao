@@ -4,7 +4,6 @@
 // registered to currentOwner (if present) for backward compatibility.
 
 import { getAdapter, REACTIVE, type ProcessChildrenResult, isHResult } from "./types.ts";
-import { currentOwner } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
 import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
@@ -58,9 +57,6 @@ export function processChildren(children: any[]): ProcessChildrenResult {
       const stop = (derived as any)[REACTIVE]?.stop;
       if (stop) {
         cleanups.push(stop);
-        // 过渡期：同时注册到 currentOwner（如存在）
-        const owner = currentOwner.get();
-        if (owner) owner.cleanups.push(stop);
       }
       nodes.push(textNode);
       continue;

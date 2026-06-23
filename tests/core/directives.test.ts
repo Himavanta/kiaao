@@ -2,11 +2,11 @@
 // kiaao — Phase 4 tests: when/each directives with Owner-based cleanup
 
 import { expect, test, describe } from "vite-plus/test";
-import { setAdapter } from "../../src/core/types.ts";
+import { setAdapter, isHResult } from "../../src/core/types.ts";
 import { browserAdapter } from "../../src/dom/adapter.ts";
 import { h } from "../../src/core/h.ts";
 import { use } from "../../src/core/signal.ts";
-import { createOwner, disposeOwner, currentOwner } from "../../src/core/owner.ts";
+import { disposeOwner } from "../../src/core/owner.ts";
 import { direct } from "../../src/core/direct.ts";
 
 setAdapter(browserAdapter);
@@ -167,7 +167,7 @@ describe("directive system", () => {
     expect(typeof myDirective).toBe("function");
   });
 
-  test("directive onMount registers to currentOwner", () => {
+  test("directive onMount registers to directive's own Owner", () => {
     let mountCalled = false;
     const TestDir = direct((_el: Element, _props: any, ctx: any) => {
       ctx.onMount(() => {
@@ -175,17 +175,14 @@ describe("directive system", () => {
       });
     });
 
-    const owner = createOwner();
-    currentOwner.set(owner);
-    h(TestDir, null, h("div"));
-    currentOwner.set(null);
-
-    // onMount should be registered to the Owner, not fired yet
-    expect(owner.mountCallbacks.length).toBe(1);
+    const result = h(TestDir, null, h("div"));
+    expect(isHResult(result)).toBe(true);
+    expect(result.owner).not.toBeNull();
+    expect(result.owner!.mountCallbacks.length).toBe(1);
     expect(mountCalled).toBe(false);
   });
 
-  test("directive onUnmount registers to currentOwner", () => {
+  test("directive onUnmount registers to directive's own Owner", () => {
     let unmountCalled = false;
     const TestDir = direct((_el: Element, _props: any, ctx: any) => {
       ctx.onUnmount(() => {
@@ -193,13 +190,10 @@ describe("directive system", () => {
       });
     });
 
-    const owner = createOwner();
-    currentOwner.set(owner);
-    h(TestDir, null, h("div"));
-    currentOwner.set(null);
-
-    expect(owner.unmountCallbacks.length).toBe(1);
-    disposeOwner(owner);
+    const result = h(TestDir, null, h("div"));
+    expect(isHResult(result)).toBe(true);
+    expect(result.owner!.unmountCallbacks.length).toBe(1);
+    disposeOwner(result.owner!);
     expect(unmountCalled).toBe(true);
   });
 });

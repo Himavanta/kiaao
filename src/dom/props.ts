@@ -3,7 +3,6 @@
 // browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
 import { getAdapter, REACTIVE } from "../core/types.ts";
-import { currentOwner } from "../core/owner.ts";
 import { isUse, use } from "../core/signal.ts";
 import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
@@ -70,11 +69,7 @@ export function setProps(
       });
       const stop = (derived as any)[REACTIVE]?.stop;
       if (stop) {
-        // 收集到 cleanups 数组（HResult 路径）
         if (cleanups) cleanups.push(stop);
-        // 过渡期：同时注册到 currentOwner
-        const owner = currentOwner.get();
-        if (owner) owner.cleanups.push(stop);
       }
     } else {
       setProp(el, key, value);

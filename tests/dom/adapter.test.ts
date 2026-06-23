@@ -6,7 +6,7 @@ import { setAdapter, removeNode } from "../../src/core/types.ts";
 import { browserAdapter } from "../../src/dom/adapter.ts";
 import { setProp, setProps, stripPrefix } from "../../src/dom/props.ts";
 import { use } from "../../src/core/signal.ts";
-import { createOwner, disposeOwner, currentOwner } from "../../src/core/owner.ts";
+import { createOwner, disposeOwner } from "../../src/core/owner.ts";
 
 // Register browser adapter for tests
 setAdapter(browserAdapter);
@@ -323,9 +323,7 @@ describe("setProps", () => {
     const owner = createOwner();
     const [title, setTitle] = use("hello");
 
-    currentOwner.set(owner);
-    setProps(el, { title });
-    currentOwner.set(null);
+    setProps(el, { title }, owner.cleanups);
 
     expect(el.getAttribute("title")).toBe("hello");
 
@@ -345,15 +343,14 @@ describe("setProps", () => {
     const [count, setCount] = use(0);
     const owner = createOwner();
 
-    currentOwner.set(owner);
-    setProps(el, { "data-count": count });
-    currentOwner.set(null);
+    setProps(el, { "data-count": count }, owner.cleanups);
 
     expect(el.getAttribute("data-count")).toBe("0");
 
     setCount(5);
     expect(el.getAttribute("data-count")).toBe("5");
 
+    // disposeOwner 会执行 owner.cleanups，停止信号绑定
     disposeOwner(owner);
 
     // After dispose, changing count should not affect the element

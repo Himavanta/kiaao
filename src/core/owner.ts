@@ -4,22 +4,6 @@
 import type { Owner } from "./types.ts";
 import { removeNode } from "./types.ts";
 
-// ── CurrentOwner (getter/setter pattern) ──────────────
-// 模块级全局变量，仅在同步 h() 执行期间有效。
-// 不跨越异步边界，不用于异步回调中的上下文推断。
-
-function createCurrentOwner() {
-  let _currentOwner: Owner | null = null;
-  return {
-    get: (): Owner | null => _currentOwner,
-    set: (owner: Owner | null): void => {
-      _currentOwner = owner;
-    },
-  };
-}
-
-export const currentOwner = createCurrentOwner();
-
 // ── createOwner ───────────────────────────────────────
 
 /**
