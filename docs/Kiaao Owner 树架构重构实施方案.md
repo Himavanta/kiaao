@@ -3,7 +3,7 @@
 **状态**：定稿
 **关联**：[跨端架构改造方案讨论](./跨端架构改造方案讨论.md)、[Kiaao 框架架构演进探讨](./架构演进探讨.md)
 **日期**：2026年6月23日
-**版本**：4.0
+**版本**：4.1
 
 ## 一、背景与动机
 
@@ -156,6 +156,8 @@ function disposeOwner(owner: Owner): void {
 
 **目标**：`h()` 返回类型保持 `Node[]`（类型签名放宽为 `Node | Node[]`）。内部实现仅从 DOM 绑定切换到 Owner 管理，不改变消费方的接口约定。
 
+**注意**：`h()` 的三个 TypeScript 重载以及实现签名的返回类型都需要从 `Element` 改为 `Node | Node[]`。JSX 运行时（`jsx-runtime/index.ts`）中 `JSX.Element` 的类型定义也需要同步更新为 `Node | Node[]`，否则 TypeScript 用户可能遇到类型不兼容。指令模式的 `handleDirectiveMode` 也改为统一返回数组。
+
 **组件模式（同步）**：
 
 ```ts
@@ -191,7 +193,7 @@ function handleComponent(tag, props) {
 }
 ```
 
-**指令模式**：遍历 children（已扁平化数组），对每个 `Element` 调用指令函数，跳过非 Element 并在开发模式警告。最终返回原 children 数组。指令函数的 `ctx.onMount`/`onUnmount`/`use` 注册到当前 `currentOwner`。
+**指令模式**：遍历 children（已扁平化数组），对每个 `Element` 调用指令函数，跳过非 Element 并在开发模式警告。最终返回原 children 数组（单元素时展开为单个节点保持兼容）。指令函数的 `ctx.onMount`/`onUnmount`/`use` 注册到当前 `currentOwner`。
 
 **Fragment**：直接返回 children 数组，不创建任何包裹节点。
 
@@ -232,6 +234,7 @@ const B = () => <A />;
 - A 的 Owner 持有 `<div>A</div>`，其 `parent` 指向 B 的 Owner。
 - B 的 Owner 的 `elements` 为空（B 自己没有创建节点），仅作为作用域容器，负责管理 A 的 Owner。
 - 卸载 B 时，`disposeOwner(B_owner)` 会递归清理 A 的 Owner，A 的 `elements` 中的 `<div>` 被移除。
+- **挂载时的递归**：`triggerMount(B_owner)` 虽然 B 自身可能没有挂载回调，但仍会递归遍历 `children` 触发 A 的挂载回调。这是透传组件的本质——作为无 DOM 产出的作用域容器，负责子组件的生命周期管理。
 
 ### 3.5 指令系统的简化
 
@@ -248,7 +251,7 @@ const B = () => <A />;
 - `else` 分支和映射表模式各自拥有独立的 Owner。
 - `each` 的锚点节点归属于容器的 Owner，不属于任何列表项的 Owner。
 
-**性能注意**：每个列表项创建一个 Owner 会带来一定的对象分配开销。对于大列表（10000+ 项），可考虑延迟创建条目 Owner（仅在实际需要清理时创建），或共享轻量级批量 Owner。这些优化可在后续迭代中进行。
+**性能注意**：每个列表项创建一个 Owner 会带来额外的对象分配开销——10000 条记录意味着 10000 个 `Set` + 10000 个数组 + 10000 个 Owner 对象。这是已知的性能权衡：用创建时的微小开销换取清理时的 O(子 Owner 数) 复杂度，而非 O(DOM 节点数)。如果每个条目本身包含组件嵌套，创建 Owner 的开销会被组件本身的复杂度掩盖。优化方向包括延迟创建条目 Owner（仅在实际需要清理时创建）或共享轻量级批量 Owner，可在后续迭代中根据 benchmark 结果决定是否实施。
 
 ### 3.7 生命周期系统：`triggerMount` 改为 Owner 遍历
 
@@ -412,7 +415,8 @@ Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM�
 5. 适配 `component.ts`、`directives.ts`（`when`/`each`）到 Owner 模型。
 6. 实现 `createApp` API，废弃全局 `mount`/`unmount`。
 7. 移除旧的 DOM 绑定符号（`INSTANCE_KEY`、`DISPOSE_KEY`、`LOCAL_EFFECTS` 等）或标记为废弃。
-8. 所有现有测试适配。
+8. 更新 TypeScript 类型：`h()` 的三个重载返回类型改为 `Node | Node[]`；`JSX.Element` 定义改为 `Node | Node[]`；`createJsxElement` 返回类型同步更新。
+9. 所有现有测试适配。
 
 ### 第二阶段：异步组件改造
 
@@ -444,9 +448,9 @@ Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM�
 7. **多个 Owner 共享节点**：透传组件等场景可能导致多个 Owner 的 `elements` 中包含同一节点。在 `removeElement` 中增加存在性检查（`el.parentNode && removeElement(el)`），确保幂等性。开发模式下输出警告。
 8. **异步组件 Promise reject**：注释占位符已绑定到 Owner，`disposeOwner` 可正常清理。
 9. **SSR 清理**：SSR adapter 的 `removeElement` 实现为空操作。
-10. **`FinalizationRegistry` 兜底**：仅作为开发模式的辅助提示，GC 回调时机不可控，不能作为主要保障。
-11. **`triggerMount` 循环引用防护**：通过 `visited: Set<Owner>` 参数防止异常情况下的循环引用导致无限递归。
-12. **树形遍历防护**：`disposeOwner` 通过 `disposed` 标记防止同一 Owner 被重复销毁。
+10. **`triggerMount` 循环引用防护**：通过 `visited: Set<Owner>` 参数防止异常情况下的循环引用导致无限递归。
+11. **树形遍历防护**：`disposeOwner` 通过 `disposed` 标记防止同一 Owner 被重复销毁。
+12. **模块级 `h()` 调用**：模块级直接调用 `h(MyComponent)` 会创建无父 Owner 的孤立 Owner，其生命周期不受框架管理。推荐使用 `createApp` 作为应用的统一入口，确保所有组件的挂载和卸载都受到正确的生命周期管理。
 
 ## 七、未来展望
 
@@ -481,13 +485,9 @@ Kiaao 的核心（信号系统、组件模型、Owner 树）不依赖 JS 高级 
 在方案设计过程中，曾深入探讨了修改 `h()` 返回值为 `[Owner, Node[]]` 以彻底消除全局上下文的方案。该方案的核心优势是父子关系完全通过函数返回值显式传递，无需任何模块级状态。经过对比分析，最终选择了 `currentOwner` 方案，理由如下：
 
 1. **改动范围可控**：`[Owner, Node[]]` 方案需要适配所有消费 `h()` 返回值的模块（`processChildren`、`handleDomMode`、指令系统、`when`/`each`、JSX 运行时、`createApp` 等），改动面覆盖框架几乎所有核心模块。`currentOwner` 方案的改动集中在 Owner 核心和组件处理逻辑。
-
 2. **实施风险更低**：大面积改动容易引入回归 bug。`currentOwner` 方案可以聚焦于 Owner 树本身的正确性，消费方逻辑不变。
-
 3. **概念复杂度更低**：框架维护者需要理解 `currentOwner` 栈的 push/pop 机制，但不需要理解 `[Owner, Node[]]` 元组在消费方如何提取和传递。
-
 4. **性能更优**：`[Owner, Node[]]` 方案每次 `h()` 调用都需要额外分配一个双元素数组。虽开销极小，但 `currentOwner` 方案没有此开销。
-
 5. **渐进式迁移路径清晰**：如果未来需要彻底消除全局上下文，可以在 Owner 树稳定后平滑迁移到 `[Owner, Node[]]` 方案。届时 Owner 树已经稳定，只需改 `h()` 的返回值格式和消费方的适配逻辑。
 
 **详细对比见**：[`currentOwner` vs `[Owner, Node[]]` 方案对比](./owner方案对比.md)
@@ -501,7 +501,8 @@ Kiaao 的核心（信号系统、组件模型、Owner 树）不依赖 JS 高级 
 - Owner 采用树形结构（`parent` / `children`），遍历和清理效率高，调试直观。
 - 采用 `currentOwner` 作为最小化全局上下文，通过 getter/setter 封装，作用域严格限定在同步 `h()` 调用期间。
 - `h()` 保持返回 `Node[]`，消费方接口不变，改动范围可控。
-- 信号绑定通过 `context.use` 创建派生，清理函数自动注册到当前 Owner。
+- `JSX.Element` 类型与 `h()` 重载同步更新，确保 TypeScript 类型兼容。
+- `each` 的条目 Owner 创建开销已记录为已知权衡，后续可通过 benchmark 验证并优化。
 - 废弃全局 `mount`/`unmount`，由 `createApp` API 替代，根 Owner 由应用实例管理。
 - `when`/`each` 第一阶段保持属性指令形态，仅做底层实现切换。控制流组件化（`Show`/`Each`/`Case`）作为后续独立迭代。
 
