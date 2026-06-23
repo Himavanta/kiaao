@@ -23,46 +23,38 @@ export function setProp(el: any, rawKey: string, value: any): void {
   if (isNil(value)) return;
 
   const adapter = getAdapter();
-  const { prefix, key } = stripPrefix(rawKey);
 
-  // prop:/attr: 前缀强制属性
-  if (prefix === "prop") {
-    adapter.setProp(el, key, value);
-    return;
-  }
-  if (prefix === "attr") {
-    adapter.setProp(el, key, String(value));
-    return;
-  }
-
-  // style
-  if (key === "style") {
+  // style（不考虑前缀，prefix 只在 adapter 层处理）
+  if (rawKey === "style" || rawKey === "attr:style" || rawKey === "prop:style") {
     if (isString(value)) {
-      adapter.setProp(el, "style", value);
+      adapter.setProp(el, rawKey, value);
     } else if (isObject(value)) {
       const cssText = Object.entries(value)
         .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
         .join("; ");
-      adapter.setProp(el, "style", cssText);
+      adapter.setProp(el, rawKey, cssText);
     }
     return;
   }
 
   // 事件
-  if (EVENT_RE.test(key)) {
-    const eventName = key.slice(2).toLowerCase();
+  if (EVENT_RE.test(rawKey)) {
+    const eventName = rawKey.slice(2).toLowerCase();
     adapter.addEventListener(el, eventName, value);
     return;
   }
 
-  // 全部委托给 adapter
-  // FORCE_ATTRIBUTE / SVG / aria-* / data-* 由 browser adapter 内部处理
-  adapter.setProp(el, key, value);
+  // 全部委托给 adapter（attr:/prop: 前缀由 adapter 内部处理）
+  adapter.setProp(el, rawKey, value);
 }
 
 // ── setProps ───────────────────────────────────────────
 
-export function setProps(el: any, props: Record<string, any> | null | undefined): void {
+export function setProps(
+  el: any,
+  props: Record<string, any> | null | undefined,
+  cleanups?: (() => void)[],
+): void {
   if (!isRecord(props)) return;
 
   for (const key of Object.keys(props)) {
@@ -78,6 +70,9 @@ export function setProps(el: any, props: Record<string, any> | null | undefined)
       });
       const stop = (derived as any)[REACTIVE]?.stop;
       if (stop) {
+        // 收集到 cleanups 数组（HResult 路径）
+        if (cleanups) cleanups.push(stop);
+        // 过渡期：同时注册到 currentOwner
         const owner = currentOwner.get();
         if (owner) owner.cleanups.push(stop);
       }

@@ -93,6 +93,16 @@ export const browserAdapter: RenderAdapter = {
   },
 
   setProp(el: any, key: string, value: unknown): void {
+    // attr: 前缀 → 强制 setAttribute
+    if (key.startsWith("attr:")) {
+      el.setAttribute(key.slice(5), String(value));
+      return;
+    }
+    // prop: 前缀 → 强制 property
+    if (key.startsWith("prop:")) {
+      el[key.slice(5)] = value;
+      return;
+    }
     // SVG：所有属性走 setAttribute
     if (el instanceof SVGElement) {
       if (value === true) {

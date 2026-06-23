@@ -125,8 +125,11 @@ export const ssrAdapter: RenderAdapter = {
 
   setProp(el: unknown, key: string, value: unknown): void {
     const element = el as SSRElement;
-    if (element.type === "element") {
-      element.attrs[key] = String(value);
-    }
+    if (element.type !== "element") return;
+    // prop: 前缀 → SSR 不输出
+    if (key.startsWith("prop:")) return;
+    // attr: 前缀 → 去掉前缀后存储
+    const actualKey = key.startsWith("attr:") ? key.slice(5) : key;
+    element.attrs[actualKey] = String(value);
   },
 };

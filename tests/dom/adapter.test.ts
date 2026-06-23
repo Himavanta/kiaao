@@ -360,4 +360,49 @@ describe("setProps", () => {
     setCount(10);
     expect(el.getAttribute("data-count")).toBe("5");
   });
+
+  test("setProps with cleanups array collects signal stops", () => {
+    const el = document.createElement("div");
+    const [title, setTitle] = use("a");
+    const cleanups: (() => void)[] = [];
+
+    setProps(el, { title }, cleanups);
+
+    expect(cleanups.length).toBe(1);
+    expect(typeof cleanups[0]).toBe("function");
+
+    // Signal still works
+    expect(el.getAttribute("title")).toBe("a");
+    setTitle("b");
+    expect(el.getAttribute("title")).toBe("b");
+  });
+
+  test("setProps with cleanups — multiple signals each produce a cleanup", () => {
+    const el = document.createElement("div");
+    const [a] = use("x");
+    const [b] = use("y");
+    const cleanups: (() => void)[] = [];
+
+    setProps(el, { title: a, "data-id": b }, cleanups);
+
+    expect(cleanups.length).toBe(2);
+  });
+
+  test("setProps without cleanups still works (backward compat)", () => {
+    const el = document.createElement("div");
+    const [count] = use(0);
+
+    // 不传第三个参数，不应报错
+    expect(() => setProps(el, { "data-n": count })).not.toThrow();
+    expect(el.getAttribute("data-n")).toBe("0");
+  });
+
+  test("setProps with empty cleanups does not affect behavior", () => {
+    const el = document.createElement("div");
+    const cleanups: (() => void)[] = [];
+
+    setProps(el, { class: "box" }, cleanups);
+    expect(el.getAttribute("class")).toBe("box");
+    expect(cleanups).toEqual([]);
+  });
 });

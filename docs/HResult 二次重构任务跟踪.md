@@ -397,7 +397,7 @@ function handleDomMode(tag, props, children): HResult {
 | 阶段                                   | 状态      | 开始 | 结束 | 确认      |
 | -------------------------------------- | --------- | ---- | ---- | --------- |
 | 阶段一：HResult 类型 + processChildren | ✅ 完成   | —    | —    | ⏳ 待确认 |
-| 阶段二：setProps 清理收集              | 🔴 待开始 | —    | —    | ⏳        |
+| 阶段二：setProps 清理收集              | ✅ 完成   | —    | —    | ⏳ 待确认 |
 | 阶段三：`h()` 返回 HResult             | 🔴 待开始 | —    | —    | ⏳        |
 | 阶段四：消除 currentOwner              | 🔴 待开始 | —    | —    | ⏳        |
 | 阶段五：when/each 适配 HResult         | 🔴 待开始 | —    | —    | ⏳        |
