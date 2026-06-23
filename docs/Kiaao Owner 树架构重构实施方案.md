@@ -3,7 +3,7 @@
 **状态**：定稿
 **关联**：[跨端架构改造方案讨论](./跨端架构改造方案讨论.md)、[Kiaao 框架架构演进探讨](./架构演进探讨.md)
 **日期**：2026年6月23日
-**版本**：4.1
+**版本**：4.2
 
 ## 一、背景与动机
 
@@ -112,17 +112,12 @@ function disposeOwner(owner: Owner): void {
   }
   owner.elements.clear();
 
-  // 4. 递归销毁所有子 Owner
-  for (const child of owner.children) {
+  // 4. 递归销毁所有子 Owner（遍历快照副本，防止子节点 dispose 过程中修改 children 导致迭代错位）
+  const childList = [...owner.children];
+  for (const child of childList) {
     disposeOwner(child);
   }
   owner.children.length = 0;
-
-  // 5. 从父 Owner 中移除自身
-  if (owner.parent) {
-    const idx = owner.parent.children.indexOf(owner);
-    if (idx !== -1) owner.parent.children.splice(idx, 1);
-  }
 }
 ```
 
