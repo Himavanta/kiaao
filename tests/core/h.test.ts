@@ -145,8 +145,8 @@ describe("h() — component mode", () => {
 
   test("context.use registers cleanup to Owner", () => {
     function Comp(_props: any, context: any) {
-      const [count] = context.use(0);
-      const [doubled] = context.use(count, () => count() * 2);
+      const count = context.use(0);
+      const doubled = context.use(count, () => count() * 2);
       return h("div", null, String(doubled()));
     }
     const { nodes: nds } = h(Comp) as any;
@@ -228,11 +228,11 @@ describe("component disposal", () => {
 
 describe("processChildren via h()", () => {
   test("signal binding creates derived and registers cleanup", () => {
-    const [count, setCount] = use(0);
+    const count = use(0);
     const { nodes: nds } = h("div", null, count) as any;
     const div = nds[0] as HTMLElement;
     expect(div.textContent).toBe("0");
-    setCount(42);
+    count(42);
     expect(div.textContent).toBe("42");
   });
 });

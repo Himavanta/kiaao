@@ -3,7 +3,7 @@
 // the animation signal lags behind to allow exit animations to complete.
 
 import { use } from "../core/signal.ts";
-import { type Getter } from "../core/types.ts";
+import { type Signal } from "../core/types.ts";
 import { direct } from "../core/direct.ts";
 import type { DirectiveContext } from "../core/direct.ts";
 import { isEmpty, isNotEmpty } from "../utils/type-guards.ts";
@@ -23,7 +23,7 @@ interface HandleSignalChangeOptions {
   generation: Generation;
   elements: Set<Element>;
   propsMap: Map<Element, ElementMotionConfig>;
-  setVisible: (v: any) => void;
+  visible: (v: any) => void;
 }
 
 /**
@@ -35,11 +35,11 @@ interface HandleSignalChangeOptions {
  * 代际标记确保快速连续切换时只有最后一次调用生效。
  */
 async function handleSignalChange(options: HandleSignalChangeOptions): Promise<void> {
-  const { newValue, generation, elements, propsMap, setVisible } = options;
+  const { newValue, generation, elements, propsMap, visible } = options;
   const myTick = ++generation.tick;
 
   if (newValue === true) {
-    setVisible(true);
+    visible(true);
     return;
   }
 
@@ -56,7 +56,7 @@ async function handleSignalChange(options: HandleSignalChangeOptions): Promise<v
 
   if (myTick !== generation.tick) return;
 
-  setVisible(false);
+  visible(false);
 }
 
 // ── createMotion ───────────────────────────────────────
@@ -73,16 +73,16 @@ async function handleSignalChange(options: HandleSignalChangeOptions): Promise<v
  * @returns [visible, Motion]
  */
 export function createMotion(
-  signal: Getter<any>,
+  signal: Signal<any>,
   context?: { use: typeof use },
-): [visible: Getter<any>, Motion: ReturnType<typeof direct>] {
+): [visible: Signal<any>, Motion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
   const generation: Generation = { tick: 0 };
 
   const useFn: typeof use = context?.use ?? use;
 
-  const [visible, setVisible] = useFn(signal());
+  const visible = useFn(signal());
 
   useFn(signal, () => {
     void handleSignalChange({
@@ -90,7 +90,7 @@ export function createMotion(
       generation,
       elements,
       propsMap,
-      setVisible,
+      visible,
     });
   });
 

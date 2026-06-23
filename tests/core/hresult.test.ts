@@ -100,7 +100,7 @@ describe("processChildren — result format", () => {
   });
 
   test("signal binding produces node + cleanup", () => {
-    const [count] = use(42);
+    const count = use(42);
     const result = processChildren([count]);
     expect(result.nodes.length).toBe(1);
     expect(result.nodes[0].textContent).toBe("42");
@@ -109,14 +109,14 @@ describe("processChildren — result format", () => {
   });
 
   test("mixed static and signal children", () => {
-    const [count] = use(0);
+    const count = use(0);
     const result = processChildren(["prefix", count, "suffix"]);
     expect(result.nodes.length).toBe(3);
     expect(result.cleanups.length).toBe(1);
   });
 
   test("nested arrays are flattened", () => {
-    const [count] = use(0);
+    const count = use(0);
     const result = processChildren(["a", ["b", [count]], "c"]);
     expect(result.nodes.length).toBe(4);
     expect(result.nodes.map((n) => n.textContent)).toEqual(["a", "b", "0", "c"]);
@@ -146,7 +146,7 @@ describe("processChildren — result format", () => {
   });
 
   test("mixed node, signal, string, HResult", () => {
-    const [signal] = use(0);
+    const signal = use(0);
     const span = document.createElement("span");
     const hr = createHResult(null, [document.createElement("hr")]);
     const result = processChildren([span, signal, "text", hr]);

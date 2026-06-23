@@ -321,46 +321,46 @@ describe("setProps", () => {
   test("reactive attribute: creates derived and registers cleanup to Owner", () => {
     const el = document.createElement("div");
     const owner = createOwner();
-    const [title, setTitle] = use("hello");
+    const title = use("hello");
 
     setProps(el, { title }, owner.cleanups);
 
     expect(el.getAttribute("title")).toBe("hello");
 
-    setTitle("world");
+    title("world");
     expect(el.getAttribute("title")).toBe("world");
 
     // On owner disposal, the cleanup should stop the derived
     disposeOwner(owner);
 
     // After disposal, setting should not update element
-    setTitle("gone");
+    title("gone");
     expect(el.getAttribute("title")).toBe("world");
   });
 
   test("reactive attribute: Owner cleanup stops signal binding", () => {
     const el = document.createElement("div");
-    const [count, setCount] = use(0);
+    const count = use(0);
     const owner = createOwner();
 
     setProps(el, { "data-count": count }, owner.cleanups);
 
     expect(el.getAttribute("data-count")).toBe("0");
 
-    setCount(5);
+    count(5);
     expect(el.getAttribute("data-count")).toBe("5");
 
     // disposeOwner 会执行 owner.cleanups，停止信号绑定
     disposeOwner(owner);
 
     // After dispose, changing count should not affect the element
-    setCount(10);
+    count(10);
     expect(el.getAttribute("data-count")).toBe("5");
   });
 
   test("setProps with cleanups array collects signal stops", () => {
     const el = document.createElement("div");
-    const [title, setTitle] = use("a");
+    const title = use("a");
     const cleanups: (() => void)[] = [];
 
     setProps(el, { title }, cleanups);
@@ -370,14 +370,14 @@ describe("setProps", () => {
 
     // Signal still works
     expect(el.getAttribute("title")).toBe("a");
-    setTitle("b");
+    title("b");
     expect(el.getAttribute("title")).toBe("b");
   });
 
   test("setProps with cleanups — multiple signals each produce a cleanup", () => {
     const el = document.createElement("div");
-    const [a] = use("x");
-    const [b] = use("y");
+    const a = use("x");
+    const b = use("y");
     const cleanups: (() => void)[] = [];
 
     setProps(el, { title: a, "data-id": b }, cleanups);
@@ -387,7 +387,7 @@ describe("setProps", () => {
 
   test("setProps without cleanups still works (backward compat)", () => {
     const el = document.createElement("div");
-    const [count] = use(0);
+    const count = use(0);
 
     // 不传第三个参数，不应报错
     expect(() => setProps(el, { "data-n": count })).not.toThrow();

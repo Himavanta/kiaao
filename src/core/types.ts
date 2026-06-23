@@ -55,19 +55,10 @@ export function isHResult(value: unknown): value is HResult {
   return isObject(value) && HRESULT_SYMBOL in value;
 }
 
-/** @internal 用于类型层面区分信号和普通函数的 brand */
-export declare const GETTER_BRAND: unique symbol;
-
-/** 信号读取函数 */
-export interface Getter<T> {
+/** 信号接口：无参调用为读取，有参调用为写入 */
+export interface Signal<T> {
   (): T;
-  readonly [GETTER_BRAND]: true;
-}
-
-/** 信号写入函数 */
-export interface Setter<T> {
-  (newValue: T): T;
-  (updater: (prev: T) => T): T;
+  (value: T | ((prev: T) => T)): void;
 }
 
 /** h() 返回类型：单个节点或节点数组 */
@@ -79,17 +70,15 @@ export type Children = Node | Node[];
 export interface DefinitionState<T> {
   value: T;
   subs: Set<DerivationState<any>>;
-  set: Setter<T>;
   stop: () => void;
 }
 
 /** 派生节点（use(...deps, fn)）的内部状态 */
 export interface DerivationState<T> {
-  deps: Set<Getter<any>>;
+  deps: Set<Signal<any>>;
   cachedValue: T;
   subs: Set<DerivationState<any>>;
   computeFn: (v?: any) => T;
-  set: Setter<T>;
   stops: Set<() => void>;
   stop: () => void;
 }

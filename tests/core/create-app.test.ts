@@ -131,8 +131,8 @@ describe("createApp", () => {
     const calls: number[] = [];
 
     function App(_props: any, context: any) {
-      const [count] = context.use(0);
-      const [doubled] = context.use(count, () => {
+      const count = context.use(0);
+      const doubled = context.use(count, () => {
         const result = count() * 2;
         calls.push(result);
         return result;

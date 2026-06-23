@@ -133,7 +133,7 @@ export function createWhenElement(options: {
   };
 
   if (isUse(whenFn)) {
-    const [derived] = use(whenFn, () => renderBranch());
+    const derived = use(whenFn, () => renderBranch());
     const stop = (derived as any)[REACTIVE]?.stop;
     if (stop) containerOwner.cleanups.push(stop);
   } else {
@@ -151,7 +151,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
   container.append(anchor);
   const nodes: Node[] = [];
   const itemOwners: Map<any, any> = new Map();
-  const itemSignalMap: Map<any, [() => any, (v: any) => void]> = new Map();
+  const itemSignalMap: Map<any, any> = new Map();
   const containerOwner = createOwner();
 
   const sync = () => {
@@ -167,13 +167,12 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
       newKeys.add(identity);
 
       if (itemSignalMap.has(identity)) {
-        const [, setter] = itemSignalMap.get(identity)!;
-        if (!isUse(rawValue)) setter(rawValue);
+        itemSignalMap.get(identity)!(rawValue);
       } else {
-        const [getter, setter] = use(rawValue);
-        itemSignalMap.set(identity, [getter, setter]);
+        const itemSignal = use(rawValue);
+        itemSignalMap.set(identity, itemSignal);
       }
-      const itemGetter = itemSignalMap.get(identity)![0];
+      const itemSignal = itemSignalMap.get(identity)!;
 
       let itemOwner = itemOwners.get(identity);
       if (!itemOwner) {
@@ -185,7 +184,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
 
       let node: any;
       try {
-        node = childFn(itemGetter, i);
+        node = childFn(itemSignal, i);
       } catch (err) {
         console.error("[kiaao] each item render error:", err);
         continue;
@@ -228,7 +227,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
         }
         const sig = itemSignalMap.get(key);
         if (sig) {
-          const stop = (sig[0] as any)[REACTIVE]?.stop;
+          const stop = (sig as any)[REACTIVE]?.stop;
           if (isFunction(stop)) stop();
           itemSignalMap.delete(key);
         }
@@ -238,7 +237,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
 
   let eachStop: (() => void) | undefined;
   if (isUse(eachFn)) {
-    const [derived] = use(eachFn, () => sync());
+    const derived = use(eachFn, () => sync());
     eachStop = (derived as any)[REACTIVE]?.stop;
   } else {
     sync();

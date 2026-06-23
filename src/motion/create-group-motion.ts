@@ -4,7 +4,7 @@
 
 import { animate } from "motion/mini";
 import { use } from "../core/signal.ts";
-import { type Getter } from "../core/types.ts";
+import { type Signal } from "../core/types.ts";
 import { direct } from "../core/direct.ts";
 import type { DirectiveContext } from "../core/direct.ts";
 import { isEmpty } from "../utils/type-guards.ts";
@@ -81,7 +81,7 @@ interface HandleGroupSignalChangeOptions {
   propsMap: Map<Element, ElementMotionConfig>;
   keyToElMap: Map<any, Element>;
   keyFn: ((item: any, index: number) => any) | undefined;
-  setVisibleItems: (v: any) => void;
+  visibleItems: (v: any) => void;
 }
 
 /**
@@ -93,7 +93,7 @@ interface HandleGroupSignalChangeOptions {
  * 代际标记确保快速连续切换时只有最后一次调用生效。
  */
 async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions): Promise<void> {
-  const { oldArray, newArray, generation, elements, propsMap, keyToElMap, keyFn, setVisibleItems } =
+  const { oldArray, newArray, generation, elements, propsMap, keyToElMap, keyFn, visibleItems } =
     options;
   const myTick = ++generation.tick;
 
@@ -107,7 +107,7 @@ async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions):
   }
 
   if (isEmpty(anims)) {
-    setVisibleItems(newArray);
+    visibleItems(newArray);
     return;
   }
 
@@ -115,7 +115,7 @@ async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions):
 
   if (myTick !== generation.tick) return;
 
-  setVisibleItems(newArray);
+  visibleItems(newArray);
 }
 
 // ── createGroupMotion ─────────────────────────────────
@@ -133,10 +133,10 @@ async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions):
  * @returns [visibleItems, GroupMotion]
  */
 export function createGroupMotion(
-  signal: Getter<any>,
+  signal: Signal<any>,
   keyFn?: (item: any, index: number) => any,
   context?: { use: typeof use },
-): [visibleItems: Getter<any>, GroupMotion: ReturnType<typeof direct>] {
+): [visibleItems: Signal<any>, GroupMotion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
   const keyToElMap = new Map<any, Element>();
@@ -144,7 +144,7 @@ export function createGroupMotion(
 
   const useFn: typeof use = context?.use ?? use;
 
-  const [visibleItems, setVisibleItems] = useFn(signal());
+  const visibleItems = useFn(signal());
 
   useFn(signal, () => {
     void handleGroupSignalChange({
@@ -155,7 +155,7 @@ export function createGroupMotion(
       propsMap,
       keyToElMap,
       keyFn,
-      setVisibleItems,
+      visibleItems,
     });
   });
 

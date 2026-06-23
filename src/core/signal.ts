@@ -1,11 +1,10 @@
 // kiaao — Reactive signal system: use, isUse, toValue
 // Platform-agnostic. No DOM dependencies.
-// Migrated from src/reactive/core.ts without functional changes.
+// Signal<T> replaces [Getter<T>, Setter<T>] — signal() reads, signal(v) writes.
 
 import {
   REACTIVE,
-  type Getter,
-  type Setter,
+  type Signal,
   type DefinitionState,
   type DerivationState,
   type SignalState,
@@ -13,8 +12,6 @@ import {
 import { isFunction, isNotEmpty, isNotNil, isSingle } from "../utils/type-guards.ts";
 
 // ── Render Mode ────────────────────────────────────────
-// 控制派生信号的运行模式。
-// SSR 模式下派生退化为一次性计算。
 
 export type RenderMode = "dom" | "ssr" | "hydrate";
 
@@ -28,7 +25,7 @@ export const getRenderMode = (): RenderMode => currentRenderMode;
 
 // ── Signal Identity ────────────────────────────────────
 
-export const isUse = (v: any): v is Getter<any> =>
+export const isUse = (v: any): v is Signal<any> =>
   isNotNil(v) && (v as any)[REACTIVE] !== undefined;
 
 // ── Value Normalization ────────────────────────────────
@@ -39,13 +36,13 @@ export const toValue = (v: any): any => (isUse(v) ? (v as any)() : v);
 
 export function registerSignalStop(args: any[], register: (stop: () => void) => void): any {
   const result = (use as (...a: any[]) => any)(...args);
-  const getter = result[0];
 
-  if (isSingle(args) && isUse(args[0]) && result[0] === args[0]) {
+  // 引用已有信号 → 直接返回，不注册清理
+  if (isSingle(args) && isUse(args[0]) && result === args[0]) {
     return result;
   }
 
-  const stop = (getter as any)[REACTIVE]?.stop;
+  const stop = (result as any)[REACTIVE]?.stop;
   if (isFunction(stop)) {
     register(stop);
   }
@@ -55,67 +52,62 @@ export function registerSignalStop(args: any[], register: (stop: () => void) => 
 // ── use ────────────────────────────────────────────────
 
 export type UseFunction = {
-  <T>(signal: Getter<T>): [Getter<T>, Setter<T>];
-  <T>(initialValue: T): [Getter<T>, Setter<T>];
-  <T>(...deps: [...Getter<any>[], (v?: any) => T]): [Getter<T>, Setter<T>];
+  <T>(signal: Signal<T>): Signal<T>;
+  <T>(initialValue: T): Signal<T>;
+  <T>(...deps: [...Signal<any>[], (v?: any) => T]): Signal<T>;
 };
 
-export const use: UseFunction = (...args: any[]): any => {
+export const use: UseFunction = ((...args: any[]): any => {
   if (isSingle(args)) {
     const val = args[0];
     if (isUse(val)) {
-      const state = (val as any)[REACTIVE] as { set: Setter<any> };
-      return [val, state.set];
+      return val; // 直接返回信号本身
     }
     return definitionMode(val);
   }
   return derivationMode(...args);
-};
+}) as UseFunction;
 
 // ── Signal Creator ─────────────────────────────────────
 
-function createSignal<T>(getter: Getter<T>, setter: Setter<T>, state: any): [Getter<T>, Setter<T>] {
-  (getter as any)[REACTIVE] = state;
-  state.set = setter;
-  return [getter, setter];
+function createSignal<T>(fn: Signal<T>, state: any): Signal<T> {
+  (fn as any)[REACTIVE] = state;
+  return fn;
 }
 
 // ── Definition Mode ────────────────────────────────────
 
-function definitionMode<T>(initialValue: T): [Getter<T>, Setter<T>] {
+function definitionMode<T>(initialValue: T): Signal<T> {
   const state: DefinitionState<T> = {
     value: initialValue,
     subs: new Set(),
-    set: null as any,
     stop: () => {},
   };
 
-  const getter = (() => state.value) as Getter<T>;
-
-  const setter = ((updater: any): T => {
+  const signal = function (updater?: any): any {
+    if (arguments.length === 0) return state.value;
     const oldValue = state.value;
     state.value = isFunction(updater) ? (updater as (prev: T) => T)(oldValue) : (updater as T);
     if (state.value !== oldValue) {
       triggerDerivations(state);
     }
-    return state.value;
-  }) as Setter<T>;
+    return;
+  } as Signal<T>;
 
-  return createSignal(getter, setter, state);
+  return createSignal(signal, state);
 }
 
 // ── Derivation State Builder ──────────────────────────
 
 function buildDerivationState<T>(
   func: (v?: any) => T,
-  validDeps: Getter<any>[],
+  validDeps: Signal<any>[],
 ): DerivationState<T> {
   const state: DerivationState<T> = {
     deps: new Set(validDeps),
     cachedValue: undefined as any,
     subs: new Set(),
     computeFn: func,
-    set: null as any,
     stops: new Set(),
     stop: null as any,
   };
@@ -153,7 +145,7 @@ function computeInitialDerivedValue<T>(state: DerivationState<T>): void {
 
 // ── Derivation Mode ────────────────────────────────────
 
-function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
+function derivationMode<T>(...args: any[]): Signal<T> {
   const ars = [...args];
   const [func, ...deps] = ars.reverse();
 
@@ -174,7 +166,7 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
     }
   }
 
-  const validDeps: Getter<any>[] = deps.filter((d: any) => isUse(d));
+  const validDeps: Signal<any>[] = deps.filter((d: any) => isUse(d));
 
   if (currentRenderMode === "ssr") {
     const value = (func as (v?: any) => T)(undefined);
@@ -184,14 +176,13 @@ function derivationMode<T>(...args: any[]): [Getter<T>, Setter<T>] {
   const state = buildDerivationState<T>(func as (v?: any) => T, validDeps);
   computeInitialDerivedValue(state);
 
-  const getter = (() => state.cachedValue) as Getter<T>;
-
-  const setter = ((value: any): T => {
+  const signal = function (value?: any): any {
+    if (arguments.length === 0) return state.cachedValue;
     recomputeDerivation(state, value);
-    return state.cachedValue;
-  }) as Setter<T>;
+    return;
+  } as Signal<T>;
 
-  return createSignal(getter, setter, state);
+  return createSignal(signal, state);
 }
 
 // ── Update Propagation ─────────────────────────────────

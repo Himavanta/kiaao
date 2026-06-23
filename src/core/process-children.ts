@@ -51,7 +51,7 @@ export function processChildren(children: any[]): ProcessChildrenResult {
 
     if (isUse(child)) {
       const textNode = adapter.createTextNode("") as Text;
-      const [derived] = use(child, () => {
+      const derived = use(child, () => {
         textNode.textContent = String(child());
       });
       const stop = (derived as any)[REACTIVE]?.stop;

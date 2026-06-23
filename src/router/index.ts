@@ -1,9 +1,8 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
 import { use, toValue } from "../core/signal.ts";
-import { type Getter, type Children } from "../core/types.ts";
+import { type HResult } from "../core/types.ts";
 import { h } from "../core/h.ts";
-import { addEvent } from "../dom/dom-utils.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────
@@ -41,15 +40,15 @@ export interface RouterOptions {
 
 export interface Router {
   /** View component — renders the matched route */
-  RouterView: (props: RouterViewProps) => Children;
+  RouterView: (props: RouterViewProps) => HResult;
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
-  currentPath: Getter<string>;
+  currentPath: () => string;
   /** Current URL query parameters signal (getter) */
-  currentParams: Getter<Record<string, string>>;
+  currentParams: () => Record<string, string>;
   /** Declarative navigation link component. */
-  Link: (props: RouterLinkProps) => Children;
+  Link: (props: RouterLinkProps) => HResult;
 }
 
 // ── Segment Extraction ─────────────────────────────────
@@ -78,8 +77,8 @@ function extractSegment(fullPath: string, base?: string): string | null {
 /** 创建 RouterView 组件：根据当前路径匹配路由并渲染对应组件 */
 function createRouterView(
   defaultFallback: RouteComponent,
-  currentPath: Getter<string>,
-): (props: RouterViewProps) => Children {
+  currentPath: () => string,
+): (props: RouterViewProps) => HResult {
   return (props: RouterViewProps) => {
     const myRoutes = props.routes;
     const myFallback = props?.fallback ?? defaultFallback;
@@ -87,7 +86,7 @@ function createRouterView(
 
     // 显式创建派生信号替代自动依赖收集
     // 当 currentPath 变化时，extractSegment 自动重新计算
-    const [segment] = use(currentPath, () => extractSegment(currentPath(), myBase));
+    const segment = use(currentPath, () => extractSegment(currentPath(), myBase));
 
     // 将路由表转为映射表（初始化时执行一次）
     const routeMap = Object.fromEntries(myRoutes.map((r) => [r.path, () => h(r.component, null)]));
@@ -107,7 +106,7 @@ function createRouterView(
 // ── RouterLink Factory ────────────────────────────────
 
 /** 创建 Link 组件：点击时通过 navigate 导航，阻止默认跳转 */
-function createRouterLink(navigate: (path: string) => void): (props: RouterLinkProps) => Children {
+function createRouterLink(navigate: (path: string) => void): (props: RouterLinkProps) => HResult {
   return (props: RouterLinkProps) => {
     const { to, children, onClick: userOnClick, ...rest } = props;
 
@@ -131,7 +130,7 @@ function createRouterLink(navigate: (path: string) => void): (props: RouterLinkP
 }
 
 /** 从 URL 查询字符串中提取参数并更新信号 */
-function updateRouterParams(setCurrentParams: (params: Record<string, string>) => void): void {
+function updateRouterParams(signal: (params: Record<string, string>) => void): void {
   const params: Record<string, string> = {};
   const search = getSearch();
   if (search) {
@@ -139,29 +138,29 @@ function updateRouterParams(setCurrentParams: (params: Record<string, string>) =
       params[key] = value;
     });
   }
-  setCurrentParams(params);
+  signal(params);
 }
 
 // ── createRouter ───────────────────────────────────────
 
 export function createRouter(options: RouterOptions = {}): Router {
-  const [currentPath, setPath] = use(getPathname());
+  const currentPath = use(getPathname());
 
-  const [currentParams, setCurrentParams] = use<Record<string, string>>({});
+  const currentParams = use<Record<string, string>>({});
 
   function updateParams(): void {
-    updateRouterParams(setCurrentParams);
+    updateRouterParams(currentParams);
   }
 
-  addEvent(window, "popstate", () => {
-    setPath(getPathname());
+  window.addEventListener("popstate", () => {
+    currentPath(getPathname());
     updateParams();
   });
 
   function navigate(path: string): void {
     const pathname = path.split("?")[0];
     pushHistory(path);
-    setPath(pathname);
+    currentPath(pathname);
     updateParams();
   }
 

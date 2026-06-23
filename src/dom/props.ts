@@ -64,7 +64,7 @@ export function setProps(
     if (EVENT_RE.test(key)) {
       setProp(el, key, value);
     } else if (isUse(value)) {
-      const [derived] = use(value, () => {
+      const derived = use(value, () => {
         setProp(el, key, value());
       });
       const stop = (derived as any)[REACTIVE]?.stop;
