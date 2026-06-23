@@ -45,6 +45,36 @@ describe("use — definition mode", () => {
     count(undefined);
     expect(count()).toBeUndefined();
   });
+
+  test("signal(null) stores null", () => {
+    const val = use<number | null>(1);
+    val(null);
+    expect(val()).toBeNull();
+  });
+
+  test("signal string stores string", () => {
+    const text = use("");
+    expect(text()).toBe("");
+    text("hello");
+    expect(text()).toBe("hello");
+  });
+
+  test("signal boolean stores boolean", () => {
+    const flag = use(false);
+    expect(flag()).toBe(false);
+    flag(true);
+    expect(flag()).toBe(true);
+  });
+
+  test("deep nested derivation chain", () => {
+    const a = use(1);
+    const b = use(a, () => a() + 1);
+    const c = use(b, () => b() + 1);
+    expect(c()).toBe(3);
+    a(5);
+    expect(b()).toBe(6);
+    expect(c()).toBe(7);
+  });
 });
 
 describe("use — signal referencing", () => {
