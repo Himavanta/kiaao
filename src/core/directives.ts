@@ -22,6 +22,11 @@ import { isHResult } from "./types.ts";
 
 function appendResult(el: Element, result: any, owner: any): void {
   if (isHResult(result)) {
+    // 提取子 Owner 并建立父子关系
+    if (result.owner) {
+      owner.children.push(result.owner);
+      result.owner.parent = owner;
+    }
     for (const node of result.nodes) {
       if (isNode(node)) {
         el.append(node);
@@ -187,6 +192,11 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
       }
 
       if (isHResult(node)) {
+        // 提取子 Owner 并建立父子关系
+        if (node.owner) {
+          itemOwner.children.push(node.owner);
+          node.owner.parent = itemOwner;
+        }
         for (const n of node.nodes) {
           if (isNode(n)) {
             itemOwner.elements.add(n);
