@@ -1,10 +1,10 @@
 // kiaao — Child node processing for h()
 // Owner-aware: signal binding cleanups register to currentOwner.
 
-import { getAdapter } from "../core/types.ts";
-import { currentOwner } from "../core/owner.ts";
-import { isUse, use } from "../core/signal.ts";
-import { REACTIVE } from "../core/types.ts";
+import { getAdapter } from "./types.ts";
+import { currentOwner } from "./owner.ts";
+import { isUse, use } from "./signal.ts";
+import { REACTIVE } from "./types.ts";
 import { isBoolean, isNil, isNode } from "../utils/type-guards.ts";
 
 /**

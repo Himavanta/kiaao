@@ -7,7 +7,7 @@ import { getRenderMode } from "./signal.ts";
 import { handleComponent } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
-import { createDirectiveContext, isDirective } from "../dom/directive.ts";
+import { createDirectiveContext, isDirective } from "../core/direct.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
 import {
   isBoolean,
@@ -19,7 +19,7 @@ import {
   isString,
 } from "../utils/type-guards.ts";
 import type { ComponentFunction } from "./component.ts";
-import type { DirectiveFunction } from "../dom/directive.ts";
+import type { DirectiveFunction } from "./direct.ts";
 
 // ── Fragment ─────────────────────────────────────────
 
@@ -30,19 +30,13 @@ export function Fragment(props: { children?: any }): any {
 
 // ── DOM Mode ──────────────────────────────────────────
 
-/**
- * DOM 模式：创建原生 DOM 元素，设置属性，处理子节点。
- * 通过 RenderAdapter 操作，不直接访问浏览器 DOM API。
- */
 function handleDomMode(tag: string, props: any, children: any[]): Node[] {
   const adapter = getAdapter();
 
-  // 检查控制流指令
+  // 控制流指令
   if (props?.when !== undefined) {
-    // when 指令：暂由旧实现处理（Phase 4 改造为 Owner 管理）
-    // 返回数组以通过类型检查
     const { when, each, key, else: elseFn, ...rest } = props;
-    const result = createWhenElementFallback({
+    const result = createWhenElement({
       tag,
       props: rest,
       children,
@@ -51,13 +45,13 @@ function handleDomMode(tag: string, props: any, children: any[]): Node[] {
       keyFn: key,
       elseFn,
     });
-    return Array.isArray(result) ? result : [result];
+    return [result];
   }
 
   if (props?.each !== undefined) {
     const { each, key, ...rest } = props;
-    const result = createEachElementFallback(tag, rest, children, each, key);
-    return Array.isArray(result) ? result : [result];
+    const result = createEachElement(tag, rest, children, each, key);
+    return [result];
   }
 
   // 普通元素
@@ -128,22 +122,6 @@ export function h(tag: any, props?: any, ...children: any[]): Children {
   return handleDomMode(tag, props, children);
 }
 
-// ── Fallback: when/each (to be replaced in Phase 4) ──
+// ── Import new Owner-based directives ─────────────────
 
-// 临时导入旧实现，保持 Phase 3 可运行
-import { createWhenElement } from "../dom/when.ts";
-import { createEachElement } from "../dom/each.ts";
-
-function createWhenElementFallback(options: any): any {
-  return createWhenElement(options);
-}
-
-function createEachElementFallback(
-  tag: string,
-  props: any,
-  children: any[],
-  each: any,
-  key: any,
-): any {
-  return createEachElement(tag, props, children, each, key);
-}
+import { createWhenElement, createEachElement } from "./directives.ts";

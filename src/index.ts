@@ -20,10 +20,10 @@ export { lazy } from "./dom/lazy.ts";
 export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
 
 // Directive system
-export { direct } from "./dom/directive.ts";
+export { direct } from "./core/direct.ts";
 
 // Types
 export type { Getter, Setter, Children } from "./core/types.ts";
 export type { UseFunction } from "./core/signal.ts";
 export type { Context } from "./core/component.ts";
-export type { DirectiveFunction, DirectiveContext } from "./dom/directive.ts";
+export type { DirectiveFunction, DirectiveContext } from "./core/direct.ts";
