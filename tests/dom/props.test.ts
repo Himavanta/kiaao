@@ -4,6 +4,10 @@
 import { expect, test, describe } from "vite-plus/test";
 import { use } from "../../src/reactive/core.ts";
 import { setProp, setProps, EVENT_RE } from "../../src/dom/props.ts";
+import { setAdapter } from "../../src/core/types.ts";
+import { browserAdapter } from "../../src/dom/adapter.ts";
+
+setAdapter(browserAdapter);
 
 // ── setProp 基本路径 ────────────────────────────────
 
