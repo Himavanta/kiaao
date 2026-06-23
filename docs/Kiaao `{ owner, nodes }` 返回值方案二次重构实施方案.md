@@ -3,7 +3,7 @@
 **状态**：草案
 **关联**：[Owner 树架构重构实施方案](./Owner树架构重构实施方案.md)
 **日期**：2026年6月23日
-**版本**：1.1
+**版本**：1.2
 
 ## 一、背景与动机
 
@@ -132,24 +132,40 @@ function handleComponent(tag, props, children): HResult {
   const owner = createOwner();
   const context = createContext(owner);
 
-  // 执行组件函数，获取子组件的 HResult
-  const childResult = tag(props, context);
+  // 执行组件函数，获取返回值
+  const result = tag(props, context);
 
-  // 异步路径
-  if (isAsyncPlaceholder(childResult.nodes)) {
-    return handleAsyncComponent(childResult, owner, context);
+  // ★ 优先判断 Promise，避免直接访问属性
+  if (result instanceof Promise) {
+    return handleAsyncComponent(result, owner, context);
   }
 
-  // 显式建立父子关系
-  owner.children.push(childResult.owner);
-  childResult.owner.parent = owner;
+  // 统一处理单值和数组（Fragment 返回多个根元素）
+  const results = Array.isArray(result) ? result : [result];
+  const allNodes: Node[] = [];
 
-  // 将子组件的节点注册到当前 Owner
-  childResult.nodes.forEach((n) => owner.elements.add(n));
+  for (const item of results) {
+    if (isHResult(item)) {
+      // 显式建立父子关系
+      owner.children.push(item.owner);
+      item.owner.parent = owner;
+      allNodes.push(...item.nodes);
+    } else if (item instanceof Node) {
+      allNodes.push(item);
+    }
+  }
 
-  return createHResult(owner, childResult.nodes);
+  // 将节点注册到当前 Owner
+  allNodes.forEach((n) => owner.elements.add(n));
+
+  return createHResult(owner, allNodes);
 }
 ```
+
+**关键改动**：
+
+- 在访问 `result` 的任何属性之前，先用 `instanceof Promise` 判断异步组件。
+- 增加数组处理分支，支持 Fragment 返回多个 `HResult` 的情况。
 
 ### 4.3 异步组件模式
 
@@ -157,7 +173,7 @@ function handleComponent(tag, props, children): HResult {
 
 ```ts
 function handleAsyncComponent(
-  promiseResult: HResult,
+  promise: Promise<any>,
   owner: Owner,
   context: ComponentContext,
 ): HResult {
@@ -166,18 +182,29 @@ function handleAsyncComponent(
 
   const placeholderResult = createHResult(owner, [placeholder]);
 
-  promiseResult
-    .then((childResult) => {
-      // 显式建立父子关系——与同步组件完全相同的逻辑
-      owner.children.push(childResult.owner);
-      childResult.owner.parent = owner;
+  promise
+    .then((rawResult) => {
+      // 统一处理单值和数组
+      const results = Array.isArray(rawResult) ? rawResult : [rawResult];
+      const allNodes: Node[] = [];
+
+      for (const item of results) {
+        if (isHResult(item)) {
+          // 显式建立父子关系——与同步组件完全相同的逻辑
+          owner.children.push(item.owner);
+          item.owner.parent = owner;
+          allNodes.push(...item.nodes);
+        } else if (item instanceof Node) {
+          allNodes.push(item);
+        }
+      }
 
       // 将真实节点注册到当前 Owner
-      childResult.nodes.forEach((n) => owner.elements.add(n));
+      allNodes.forEach((n) => owner.elements.add(n));
       owner.elements.delete(placeholder);
 
       // 替换占位符
-      placeholder.replaceWith(...childResult.nodes);
+      placeholder.replaceWith(...allNodes);
 
       // 触发挂载
       triggerMount(owner);
@@ -199,30 +226,98 @@ DOM 元素的创建仍然在组件函数内部进行。`handleDomMode` 接受显
 ```ts
 function handleDomMode(tag, props, children, owner: Owner): HResult {
   const el = createElement(tag);
-  // ... 处理 props
+  // 处理属性（传入 owner 以注册响应式绑定的清理函数）
+  setProps(el, props, owner);
+  // 处理子节点（传入 owner）
   const childNodes = processChildren(children, owner);
-  // ... 插入子节点
+  // 插入子节点
+  childNodes.forEach((n) => el.appendChild(n));
   return createHResult(owner, [el]);
 }
 ```
 
-`processChildren` 同样接收 `owner` 参数，处理信号绑定时将清理函数注册到该 Owner 的 `cleanups` 中。
+`setProps` 同样接收 `owner` 参数，处理响应式属性绑定时将清理函数注册到该 Owner 的 `cleanups` 中：
 
-### 4.5 指令模式
+```ts
+function setProps(el: unknown, props: Record<string, any>, owner: Owner | null): void {
+  for (const key of Object.keys(props)) {
+    // ... 处理事件、style、前缀等
+    const value = props[key];
+    if (isUse(value)) {
+      const [derived] = use(value, () => setProp(el, key, value()));
+      const stop = (derived as any)[REACTIVE]?.stop;
+      if (stop && owner) owner.cleanups.push(stop);
+    }
+  }
+}
+```
 
-指令模式与 DOM 模式类似，也接收显式的 `owner` 参数：
+### 4.5 `processChildren` 的适配
+
+`processChildren` 需要识别 `HResult` 对象并从中提取 `nodes`，同时接收显式的 `owner` 参数用于注册信号绑定的清理函数：
+
+```ts
+function processChildren(children: any[], owner: Owner): Node[] {
+  const result: Node[] = [];
+  for (const child of children.flat(Infinity)) {
+    if (child == null || typeof child === "boolean") continue;
+    if (Array.isArray(child)) {
+      result.push(...processChildren(child, owner));
+      continue;
+    }
+    if (child instanceof Node) {
+      result.push(child);
+      continue;
+    }
+    // ★ 新增：识别 HResult 对象并提取 nodes
+    if (isHResult(child)) {
+      result.push(...child.nodes);
+      continue;
+    }
+    if (isUse(child)) {
+      const textNode = createTextNode("");
+      const [derived] = use(child, () => {
+        textNode.textContent = String(child());
+      });
+      owner.cleanups.push(derived[REACTIVE].stop);
+      result.push(textNode);
+      continue;
+    }
+    result.push(createTextNode(String(child)));
+  }
+  return result;
+}
+```
+
+### 4.6 指令模式
+
+指令模式需要先解包 `HResult`，提取其中的 `nodes`，再在这些 `nodes` 中找到 `Element` 来调用指令函数：
 
 ```ts
 function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
-  const flatChildren = children.flat(Infinity);
-  for (const child of flatChildren) {
-    if (child instanceof Element) {
-      tag(child, props, createDirectiveContext(owner));
+  // 先解包所有 HResult，提取实际的 Node
+  const allNodes: Node[] = [];
+  for (const child of children.flat(Infinity)) {
+    if (isHResult(child)) {
+      allNodes.push(...child.nodes);
+    } else if (child instanceof Node) {
+      allNodes.push(child);
     }
   }
-  return createHResult(owner, flatChildren.filter((c) => c instanceof Node) as Node[]);
+
+  // 对每个 Element 调用指令函数
+  const dirProps = { ...props, children: allNodes };
+  for (const node of allNodes) {
+    if (node instanceof Element) {
+      tag(node, dirProps, createDirectiveContext(owner));
+    }
+  }
+
+  return createHResult(owner, allNodes);
 }
 ```
+
+**关键点**：指令函数接收的 `children` 是 `Element[]`（已经解包），不是 `HResult[]`。指令内部的逻辑完全不需要改动。
 
 ## 五、对 `currentOwner` 的消除
 
@@ -232,16 +327,17 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 所有消费 `h()` 返回值的模块都需要从处理 `Node | Node[]` 改为处理 `HResult`。具体包括：
 
-| 模块                  | 当前代码                    | 新代码                                   |
-| --------------------- | --------------------------- | ---------------------------------------- |
-| `handleComponent`     | `return nodes`              | `return createHResult(owner, nodes)`     |
-| `handleDomMode`       | `return el`                 | `return createHResult(owner, [el])`      |
-| `handleDirectiveMode` | `return children`           | `return createHResult(owner, nodes)`     |
-| `processChildren`     | 接收 `children`             | 接收 `children` + `owner`，返回 `Node[]` |
-| `when`/`each` 内部    | 调用 `h()` 拿到 `Node[]`    | 调用 `h()` 拿到 `HResult`，提取 `.nodes` |
-| JSX 运行时            | `return h(...)` 返回 `Node` | `return h(...)` 返回 `HResult`           |
-| `createApp`           | `const nodes = h(App)`      | `const { owner, nodes } = h(App)`        |
-| 动画扩展              | 可能调用 `h()`              | 适配新返回值                             |
+| 模块                  | 当前代码                             | 新代码                                    |
+| --------------------- | ------------------------------------ | ----------------------------------------- |
+| `handleComponent`     | `return nodes`                       | `return createHResult(owner, nodes)`      |
+| `handleDomMode`       | `return el`                          | `return createHResult(owner, [el])`       |
+| `handleDirectiveMode` | `return children`                    | `return createHResult(owner, nodes)`      |
+| `processChildren`     | 接收 `children`                      | 接收 `children` + `owner`，识别 `HResult` |
+| `setProps`            | 通过 `currentOwner.get()` 获取 Owner | 接收显式 `owner` 参数                     |
+| `when`/`each` 内部    | 调用 `h()` 拿到 `Node[]`             | 调用 `h()` 拿到 `HResult`，提取 `.nodes`  |
+| JSX 运行时            | `return h(...)` 返回 `Node`          | `return h(...)` 返回 `HResult`            |
+| `createApp`           | `const nodes = h(App)`               | `const { owner, nodes } = h(App)`         |
+| 动画扩展              | 可能调用 `h()`                       | 适配新返回值                              |
 
 改动面较大，但每处改动都是机械性的——将 `const nodes = h(...)` 替换为 `const { owner, nodes } = h(...)`，并在父级将 `owner` 挂载到自己的 `children` 上。
 
@@ -252,7 +348,7 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 1. 定义 `HResult` 接口与 Symbol 标记。
 2. 实现 `createHResult` 和 `isHResult` 工具函数。
 3. 修改 `h()` 的所有内部实现，返回 `HResult`。
-4. 修改 `processChildren` 和 `handleDomMode` 等接受显式 `owner` 参数。
+4. 修改 `processChildren`、`handleDomMode`、`setProps` 等接受显式 `owner` 参数。
 
 ### 第二阶段：消除 `currentOwner`
 
