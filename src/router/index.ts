@@ -1,7 +1,7 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
 import { use, toValue } from "../core/signal.ts";
-import { type HResult } from "../core/types.ts";
+import { type Signal, type HResult } from "../core/types.ts";
 import { h } from "../core/h.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
@@ -44,9 +44,9 @@ export interface Router {
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
-  currentPath: () => string;
+  currentPath: Signal<string>;
   /** Current URL query parameters signal (getter) */
-  currentParams: () => Record<string, string>;
+  currentParams: Signal<Record<string, string>>;
   /** Declarative navigation link component. */
   Link: (props: RouterLinkProps) => HResult;
 }
@@ -77,7 +77,7 @@ function extractSegment(fullPath: string, base?: string): string | null {
 /** 创建 RouterView 组件：根据当前路径匹配路由并渲染对应组件 */
 function createRouterView(
   defaultFallback: RouteComponent,
-  currentPath: () => string,
+  currentPath: Signal<string>,
 ): (props: RouterViewProps) => HResult {
   return (props: RouterViewProps) => {
     const myRoutes = props.routes;
