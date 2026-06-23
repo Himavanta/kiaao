@@ -1,13 +1,11 @@
-// kiaao — DOM property/attribute/event handling via RenderAdapter
-// Replaces the old src/dom/props.ts. Uses the RenderAdapter for DOM operations
-// and registers reactive bindings to the current Owner (via currentOwner).
+// kiaao — Property/attribute/event handling
+// Platform-agnostic: all DOM operations go through RenderAdapter.
+// browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
-import { getAdapter } from "../core/types.ts";
+import { getAdapter, REACTIVE } from "../core/types.ts";
 import { currentOwner } from "../core/owner.ts";
 import { isUse, use } from "../core/signal.ts";
-import { REACTIVE } from "../core/types.ts";
-import { isBoolean, isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
-import { FORCE_ATTRIBUTE } from "./adapter.ts";
+import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
 export const EVENT_RE = /^on[A-Z]/;
@@ -21,10 +19,6 @@ export const stripPrefix = (rawKey: string): { prefix: "attr" | "prop" | null; k
 
 // ── setProp ────────────────────────────────────────────
 
-/**
- * 在元素上设置单个属性。
- * 通过 RenderAdapter 执行实际的 DOM 操作。
- */
 export function setProp(el: any, rawKey: string, value: any): void {
   if (isNil(value)) return;
 
@@ -33,24 +27,23 @@ export function setProp(el: any, rawKey: string, value: any): void {
 
   // prop:/attr: 前缀强制属性
   if (prefix === "prop") {
-    adapter.setProperty(el, key, value);
+    adapter.setProp(el, key, value);
     return;
   }
   if (prefix === "attr") {
-    adapter.setAttribute(el, key, String(value));
+    adapter.setProp(el, key, String(value));
     return;
   }
 
   // style
   if (key === "style") {
     if (isString(value)) {
-      adapter.setAttribute(el, "style", value);
+      adapter.setProp(el, "style", value);
     } else if (isObject(value)) {
-      // 将对象转换为 CSS 字符串，兼容浏览器和 SSR
       const cssText = Object.entries(value)
         .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
         .join("; ");
-      adapter.setAttribute(el, "style", cssText);
+      adapter.setProp(el, "style", cssText);
     }
     return;
   }
@@ -62,40 +55,13 @@ export function setProp(el: any, rawKey: string, value: any): void {
     return;
   }
 
-  // SVG → setAttribute
-  if (el instanceof SVGElement) {
-    adapter.setAttribute(el, key, String(value));
-    return;
-  }
-
-  // aria-* / data-*
-  if (key.startsWith("aria-") || key.startsWith("data-")) {
-    adapter.setAttribute(el, key, String(value));
-    return;
-  }
-
-  // FORCE_ATTRIBUTE
-  if (FORCE_ATTRIBUTE.has(key)) {
-    if (isBoolean(value)) {
-      if (value) adapter.setAttribute(el, key, "");
-      else adapter.removeAttribute(el, key);
-    } else {
-      adapter.setAttribute(el, key, String(value));
-    }
-    return;
-  }
-
-  // 默认：property
-  adapter.setProperty(el, key, value);
+  // 全部委托给 adapter
+  // FORCE_ATTRIBUTE / SVG / aria-* / data-* 由 browser adapter 内部处理
+  adapter.setProp(el, key, value);
 }
 
 // ── setProps ───────────────────────────────────────────
 
-/**
- * 在元素上设置一组属性。
- * 响应式属性（信号）自动创建派生绑定，
- * 清理函数注册到当前 Owner。
- */
 export function setProps(el: any, props: Record<string, any> | null | undefined): void {
   if (!isRecord(props)) return;
 
@@ -108,8 +74,7 @@ export function setProps(el: any, props: Record<string, any> | null | undefined)
       setProp(el, key, value);
     } else if (isUse(value)) {
       const [derived] = use(value, () => {
-        const currentVal = value();
-        setProp(el, key, currentVal);
+        setProp(el, key, value());
       });
       const stop = (derived as any)[REACTIVE]?.stop;
       if (stop) {

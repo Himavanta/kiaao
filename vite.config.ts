@@ -5,17 +5,7 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   pack: {
-    entry: [
-      "src/index.ts",
-      "src/motion/index.ts",
-      "src/router/index.ts",
-      "src/server/index.ts",
-      "src/astro/index.ts",
-      "src/astro/client.ts",
-      "src/astro/server.ts",
-      "src/jsx-runtime/index.ts",
-      "src/jsx-dev-runtime/index.ts",
-    ],
+    entry: ["src/index.ts", "src/*/index.ts", "src/astro/client.ts", "src/astro/server.ts"],
     dts: {
       tsgo: true,
     },

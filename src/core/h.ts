@@ -6,7 +6,7 @@ import { getAdapter, type Children } from "./types.ts";
 import { handleComponent } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
-import { createDirectiveContext, isDirective } from "../core/direct.ts";
+import { createDirectiveContext, isDirective } from "./direct.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
 import {
   isBoolean,

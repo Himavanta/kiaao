@@ -80,12 +80,13 @@ export interface RenderAdapter {
   append(parent: unknown, child: unknown): void;
   remove(node: unknown): void;
   replaceWith(oldNode: unknown, ...newNodes: unknown[]): void;
-  setAttribute(el: unknown, key: string, value: string): void;
-  removeAttribute(el: unknown, key: string): void;
+  /**
+   * 设置元素属性。浏览器 adapter 内部根据属性名决定走
+   * setAttribute 还是 property 赋值；Lynx 等平台直接设值即可。
+   */
+  setProp(el: unknown, key: string, value: unknown): void;
   addEventListener(el: unknown, type: string, handler: Function): void;
   removeEventListener(el: unknown, type: string, handler: Function): void;
-  setProperty(el: unknown, key: string, value: unknown): void;
-  querySelector(selector: string): unknown;
 }
 
 // ── Adapter Registration ───────────────────────────────

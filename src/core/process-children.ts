@@ -5,7 +5,7 @@ import { getAdapter } from "./types.ts";
 import { currentOwner } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
 import { REACTIVE } from "./types.ts";
-import { isBoolean, isNil, isNode } from "../utils/type-guards.ts";
+import { isBoolean, isNil, isNode, isObject } from "../utils/type-guards.ts";
 
 /**
  * 处理子节点数组，返回扁平化的 Node 数组。
@@ -33,7 +33,7 @@ export function processChildren(children: any[]): Node[] {
     }
 
     // SSR 节点对象（非 DOM 环境）
-    if (child && typeof child === "object" && "type" in (child as any)) {
+    if (isObject(child) && "type" in (child as any)) {
       result.push(child as Node);
       continue;
     }

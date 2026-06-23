@@ -2,6 +2,7 @@
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
 import type { RenderAdapter } from "../core/types.ts";
+import { isObject } from "../utils/type-guards.ts";
 
 // ── SVG ───────────────────────────────────────────────
 
@@ -83,27 +84,40 @@ export const browserAdapter: RenderAdapter = {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
 
-  setAttribute(el: Element, key: string, value: string): void {
-    el.setAttribute(key, value);
-  },
-
-  removeAttribute(el: Element, key: string): void {
-    el.removeAttribute(key);
+  removeEventListener(el: EventTarget, type: string, handler: Function): void {
+    el.removeEventListener(type, handler as EventListener);
   },
 
   addEventListener(el: EventTarget, type: string, handler: Function): void {
     el.addEventListener(type, handler as EventListener);
   },
 
-  removeEventListener(el: EventTarget, type: string, handler: Function): void {
-    el.removeEventListener(type, handler as EventListener);
-  },
-
-  setProperty(el: any, key: string, value: unknown): void {
+  setProp(el: any, key: string, value: unknown): void {
+    // SVG：所有属性走 setAttribute
+    if (el instanceof SVGElement) {
+      if (value === true) {
+        el.setAttribute(key, "");
+        return;
+      }
+      if (value === false || value == null) {
+        el.removeAttribute(key);
+        return;
+      }
+      el.setAttribute(key, isObject(value) ? JSON.stringify(value) : String(value));
+      return;
+    }
+    if (FORCE_ATTRIBUTE.has(key) || key.startsWith("aria-") || key.startsWith("data-")) {
+      if (value === true) {
+        el.setAttribute(key, "");
+        return;
+      }
+      if (value === false || value == null) {
+        el.removeAttribute(key);
+        return;
+      }
+      el.setAttribute(key, isObject(value) ? JSON.stringify(value) : String(value));
+      return;
+    }
     el[key] = value;
-  },
-
-  querySelector(selector: string): Element | null {
-    return document.querySelector(selector);
   },
 };

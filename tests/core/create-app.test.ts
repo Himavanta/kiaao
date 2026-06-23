@@ -34,7 +34,7 @@ describe("createApp", () => {
     document.body.append(container);
 
     const app = createApp(App);
-    app.mount("#test-container");
+    app.mount(container);
 
     expect(container.children.length).toBeGreaterThan(0);
     expect(container.textContent).toBe("selector test");

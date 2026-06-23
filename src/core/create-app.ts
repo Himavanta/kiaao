@@ -52,18 +52,12 @@ export function createApp(component: ComponentFunction, props?: Record<string, a
   const rootNodes: Node[] = nodeList.filter((n): n is Node => n instanceof Node);
 
   return {
-    mount(container: string | Node): void {
+    mount(container: Element): void {
       const adapter = getAdapter();
-      const target = typeof container === "string" ? document.querySelector(container) : container;
-
-      if (!target) {
-        console.error("[kiaao] createApp.mount: target container not found");
-        return;
-      }
 
       // 将根节点插入 DOM
       for (const node of rootNodes) {
-        adapter.append(target, node);
+        adapter.append(container, node);
       }
 
       // 触发 onMount

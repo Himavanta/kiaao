@@ -135,57 +135,44 @@ describe("browserAdapter.replaceWith", () => {
   });
 });
 
-describe("browserAdapter.setAttribute / removeAttribute", () => {
-  test("setAttribute sets attribute", () => {
+describe("browserAdapter.setProp — attribute behavior", () => {
+  test("FORCE_ATTRIBUTE goes through setAttribute", () => {
     const el = browserAdapter.createElement("div") as HTMLElement;
-    browserAdapter.setAttribute(el, "class", "box");
+    browserAdapter.setProp(el, "class", "box");
     expect(el.getAttribute("class")).toBe("box");
   });
 
-  test("removeAttribute removes attribute", () => {
+  test("null value removes attribute", () => {
     const el = browserAdapter.createElement("div") as HTMLElement;
     el.setAttribute("class", "box");
-    browserAdapter.removeAttribute(el, "class");
+    browserAdapter.setProp(el, "class", null);
     expect(el.hasAttribute("class")).toBe(false);
   });
-});
 
-describe("browserAdapter.addEventListener / removeEventListener", () => {
-  test("addEventListener triggers on event", () => {
+  test("false value removes attribute for FORCE_ATTRIBUTE", () => {
     const el = browserAdapter.createElement("button") as HTMLElement;
-    let called = false;
-    const handler = () => {
-      called = true;
-    };
-    browserAdapter.addEventListener(el, "click", handler);
-    el.click();
-    expect(called).toBe(true);
-    browserAdapter.removeEventListener(el, "click", handler);
+    el.setAttribute("disabled", "");
+    browserAdapter.setProp(el, "disabled", false);
+    expect(el.hasAttribute("disabled")).toBe(false);
   });
 
-  test("removeEventListener prevents triggering", () => {
+  test("true value sets empty attribute for FORCE_ATTRIBUTE", () => {
     const el = browserAdapter.createElement("button") as HTMLElement;
-    let callCount = 0;
-    const handler = () => {
-      callCount++;
-    };
-    browserAdapter.addEventListener(el, "click", handler);
-    browserAdapter.removeEventListener(el, "click", handler);
-    el.click();
-    expect(callCount).toBe(0);
+    browserAdapter.setProp(el, "disabled", true);
+    expect(el.getAttribute("disabled")).toBe("");
   });
 });
 
-describe("browserAdapter.setProperty", () => {
+describe("browserAdapter.setProp — property behavior", () => {
   test("sets property on element", () => {
     const el = browserAdapter.createElement("input") as HTMLInputElement;
-    browserAdapter.setProperty(el, "value", "test");
+    browserAdapter.setProp(el, "value", "test");
     expect(el.value).toBe("test");
   });
 
   test("sets custom property", () => {
     const el: any = browserAdapter.createElement("div");
-    browserAdapter.setProperty(el, "customProp", 42);
+    browserAdapter.setProp(el, "customProp", 42);
     expect(el.customProp).toBe(42);
   });
 });

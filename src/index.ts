@@ -4,7 +4,7 @@
 import { setAdapter } from "./core/types.ts";
 import { browserAdapter } from "./dom/adapter.ts";
 try {
-  if (typeof document !== "undefined") {
+  if (globalThis.document) {
     setAdapter(browserAdapter);
   }
 } catch {}

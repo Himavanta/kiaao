@@ -115,20 +115,6 @@ export const ssrAdapter: RenderAdapter = {
     // SSR 无 DOM，空操作
   },
 
-  setAttribute(el: unknown, key: string, value: string): void {
-    const element = el as SSRElement;
-    if (element.type === "element") {
-      element.attrs[key] = value;
-    }
-  },
-
-  removeAttribute(el: unknown, key: string): void {
-    const element = el as SSRElement;
-    if (element.type === "element") {
-      delete element.attrs[key];
-    }
-  },
-
   addEventListener(): void {
     // SSR: 事件绑定不输出
   },
@@ -137,11 +123,10 @@ export const ssrAdapter: RenderAdapter = {
     // SSR: 事件绑定不输出
   },
 
-  setProperty(): void {
-    // SSR: property 赋值不输出（仅 attr: 前缀的属性会输出）
-  },
-
-  querySelector(): unknown {
-    return null; // SSR: 无 DOM，无法查询
+  setProp(el: unknown, key: string, value: unknown): void {
+    const element = el as SSRElement;
+    if (element.type === "element") {
+      element.attrs[key] = String(value);
+    }
   },
 };
