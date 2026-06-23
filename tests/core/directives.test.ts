@@ -16,31 +16,31 @@ setAdapter(browserAdapter);
 describe("when directive — basic", () => {
   test("renders children when truthy", () => {
     const [show] = use(true);
-    const el = h("div", { when: show }, h("span", null, "content")) as Node[];
-    const div = el[0] as HTMLElement;
+    const { nodes } = h("div", { when: show }, h("span", null, "content"));
+    const div = nodes[0] as HTMLElement;
     expect(div.children.length).toBe(1);
     expect(div.children[0].textContent).toBe("content");
   });
 
   test("hides children when falsy", () => {
     const [show] = use(false);
-    const el = h("div", { when: show }, h("span", null, "content")) as Node[];
-    const div = el[0] as HTMLElement;
+    const { nodes } = h("div", { when: show }, h("span", null, "content"));
+    const div = nodes[0] as HTMLElement;
     expect(div.children.length).toBe(0);
   });
 
   test("shows else content when falsy", () => {
     const [show] = use(false);
-    const el = h("div", { when: show, else: () => h("p", null, "fallback") }) as Node[];
-    const div = el[0] as HTMLElement;
+    const { nodes } = h("div", { when: show, else: () => h("p", null, "fallback") });
+    const div = nodes[0] as HTMLElement;
     expect(div.children.length).toBe(1);
     expect(div.children[0].textContent).toBe("fallback");
   });
 
   test("toggles on signal change", () => {
     const [show, setShow] = use(true);
-    const el = h("div", { when: show }, h("span", null, "content")) as Node[];
-    const div = el[0] as HTMLElement;
+    const { nodes } = h("div", { when: show }, h("span", null, "content"));
+    const div = nodes[0] as HTMLElement;
     expect(div.children.length).toBe(1);
 
     setShow(false);
@@ -56,29 +56,29 @@ describe("when directive — basic", () => {
 describe("when directive — mapping mode", () => {
   test("renders matching branch by key", () => {
     const [status] = use("loading");
-    const el = h(
+    const { nodes } = h(
       "div",
       { when: status },
       {
         loading: () => h("span", null, "Loading..."),
         ready: () => h("p", null, "Ready"),
       },
-    ) as Node[];
-    const div = el[0] as HTMLElement;
+    );
+    const div = nodes[0] as HTMLElement;
     expect(div.children[0].textContent).toBe("Loading...");
   });
 
   test("switches branch on signal change", () => {
     const [status, setStatus] = use("loading");
-    const el = h(
+    const { nodes } = h(
       "div",
       { when: status },
       {
         loading: () => h("span", null, "Loading..."),
         ready: () => h("p", null, "Ready"),
       },
-    ) as Node[];
-    const div = el[0] as HTMLElement;
+    );
+    const div = nodes[0] as HTMLElement;
     expect(div.children[0].textContent).toBe("Loading...");
 
     setStatus("ready");
@@ -91,10 +91,8 @@ describe("when directive — mapping mode", () => {
 describe("each directive — basic", () => {
   test("renders list items", () => {
     const [items] = use(["a", "b", "c"]);
-    const el = h("ul", { each: items }, (item: any, _index: number) =>
-      h("li", null, item),
-    ) as Node[];
-    const ul = el[0] as HTMLElement;
+    const { nodes } = h("ul", { each: items }, (item: any, _index: number) => h("li", null, item));
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(3);
     expect(ul.children[0].textContent).toBe("a");
     expect(ul.children[1].textContent).toBe("b");
@@ -103,8 +101,8 @@ describe("each directive — basic", () => {
 
   test("updates on array change", () => {
     const [items, setItems] = use(["a", "b"]);
-    const el = h("ul", { each: items }, (item: any) => h("li", null, item)) as Node[];
-    const ul = el[0] as HTMLElement;
+    const { nodes } = h("ul", { each: items }, (item: any) => h("li", null, item));
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(2);
 
     setItems(["a", "b", "c"]);
@@ -113,8 +111,8 @@ describe("each directive — basic", () => {
 
   test("removes items on shrink", () => {
     const [items, setItems] = use(["a", "b", "c"]);
-    const el = h("ul", { each: items }, (item: any) => h("li", null, item)) as Node[];
-    const ul = el[0] as HTMLElement;
+    const { nodes } = h("ul", { each: items }, (item: any) => h("li", null, item));
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(3);
 
     setItems(["a"]);
@@ -124,8 +122,8 @@ describe("each directive — basic", () => {
 
   test("empty array renders nothing", () => {
     const [items] = use([]);
-    const el = h("ul", { each: items }, (item: any) => h("li", null, item)) as Node[];
-    const ul = el[0] as HTMLElement;
+    const { nodes } = h("ul", { each: items }, (item: any) => h("li", null, item));
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(0);
   });
 });
@@ -138,10 +136,10 @@ describe("each directive — with key", () => {
       { id: 1, name: "A" },
       { id: 2, name: "B" },
     ]);
-    const el = h("ul", { each: items, key: (item: any) => item.id }, (item: any) =>
+    const { nodes } = h("ul", { each: items, key: (item: any) => item.id }, (item: any) =>
       h("li", null, item().name),
-    ) as Node[];
-    const ul = el[0] as HTMLElement;
+    );
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(2);
   });
 });
@@ -151,8 +149,8 @@ describe("each directive — with key", () => {
 describe("each directive — reactive source", () => {
   test("reacts to signal changes", () => {
     const [items, setItems] = use(["x", "y"]);
-    const el = h("ul", { each: items }, (item: any) => h("li", null, item)) as Node[];
-    const ul = el[0] as HTMLElement;
+    const { nodes } = h("ul", { each: items }, (item: any) => h("li", null, item));
+    const ul = nodes[0] as HTMLElement;
     expect(ul.children.length).toBe(2);
 
     setItems(["p", "q", "r"]);

@@ -5,9 +5,9 @@
 
 import { h, Fragment } from "../core/h.ts";
 import type { Context } from "../core/component.ts";
-import type { Children } from "../core/types.ts";
+import type { HResult } from "../core/types.ts";
 import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
-import type { DirectiveContext } from "../dom/directive.ts";
+import type { DirectiveContext } from "../core/direct.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 
@@ -24,7 +24,7 @@ function normalizeChildren(children: unknown): unknown[] | undefined {
   return [children];
 }
 
-function createJsxElement(type: any, props: Record<string, any> | null, key?: any): Children {
+function createJsxElement(type: any, props: Record<string, any> | null, key?: any): HResult {
   if (isNil(props)) return h(type);
 
   const { children, ...rest } = props;
@@ -52,10 +52,10 @@ export { createJsxElement as jsxDEV };
 // ── JSX Type Declarations ──────────────────────────────
 
 export namespace JSX {
-  // h() now returns Children (Node | Node[]), so JSX.Element must be the union
-  export type Element = Children;
+  // h() now returns HResult
+  export type Element = HResult;
   export interface ElementClass {
-    (props: Record<string, any>, context?: Context): Children;
+    (props: Record<string, any>, context?: Context): HResult;
     (el: Element, props: Record<string, any>, ctx: DirectiveContext): void;
   }
   export interface ElementChildrenAttribute {

@@ -6,7 +6,7 @@
 import { getAdapter, REACTIVE, type ProcessChildrenResult, isHResult } from "./types.ts";
 import { currentOwner } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
-import { isNil, isNode, isObject } from "../utils/type-guards.ts";
+import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
 /**
  * 处理子节点数组，返回扁平化的 Node 数组和孤儿的清理函数。
@@ -26,7 +26,7 @@ export function processChildren(children: any[]): ProcessChildrenResult {
   for (const child of children.flat(Infinity)) {
     if (isNil(child) || child === true || child === false) continue;
 
-    if (Array.isArray(child)) {
+    if (isArray(child)) {
       const sub = processChildren(child);
       nodes.push(...sub.nodes);
       cleanups.push(...sub.cleanups);

@@ -48,7 +48,7 @@ describe("renderToString", () => {
 
   test("renders Fragment without extra wrapper", () => {
     function App() {
-      return [...(h("span", null, "a") as Node[]), ...(h("span", null, "b") as Node[])];
+      return [h("span", null, "a"), h("span", null, "b")];
     }
     const html = renderToString(App);
     expect(html).toBe("<span>a</span><span>b</span>");

@@ -1,66 +1,41 @@
 // kiaao — createApp: application root with Owner lifecycle management
 // Replaces the old global mount/unmount functions.
 
-import { createOwner, disposeOwner, triggerMount, currentOwner } from "./owner.ts";
+import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { h } from "./h.ts";
-import { getAdapter } from "./types.ts";
+import { isHResult, getAdapter } from "./types.ts";
+import type { ComponentFunction } from "./component.ts";
 
 export interface App {
-  mount(container: string | Node): void;
+  mount(container: Element): void;
   unmount(): void;
 }
-
-import type { ComponentFunction } from "./component.ts";
 
 /**
  * 创建一个kiaao应用实例。
  * 内部创建根 Owner，管理整个组件树的生命周期。
- *
- * @param component 根组件函数
- * @param props 根组件 props（可选）
- * @returns App 实例（mount / unmount）
- *
- * @example
- * ```ts
- * import { createApp } from "kiaao";
- *
- * function App() {
- *   return h("div", null, "Hello");
- * }
- *
- * const app = createApp(App);
- * app.mount("#app");
- * // 稍后
- * app.unmount();
- * ```
  */
 export function createApp(component: ComponentFunction, props?: Record<string, any>): App {
-  // 创建根 Owner（无父级）
   const rootOwner = createOwner();
 
-  // 渲染组件
-  const prevOwner = currentOwner.get();
-  currentOwner.set(rootOwner);
-  const nodes = h(component, props);
-  currentOwner.set(prevOwner);
+  // 渲染组件 → 获取 HResult
+  const hr = h(component, props);
+  const appOwner = isHResult(hr) ? hr.owner : null;
+  const nodes: Node[] = isHResult(hr) ? [...hr.nodes] : [];
 
-  // 注册所有根节点到根 Owner
-  const nodeList = Array.isArray(nodes) ? nodes.flat(Infinity) : [nodes];
-  for (const n of nodeList) {
-    if (n instanceof Node) rootOwner.elements.add(n);
+  // 建立根组件的父子关系
+  if (appOwner) {
+    rootOwner.children.push(appOwner);
+    appOwner.parent = rootOwner;
+    rootOwner.elements = appOwner.elements;
   }
-  const rootNodes: Node[] = nodeList.filter((n): n is Node => n instanceof Node);
 
   return {
     mount(container: Element): void {
       const adapter = getAdapter();
-
-      // 将根节点插入 DOM
-      for (const node of rootNodes) {
+      for (const node of nodes) {
         adapter.append(container, node);
       }
-
-      // 触发 onMount
       triggerMount(rootOwner);
     },
 

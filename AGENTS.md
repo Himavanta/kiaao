@@ -14,3 +14,11 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 - [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
 
 <!--VITE PLUS END-->
+
+## 代码规范
+
+- 使用统一类型封装模块
+- 使用统一dom操作封装
+- 不要使用for循环，使用for-in 或者for-of来代替
+- 函数参数超过3个时使用对象解构传递
+- 函数体代码行数控制在30行内，最多不超过50行

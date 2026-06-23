@@ -8,7 +8,6 @@ import { setAdapter } from "../core/types.ts";
 import { setRenderMode, getRenderMode } from "../core/signal.ts";
 import { h } from "../core/h.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
-import { isArray } from "../utils/type-guards.ts";
 import { isObject } from "../utils/type-guards.ts";
 import type { ComponentFunction } from "../core/component.ts";
 
@@ -29,7 +28,7 @@ export function renderToString(
 
   try {
     const result = h(component, mergedProps);
-    const nodes = isArray(result) ? result.flat(Infinity) : [result];
+    const nodes = result.nodes || [];
     let html = "";
     for (const node of nodes) {
       if (isObject(node) && "type" in (node as any)) {

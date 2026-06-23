@@ -3,7 +3,7 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { REACTIVE } from "./types.ts";
+import { REACTIVE, isHResult } from "./types.ts";
 import { createOwner, disposeOwner, currentOwner } from "./owner.ts";
 import { getAdapter } from "./types.ts";
 import { setProps } from "../dom/props.ts";
@@ -20,16 +20,25 @@ import {
 // ── Mapping Table Detection ───────────────────────────
 
 function isMappingTable(v: any): boolean {
-  return isPlainObject(v);
+  return isPlainObject(v) && !isHResult(v);
 }
 
 // ── Helper: append result to element ────────────────
 
 function appendResult(el: Element, result: any, owner: any): void {
+  if (isHResult(result)) {
+    for (const node of result.nodes) {
+      if (isNode(node)) {
+        el.append(node);
+        owner.elements.add(node);
+      }
+    }
+    return;
+  }
   if (isNode(result)) {
     el.append(result);
     owner.elements.add(result);
-  } else if (Array.isArray(result)) {
+  } else if (isArray(result)) {
     for (const node of result) {
       if (isNode(node)) {
         el.append(node);
@@ -232,7 +241,16 @@ function renderEachOnElement(
       }
       currentOwner.set(null);
 
-      if (isNode(node)) {
+      if (isHResult(node)) {
+        for (const n of node.nodes) {
+          if (isNode(n)) {
+            itemOwner.elements.add(n);
+            anchor.before(n);
+            nodes.push(n);
+            prevNode = n;
+          }
+        }
+      } else if (isNode(node)) {
         itemOwner.elements.add(node);
         anchor.before(node);
         if (prevNode === null && container.firstChild !== node) {
@@ -242,7 +260,7 @@ function renderEachOnElement(
         }
         nodes.push(node);
         prevNode = node;
-      } else if (Array.isArray(node)) {
+      } else if (isArray(node)) {
         for (const n of node) {
           if (isNode(n)) {
             itemOwner.elements.add(n);

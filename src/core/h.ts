@@ -1,8 +1,7 @@
 // kiaao — h() function: creates real DOM or dispatches to SSR mode
-// Component mode creates Owners, DOM mode uses adapter, Directive mode skips component instance.
-// Fragment is inlined — returns children array without container.
+// Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
-import { getAdapter, type Children } from "./types.ts";
+import { getAdapter, type HResult, createHResult, isHResult } from "./types.ts";
 import { handleComponent } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
@@ -13,6 +12,7 @@ import {
   isElement,
   isFunction,
   isNotEmpty,
+  isNode,
   isNotNil,
   isObject,
   isString,
@@ -29,13 +29,13 @@ export function Fragment(props: { children?: any }): any {
 
 // ── DOM Mode ──────────────────────────────────────────
 
-function handleDomMode(tag: string, props: any, children: any[]): Node[] {
+function handleDomMode(tag: string, props: any, children: any[]): HResult {
   const adapter = getAdapter();
 
   // 控制流指令
   if (props?.when !== undefined) {
     const { when, each, key, else: elseFn, ...rest } = props;
-    const result = createWhenElement({
+    const el = createWhenElement({
       tag,
       props: rest,
       children,
@@ -44,37 +44,47 @@ function handleDomMode(tag: string, props: any, children: any[]): Node[] {
       keyFn: key,
       elseFn,
     });
-    return [result];
+    return createHResult(null, [el]);
   }
 
   if (props?.each !== undefined) {
     const { each, key, ...rest } = props;
-    const result = createEachElement(tag, rest, children, each, key);
-    return [result];
+    const el = createEachElement(tag, rest, children, each, key);
+    return createHResult(null, [el]);
   }
 
   // 普通元素
   const el: any = adapter.createElement(tag);
-  setProps(el, isObject(props) ? props : null);
-  const { nodes: childNodes } = processChildren(children);
+  const orphanCleanups: (() => void)[] = [];
+  setProps(el, isObject(props) ? props : null, orphanCleanups);
+  const { nodes: childNodes, cleanups: childCleanups } = processChildren(children);
   for (const node of childNodes) {
     adapter.append(el, node);
   }
-  return [el];
+  return createHResult(null, [el], [...orphanCleanups, ...childCleanups]);
 }
 
 // ── Directive Mode ────────────────────────────────────
 
-/** 指令模式：遍历 children，对每个 Element 调用指令函数 */
-function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]): Node[] {
+function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]): HResult {
   const dirProps = { ...props };
   if (isNotEmpty(children)) {
     dirProps.children = normalizeChildren(children);
   }
 
+  // 解包 children 中的 HResult
   const flatChildren = children.flat(Infinity);
+  const allNodes: Node[] = [];
 
   for (const child of flatChildren) {
+    if (isHResult(child)) {
+      allNodes.push(...child.nodes);
+    } else if (isNode(child)) {
+      allNodes.push(child);
+    }
+  }
+
+  for (const child of allNodes) {
     if (isElement(child)) {
       const ctx = createDirectiveContext(child);
       (tag as DirectiveFunction)(child, dirProps, ctx);
@@ -85,36 +95,29 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
     }
   }
 
-  return flatChildren as Node[];
+  return createHResult(null, allNodes);
 }
 
 // ── h() ────────────────────────────────────────────────
 
-// Type overloads
-export function h(tag: DirectiveFunction, props?: any, ...children: any[]): Children;
-export function h(tag: string | ComponentFunction, props?: any, ...children: any[]): Children;
-export function h(tag: any, props?: any, ...children: any[]): Children {
-  // Invalid tag → 注释占位
+export function h(tag: DirectiveFunction, props?: any, ...children: any[]): HResult;
+export function h(tag: string | ComponentFunction, props?: any, ...children: any[]): HResult;
+export function h(tag: any, props?: any, ...children: any[]): HResult {
   if (!isString(tag) && !isFunction(tag)) {
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`);
     }
-    return [getAdapter().createComment("") as Node];
+    return createHResult(null, [getAdapter().createComment("") as Node]);
   }
 
-  // 函数标签：指令 / 组件
   if (isFunction(tag)) {
     if (isDirective(tag)) {
       return handleDirectiveMode(tag, props, children);
     }
-    // 组件模式
     return handleComponent(tag as ComponentFunction, props, children);
   }
 
-  // 字符串标签：DOM 模式
   return handleDomMode(tag, props, children);
 }
-
-// ── Import new Owner-based directives ─────────────────
 
 import { createWhenElement, createEachElement } from "./directives.ts";
