@@ -1,8 +1,8 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
-import { use, toValue } from "../reactive/core.ts";
-import { type Getter } from "../reactive/types.ts";
-import { h } from "../dom/h.ts";
+import { use, toValue } from "../core/signal.ts";
+import { type Getter, type Children } from "../core/types.ts";
+import { h } from "../core/h.ts";
 import { addEvent } from "../dom/dom-utils.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
@@ -41,7 +41,7 @@ export interface RouterOptions {
 
 export interface Router {
   /** View component — renders the matched route */
-  RouterView: (props: RouterViewProps) => Node;
+  RouterView: (props: RouterViewProps) => Children;
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
@@ -49,7 +49,7 @@ export interface Router {
   /** Current URL query parameters signal (getter) */
   currentParams: Getter<Record<string, string>>;
   /** Declarative navigation link component. */
-  Link: (props: RouterLinkProps) => Node;
+  Link: (props: RouterLinkProps) => Children;
 }
 
 // ── Segment Extraction ─────────────────────────────────
@@ -79,7 +79,7 @@ function extractSegment(fullPath: string, base?: string): string | null {
 function createRouterView(
   defaultFallback: RouteComponent,
   currentPath: Getter<string>,
-): (props: RouterViewProps) => Node {
+): (props: RouterViewProps) => Children {
   return (props: RouterViewProps) => {
     const myRoutes = props.routes;
     const myFallback = props?.fallback ?? defaultFallback;
@@ -107,7 +107,7 @@ function createRouterView(
 // ── RouterLink Factory ────────────────────────────────
 
 /** 创建 Link 组件：点击时通过 navigate 导航，阻止默认跳转 */
-function createRouterLink(navigate: (path: string) => void): (props: RouterLinkProps) => Node {
+function createRouterLink(navigate: (path: string) => void): (props: RouterLinkProps) => Children {
   return (props: RouterLinkProps) => {
     const { to, children, onClick: userOnClick, ...rest } = props;
 

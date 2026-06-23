@@ -32,6 +32,12 @@ export function processChildren(children: any[]): Node[] {
       continue;
     }
 
+    // SSR 节点对象（非 DOM 环境）
+    if (child && typeof child === "object" && "type" in (child as any)) {
+      result.push(child as Node);
+      continue;
+    }
+
     if (isUse(child)) {
       const textNode = adapter.createTextNode("") as Text;
       const [derived] = use(child, () => {

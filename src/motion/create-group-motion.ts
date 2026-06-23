@@ -3,10 +3,10 @@
 // Supports keyFn-based precise diff or full-exit path without keyFn.
 
 import { animate } from "motion/mini";
-import { use } from "../reactive/core.ts";
-import { type Getter } from "../reactive/types.ts";
-import { direct } from "../dom/directive.ts";
-import type { DirectiveContext } from "../dom/directive.ts";
+import { use } from "../core/signal.ts";
+import { type Getter } from "../core/types.ts";
+import { direct } from "../core/direct.ts";
+import type { DirectiveContext } from "../core/direct.ts";
 import { isEmpty } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,

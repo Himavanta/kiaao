@@ -1,0 +1,130 @@
+// kiaao — SSR RenderAdapter implementation
+// Creates lightweight serializable node trees for string rendering.
+
+import type { RenderAdapter } from "../core/types.ts";
+import { escapeHtml, escapeAttr } from "../dom/dom-utils.ts";
+
+// ── SSR Node Types ───────────────────────────────────
+
+interface SSRElement {
+  type: "element";
+  tag: string;
+  attrs: Record<string, string>;
+  children: SSRNode[];
+}
+
+interface SSRText {
+  type: "text";
+  value: string;
+}
+
+interface SSRComment {
+  type: "comment";
+  value: string;
+}
+
+type SSRNode = SSRElement | SSRText | SSRComment;
+
+// ── Serialization ────────────────────────────────────
+
+const VOID_ELEMENTS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+]);
+
+/** 将 SSR 节点树序列化为 HTML 字符串 */
+export function serializeSSRNode(node: SSRNode): string {
+  if (node.type === "text") return escapeHtml(node.value);
+  if (node.type === "comment") return `<!--${node.value}-->`;
+
+  // Element
+  const tag = node.tag;
+  let attrs = "";
+  for (const [key, val] of Object.entries(node.attrs)) {
+    attrs += ` ${key}="${escapeAttr(val)}"`;
+  }
+
+  if (VOID_ELEMENTS.has(tag)) return `<${tag}${attrs} />`;
+
+  let html = `<${tag}${attrs}>`;
+  for (const child of node.children) {
+    html += serializeSSRNode(child);
+  }
+  html += `</${tag}>`;
+  return html;
+}
+
+// ── SSR Adapter ──────────────────────────────────────
+
+export const ssrAdapter: RenderAdapter = {
+  createElement(tag: string): SSRElement {
+    return { type: "element", tag, attrs: {}, children: [] };
+  },
+
+  createTextNode(text: string): SSRText {
+    return { type: "text", value: text };
+  },
+
+  createComment(text: string): SSRComment {
+    return { type: "comment", value: text };
+  },
+
+  before(_ref: unknown, _child: unknown): void {
+    // SSR 中不需要 DOM 级别的 before/append 顺序管理
+    // 子节点顺序由 createElement 时的 children.push 维护
+  },
+
+  append(parent: unknown, child: unknown): void {
+    const p = parent as SSRElement;
+    const c = child as SSRNode;
+    if (p.type === "element") {
+      p.children.push(c);
+    }
+  },
+
+  remove(_node: unknown): void {
+    // SSR 无 DOM，空操作
+  },
+
+  replaceWith(_oldNode: unknown, ..._newNodes: unknown[]): void {
+    // SSR 无 DOM，空操作
+  },
+
+  setAttribute(el: unknown, key: string, value: string): void {
+    const element = el as SSRElement;
+    if (element.type === "element") {
+      element.attrs[key] = value;
+    }
+  },
+
+  removeAttribute(el: unknown, key: string): void {
+    const element = el as SSRElement;
+    if (element.type === "element") {
+      delete element.attrs[key];
+    }
+  },
+
+  addEventListener(): void {
+    // SSR: 事件绑定不输出
+  },
+
+  removeEventListener(): void {
+    // SSR: 事件绑定不输出
+  },
+
+  setProperty(): void {
+    // SSR: property 赋值不输出（仅 attr: 前缀的属性会输出）
+  },
+};

@@ -3,7 +3,6 @@
 // Fragment is inlined — returns children array without container.
 
 import { getAdapter, type Children } from "./types.ts";
-import { getRenderMode } from "./signal.ts";
 import { handleComponent } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
@@ -95,12 +94,6 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
 export function h(tag: DirectiveFunction, props?: any, ...children: any[]): Children;
 export function h(tag: string | ComponentFunction, props?: any, ...children: any[]): Children;
 export function h(tag: any, props?: any, ...children: any[]): Children {
-  // SSR mode: not yet supported in new h() - Phase 6 will add SSR adapter
-  if (getRenderMode() === "ssr") {
-    console.warn("[kiaao] SSR mode not yet supported in new h() - Phase 6");
-    return [getAdapter().createComment("ssr-not-ready") as Node];
-  }
-
   // Invalid tag → 注释占位
   if (!isString(tag) && !isFunction(tag)) {
     if (process.env.NODE_ENV !== "production") {

@@ -1,5 +1,14 @@
 // kiaao — Public API (Owner architecture)
 
+// Auto-register browser adapter on import
+import { setAdapter } from "./core/types.ts";
+import { browserAdapter } from "./dom/adapter.ts";
+try {
+  if (typeof document !== "undefined") {
+    setAdapter(browserAdapter);
+  }
+} catch {}
+
 // Reactive core (platform-agnostic)
 export { use, isUse, toValue } from "./core/signal.ts";
 
@@ -9,8 +18,9 @@ export { h } from "./core/h.ts";
 // Components
 export { Fragment } from "./core/h.ts";
 
-// Mount & unmount (temporary — will be replaced by createApp in Phase 5)
-export { mount, unmount } from "./dom/component.ts";
+// Mount & unmount (createApp API with Owner lifecycle)
+export { createApp } from "./core/create-app.ts";
+export type { App } from "./core/create-app.ts";
 
 // Portal, lazy (unchanged)
 export { Portal } from "./dom/portal.ts";

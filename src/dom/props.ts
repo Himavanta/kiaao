@@ -46,8 +46,11 @@ export function setProp(el: any, rawKey: string, value: any): void {
     if (isString(value)) {
       adapter.setAttribute(el, "style", value);
     } else if (isObject(value)) {
-      adapter.removeAttribute(el, "style");
-      Object.assign((el as HTMLElement).style, value);
+      // 将对象转换为 CSS 字符串，兼容浏览器和 SSR
+      const cssText = Object.entries(value)
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
+        .join("; ");
+      adapter.setAttribute(el, "style", cssText);
     }
     return;
   }

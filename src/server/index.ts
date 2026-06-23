@@ -4,18 +4,22 @@
 //   import { renderToString } from "kiaao/server";
 //   const html = renderToString(MyComponent, { name: "kiaao" });
 
-import { h } from "../dom/h.ts";
-import { setRenderMode, getRenderMode } from "../reactive/core.ts";
-import { isSSRSafe } from "../dom/ssr-helpers.ts";
-import { isString } from "../utils/type-guards.ts";
+import { setAdapter } from "../core/types.ts";
+import { setRenderMode, getRenderMode } from "../core/signal.ts";
+import { h } from "../core/h.ts";
+import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
+import { isArray } from "../utils/type-guards.ts";
+import type { ComponentFunction } from "../core/component.ts";
 
 export function renderToString(
-  component: (props: any) => any,
+  component: ComponentFunction,
   props?: any,
   options?: { slots?: Record<string, string> },
 ): string {
   const prevMode = getRenderMode();
+
   setRenderMode("ssr");
+  setAdapter(ssrAdapter);
 
   let mergedProps = props ?? {};
   if (options?.slots?.default) {
@@ -24,7 +28,14 @@ export function renderToString(
 
   try {
     const result = h(component, mergedProps);
-    return isSSRSafe(result) ? result.html : isString(result) ? result : "";
+    const nodes = isArray(result) ? result.flat(Infinity) : [result];
+    let html = "";
+    for (const node of nodes) {
+      if (node && typeof node === "object" && "type" in (node as any)) {
+        html += serializeSSRNode(node as any);
+      }
+    }
+    return html;
   } finally {
     setRenderMode(prevMode);
   }

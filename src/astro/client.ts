@@ -1,6 +1,6 @@
 // kiaao — Astro client entry
 
-import { h, mount, unmount } from "../index.ts";
+import { h, createApp } from "../index.ts";
 
 export default (rootElement: HTMLElement) => {
   return async (
@@ -17,13 +17,15 @@ export default (rootElement: HTMLElement) => {
 
     rootElement.innerHTML = "";
     const mergedProps = { ...props, children: slots.default ?? props.children, slots };
-    const el = h(Component, mergedProps);
-    mount(el, rootElement);
+
+    // Use createApp for component mount/unmount lifecycle
+    const app = createApp((p: any) => h(Component, p), mergedProps);
+    app.mount(rootElement);
 
     rootElement.addEventListener(
       "astro:unmount",
       () => {
-        unmount(el);
+        app.unmount();
       },
       { once: true },
     );
