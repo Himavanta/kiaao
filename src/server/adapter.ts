@@ -2,7 +2,20 @@
 // Creates lightweight serializable node trees for string rendering.
 
 import type { RenderAdapter } from "../core/types.ts";
-import { escapeHtml, escapeAttr } from "../dom/dom-utils.ts";
+
+// ── HTML Escaping (SSR) ───────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 // ── SSR Node Types ───────────────────────────────────
 
@@ -126,5 +139,9 @@ export const ssrAdapter: RenderAdapter = {
 
   setProperty(): void {
     // SSR: property 赋值不输出（仅 attr: 前缀的属性会输出）
+  },
+
+  querySelector(): unknown {
+    return null; // SSR: 无 DOM，无法查询
   },
 };

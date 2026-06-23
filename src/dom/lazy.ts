@@ -2,10 +2,11 @@
 // Returns a component that loads asynchronously and renders via the framework's
 // built-in async component mechanism (h() detects Promise return values).
 
-import type { ComponentFunction } from "./h.ts";
-import { h } from "./h.ts";
-import { getRenderMode } from "../reactive/core.ts";
+import type { ComponentFunction } from "../core/component.ts";
+import { h } from "../core/h.ts";
+import { getRenderMode } from "../core/signal.ts";
 import { isDefined } from "../utils/type-guards.ts";
+import { getAdapter } from "../core/types.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
@@ -23,7 +24,8 @@ export function lazy<T extends ComponentFunction<any>>(
       .catch((err: Error) => {
         console.error("[kiaao] lazy loading error:", err);
         if (isDefined(document)) {
-          return document.createTextNode(String(err));
+          const adapter = getAdapter();
+          return adapter.createTextNode(String(err)) as Text;
         }
         throw err;
       });

@@ -85,6 +85,7 @@ export interface RenderAdapter {
   addEventListener(el: unknown, type: string, handler: Function): void;
   removeEventListener(el: unknown, type: string, handler: Function): void;
   setProperty(el: unknown, key: string, value: unknown): void;
+  querySelector(selector: string): unknown;
 }
 
 // ── Adapter Registration ───────────────────────────────

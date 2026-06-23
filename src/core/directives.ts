@@ -8,8 +8,20 @@ import { createOwner, disposeOwner, currentOwner } from "./owner.ts";
 import { getAdapter } from "./types.ts";
 import { setProps } from "../dom/props.ts";
 import { processChildren } from "./process-children.ts";
-import { isFunction, isNode, isSingle, isUndefined, isArray } from "../utils/type-guards.ts";
-import { isMappingTable, isVoidElement } from "../dom/ssr-helpers.ts";
+import {
+  isFunction,
+  isNode,
+  isSingle,
+  isUndefined,
+  isArray,
+  isPlainObject,
+} from "../utils/type-guards.ts";
+
+// ── Mapping Table Detection ───────────────────────────
+
+function isMappingTable(v: any): boolean {
+  return isPlainObject(v);
+}
 
 // ── Helper: append result to element ────────────────
 
@@ -49,9 +61,6 @@ export function createWhenElement(options: {
   elseFn?: () => any;
 }): Element {
   const { tag, props, children, whenFn, eachFn, keyFn, elseFn } = options;
-  if (isVoidElement(tag)) {
-    throw new Error(`[kiaao] when cannot be used on void element <${tag}>`);
-  }
 
   const adapter = getAdapter();
   const el = adapter.createElement(tag) as Element;
@@ -299,10 +308,6 @@ export function createEachElement(
   eachFn: any,
   keyFn?: any,
 ): Element {
-  if (isVoidElement(tag)) {
-    throw new Error(`[kiaao] each cannot be used on void element <${tag}>`);
-  }
-
   const adapter = getAdapter();
   const el = adapter.createElement(tag) as Element;
   setProps(el, props);

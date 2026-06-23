@@ -9,6 +9,10 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 const splitSet = (str: string): Set<string> => new Set(str.trim().split(/\s+/));
 
+const VOID_ELEMENTS = splitSet(
+  "area base br col embed hr img input link meta param source track wbr",
+);
+
 const SVG_TAGS = splitSet(
   "svg g defs symbol marker clipPath mask pattern switch use foreignObject " +
     "circle ellipse rect line polyline polygon path " +
@@ -67,6 +71,7 @@ export const browserAdapter: RenderAdapter = {
   },
 
   append(parent: Node, child: Node): void {
+    if (VOID_ELEMENTS.has((parent as Element).localName || "")) return;
     (parent as ParentNode).append(child);
   },
 
@@ -96,5 +101,9 @@ export const browserAdapter: RenderAdapter = {
 
   setProperty(el: any, key: string, value: unknown): void {
     el[key] = value;
+  },
+
+  querySelector(selector: string): Element | null {
+    return document.querySelector(selector);
   },
 };

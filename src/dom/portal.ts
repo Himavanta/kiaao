@@ -1,40 +1,40 @@
-import { isNode } from "../utils/type-guards.ts";
 // kiaao — Portal component
 // Renders content into a specified DOM container outside the component tree.
 
-import { SSR_COMPONENT } from "../reactive/types.ts";
-import type { Context } from "./h.ts";
-import { disposeNode, triggerMount } from "./component.ts";
-import { ssr } from "./ssr-helpers.ts";
-import { createComment, qs } from "./dom-utils.ts";
-import { isArray, isString } from "../utils/type-guards.ts";
+import { SSR_COMPONENT } from "../core/types.ts";
+import type { Context } from "../core/component.ts";
+import { getAdapter } from "../core/types.ts";
+import { isArray, isNode, isString } from "../utils/type-guards.ts";
 
 export function Portal(
   props: { to: string | HTMLElement; children: any },
   { onUnmount }: Context,
 ): Node {
-  const target = isString(props.to) ? qs<HTMLElement>(props.to) : props.to;
-  if (!target) return createComment("portal-missing-target");
+  const adapter = getAdapter();
+  const target = isString(props.to)
+    ? (adapter.querySelector(props.to) as HTMLElement | null)
+    : props.to;
+  if (!target) return adapter.createComment("portal-missing-target") as Node;
 
   const nodes = isArray(props.children) ? props.children : [props.children];
 
   for (const node of nodes) {
     if (isNode(node)) {
       target.append(node);
-      triggerMount(node);
     }
   }
 
   onUnmount(() => {
     for (const node of nodes) {
       if (isNode(node)) {
-        disposeNode(node);
-        (node as ChildNode).remove();
+        adapter.remove(node);
       }
     }
   });
 
-  return createComment("portal");
+  return adapter.createComment("portal") as Node;
 }
 
-(Portal as any)[SSR_COMPONENT] = () => ssr("<!-- portal placeholder -->");
+(Portal as any)[SSR_COMPONENT] = () => {
+  return { html: "<!-- portal placeholder -->" };
+};
