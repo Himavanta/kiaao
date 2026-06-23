@@ -161,8 +161,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
     const newKeys = new Set<any>();
     const currentKeys = new Set(itemOwners.keys());
 
-    for (let i = 0; i < items.length; i++) {
-      const rawValue = items[i];
+    for (const [i, rawValue] of items.entries()) {
       const identity = keyFn ? keyFn(rawValue, i) : i;
       newKeys.add(identity);
 

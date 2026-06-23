@@ -9,7 +9,7 @@ import {
   type DerivationState,
   type SignalState,
 } from "./types.ts";
-import { isFunction, isNotEmpty, isNotNil, isSingle } from "../utils/type-guards.ts";
+import { isFunction, isNotEmpty, isNotNil, isSingle, isEmpty } from "../utils/type-guards.ts";
 
 // ── Render Mode ────────────────────────────────────────
 
@@ -84,8 +84,9 @@ function definitionMode<T>(initialValue: T): Signal<T> {
     stop: () => {},
   };
 
-  const signal = function (updater?: any): any {
-    if (arguments.length === 0) return state.value;
+  const signal = function (...args: any[]): any {
+    if (isEmpty(args)) return state.value;
+    const [updater] = args;
     const oldValue = state.value;
     state.value = isFunction(updater) ? (updater as (prev: T) => T)(oldValue) : (updater as T);
     if (state.value !== oldValue) {
@@ -176,8 +177,9 @@ function derivationMode<T>(...args: any[]): Signal<T> {
   const state = buildDerivationState<T>(func as (v?: any) => T, validDeps);
   computeInitialDerivedValue(state);
 
-  const signal = function (value?: any): any {
-    if (arguments.length === 0) return state.cachedValue;
+  const signal = function (...args: any[]): any {
+    if (isEmpty(args)) return state.cachedValue;
+    const [value] = args;
     recomputeDerivation(state, value);
     return;
   } as Signal<T>;
