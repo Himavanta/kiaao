@@ -22,7 +22,6 @@ import { isHResult } from "./types.ts";
 
 function appendResult(el: Element, result: any, owner: any): void {
   if (isHResult(result)) {
-    // 提取子 Owner 并建立父子关系
     if (result.owner) {
       owner.children.push(result.owner);
       result.owner.parent = owner;
@@ -64,6 +63,87 @@ function detectWhenMode(children: any[], eachFn: any) {
   return { isMappingMode: isMapping, isLazy, hasEach, mappingTable };
 }
 
+// ── When: clear element children ─────────────────────
+
+function clearElement(el: Element): void {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+// ── When: render by mode ────────────────────────────
+
+function renderMappingMode(options: {
+  el: Element;
+  mappingTable: Record<string, () => any>;
+  showRaw: any;
+  elseFn: (() => any) | undefined;
+  owner: any;
+}): void {
+  const { el, mappingTable, showRaw, elseFn, owner } = options;
+  const branchFn = mappingTable[showRaw];
+  if (branchFn) appendResult(el, branchFn(), owner);
+  else if (elseFn) appendResult(el, elseFn(), owner);
+}
+
+function renderLazyMode(options: {
+  el: Element;
+  childFn: () => any;
+  show: boolean;
+  elseFn: (() => any) | undefined;
+  owner: any;
+}): void {
+  const { el, childFn, show, elseFn, owner } = options;
+  if (show) appendResult(el, childFn(), owner);
+  else if (elseFn) appendResult(el, elseFn(), owner);
+}
+
+function renderEachMode(options: {
+  el: Element;
+  eachFn: unknown;
+  childFn: any;
+  keyFn: unknown;
+  owner: any;
+}): void {
+  const { el, eachFn, childFn, keyFn, owner } = options;
+  const { nodes } = renderEachOnElement({
+    container: el,
+    eachFn,
+    childFn,
+    keyFn,
+  });
+  for (const n of nodes) if (isNode(n)) owner.elements.add(n);
+}
+
+function renderStaticMode(options: {
+  el: Element;
+  children: any[];
+  show: boolean;
+  elseFn: (() => any) | undefined;
+  owner: any;
+}): void {
+  const { el, children, show, elseFn, owner } = options;
+  if (!show) {
+    if (elseFn) appendResult(el, elseFn(), owner);
+    return;
+  }
+  const { nodes, cleanups } = processChildren(children);
+  for (const node of nodes) {
+    el.append(node);
+    owner.elements.add(node);
+  }
+  owner.cleanups.push(...cleanups);
+}
+
+/** 订阅 whenFn 变化，非信号时立即执行一次初始渲染 */
+function subscribeWhenFn(whenFn: unknown, renderBranch: () => void, containerOwner: any): void {
+  if (isUse(whenFn)) {
+    const derived = use(whenFn, () => renderBranch());
+    const stop = (derived as any)[REACTIVE]?.stop;
+    if (stop) containerOwner.cleanups.push(stop);
+  } else {
+    renderBranch();
+  }
+}
+
 // ── createWhenElement ─────────────────────────────────
 
 export function createWhenElement(options: {
@@ -84,8 +164,8 @@ export function createWhenElement(options: {
   setProps(el, props, containerOwner.cleanups);
 
   const { isMappingMode, isLazy, hasEach, mappingTable } = detectWhenMode(children, eachFn);
-  let prevKey: any = undefined;
-  let branchOwner: any = null;
+  let prevKey: any;
+  let branchOwner: any;
 
   const renderBranch = () => {
     const showRaw = toValue(whenFn);
@@ -98,61 +178,150 @@ export function createWhenElement(options: {
       disposeOwner(branchOwner);
       branchOwner = null;
     }
-    while (el.firstChild) el.removeChild(el.firstChild);
+    clearElement(el);
 
     branchOwner = createOwner();
     branchOwner.parent = containerOwner;
     containerOwner.children.push(branchOwner);
 
-    try {
-      if (isMappingMode && mappingTable) {
-        const branchFn = mappingTable[showRaw];
-        if (branchFn) appendResult(el, branchFn(), branchOwner);
-        else if (elseFn) appendResult(el, elseFn(), branchOwner);
-      } else if (isLazy) {
-        if (show) appendResult(el, children[0](), branchOwner);
-        else if (elseFn) appendResult(el, elseFn(), branchOwner);
-      } else if (hasEach) {
-        const childFn = children[0];
-        if (show) {
-          const { nodes } = renderEachOnElement(el, eachFn!, childFn, keyFn);
-          for (const n of nodes) if (isNode(n)) branchOwner.elements.add(n);
-        } else if (elseFn) appendResult(el, elseFn(), branchOwner);
-      } else {
-        if (show) {
-          const { nodes, cleanups } = processChildren(children);
-          for (const node of nodes) {
-            el.append(node);
-            branchOwner.elements.add(node);
-          }
-          branchOwner.cleanups.push(...cleanups);
-        } else if (elseFn) appendResult(el, elseFn(), branchOwner);
-      }
-    } finally {
+    if (isMappingMode && mappingTable) {
+      renderMappingMode({ el, mappingTable, showRaw, elseFn, owner: branchOwner });
+    } else if (isLazy) {
+      renderLazyMode({ el, childFn: children[0], show, elseFn, owner: branchOwner });
+    } else if (hasEach) {
+      renderEachMode({ el, eachFn: eachFn!, childFn: children[0], keyFn, owner: branchOwner });
+    } else {
+      renderStaticMode({ el, children, show, elseFn, owner: branchOwner });
     }
   };
 
-  if (isUse(whenFn)) {
-    const derived = use(whenFn, () => renderBranch());
-    const stop = (derived as any)[REACTIVE]?.stop;
-    if (stop) containerOwner.cleanups.push(stop);
-  } else {
-    renderBranch();
+  subscribeWhenFn(whenFn, renderBranch, containerOwner);
+  return el;
+} // ── Each: helpers ──────────────────────────────────
+
+/** 创建条目的 DOM 节点，处理 HResult/Node/Array 三种返回类型 */
+function createItemDOMNodes(options: {
+  itemSignal: any;
+  index: number;
+  childFn: any;
+  itemOwner: any;
+  anchor: any;
+  nodes: Node[];
+}): Node[] {
+  const { itemSignal, index: i, childFn, itemOwner, anchor, nodes } = options;
+  let node: any;
+  try {
+    node = childFn(itemSignal, i);
+  } catch (err) {
+    console.error("[kiaao] each item render error:", err);
+    return [];
   }
 
-  return el;
+  const newNodes: Node[] = [];
+  const addNode = (n: Node) => {
+    itemOwner.elements.add(n);
+    anchor.before(n);
+    newNodes.push(n);
+    nodes.push(n);
+  };
+
+  if (isHResult(node)) {
+    if (node.owner) {
+      itemOwner.children.push(node.owner);
+      node.owner.parent = itemOwner;
+    }
+    for (const n of node.nodes) if (isNode(n)) addNode(n);
+  } else if (isNode(node)) {
+    addNode(node);
+  } else if (isArray(node)) {
+    for (const n of node) if (isNode(n)) addNode(n);
+  }
+  return newNodes;
+}
+
+/** 检查 identity 匹配的节点组是否需要重排，需要则移动到 anchor 前 */
+function repositionItemGroup(
+  container: Element,
+  anchor: any,
+  existingNodes: Node[],
+  prevNode: Node | null,
+): Node | null {
+  if (!existingNodes.length) return prevNode;
+  const firstNode = existingNodes[0];
+  const needsMove =
+    prevNode === null
+      ? container.firstChild !== firstNode && container.firstChild !== anchor
+      : firstNode.previousSibling !== prevNode;
+  if (needsMove) {
+    for (const n of [...existingNodes].reverse()) {
+      anchor.before(n);
+    }
+  }
+  return existingNodes[existingNodes.length - 1] || prevNode;
+}
+
+/** 获取或创建条目信号 */
+function getOrCreateSignal(itemSignalMap: Map<any, any>, identity: any, rawValue: unknown): any {
+  if (itemSignalMap.has(identity)) {
+    itemSignalMap.get(identity)!(rawValue);
+  } else {
+    itemSignalMap.set(identity, use(rawValue));
+  }
+  return itemSignalMap.get(identity)!;
+}
+
+/** 获取或创建条目 Owner */
+function getOrCreateOwner(itemOwners: Map<any, any>, identity: any, containerOwner: any): any {
+  let owner = itemOwners.get(identity);
+  if (!owner) {
+    owner = createOwner();
+    owner.parent = containerOwner;
+    containerOwner.children.push(owner);
+    itemOwners.set(identity, owner);
+  }
+  return owner;
+}
+
+/** 清理已移除条目的 Owner 和信号 */
+function disposeRemovedItems(
+  currentKeys: Set<any>,
+  newKeys: Set<any>,
+  itemOwners: Map<any, any>,
+  itemSignalMap: Map<any, any>,
+  itemNodeMap: Map<any, Node[]>,
+): void {
+  for (const key of currentKeys) {
+    if (newKeys.has(key)) continue;
+    const owner = itemOwners.get(key);
+    if (owner) {
+      disposeOwner(owner);
+      itemOwners.delete(key);
+    }
+    const sig = itemSignalMap.get(key);
+    if (sig) {
+      const stop = (sig as any)[REACTIVE]?.stop;
+      if (isFunction(stop)) stop();
+      itemSignalMap.delete(key);
+    }
+    itemNodeMap.delete(key);
+  }
 }
 
 // ── renderEachOnElement ──────────────────────────────
 
-function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyFn?: any) {
+function renderEachOnElement(options: {
+  container: Element;
+  eachFn: any;
+  childFn: any;
+  keyFn?: any;
+}) {
+  const { container, eachFn, childFn, keyFn } = options;
   const adapter = getAdapter();
   const anchor = adapter.createComment("each") as Comment;
   container.append(anchor);
   const nodes: Node[] = [];
   const itemOwners: Map<any, any> = new Map();
   const itemSignalMap: Map<any, any> = new Map();
-  /** Track each identity's DOM nodes so we can reuse them across syncs */
   const itemNodeMap: Map<any, Node[]> = new Map();
   const containerOwner = createOwner();
 
@@ -161,136 +330,67 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
     const items = isArray(source) ? source : [];
     const newKeys = new Set<any>();
     const currentKeys = new Set(itemOwners.keys());
-
     let prevNode: Node | null = null;
 
     for (const [i, rawValue] of items.entries()) {
       const identity = keyFn ? keyFn(rawValue, i) : i;
       newKeys.add(identity);
-
-      // Sync item signal
-      if (itemSignalMap.has(identity)) {
-        itemSignalMap.get(identity)!(rawValue);
-      } else {
-        const itemSignal = use(rawValue);
-        itemSignalMap.set(identity, itemSignal);
-      }
-      const itemSignal = itemSignalMap.get(identity)!;
-
-      // Sync item owner
-      let itemOwner = itemOwners.get(identity);
-      if (!itemOwner) {
-        itemOwner = createOwner();
-        itemOwner.parent = containerOwner;
-        containerOwner.children.push(itemOwner);
-        itemOwners.set(identity, itemOwner);
-      }
+      const itemSignal = getOrCreateSignal(itemSignalMap, identity, rawValue);
+      const itemOwner = getOrCreateOwner(itemOwners, identity, containerOwner);
 
       if (itemNodeMap.has(identity)) {
-        // Identity already exists — reuse DOM nodes
-        const existingNodes = itemNodeMap.get(identity)!;
-
-        // Check if the node group needs repositioning
-        const firstNode = existingNodes[0];
-        if (firstNode) {
-          const needsMove =
-            prevNode === null
-              ? container.firstChild !== firstNode && container.firstChild !== anchor
-              : firstNode.previousSibling !== prevNode;
-          if (needsMove) {
-            // Move group to the end (before anchor), reverse-order to preserve sequence
-            for (let j = existingNodes.length - 1; j >= 0; j--) {
-              anchor.before(existingNodes[j]);
-            }
-          }
-        }
-
-        prevNode = existingNodes[existingNodes.length - 1] || prevNode;
+        prevNode = repositionItemGroup(container, anchor, itemNodeMap.get(identity)!, prevNode);
       } else {
-        // New identity — render fresh DOM nodes
-        let node: any;
-        try {
-          node = childFn(itemSignal, i);
-        } catch (err) {
-          console.error("[kiaao] each item render error:", err);
-          continue;
-        }
-
-        const newNodeNodes: Node[] = [];
-
-        if (isHResult(node)) {
-          if (node.owner) {
-            itemOwner.children.push(node.owner);
-            node.owner.parent = itemOwner;
-          }
-          for (const n of node.nodes) {
-            if (isNode(n)) {
-              itemOwner.elements.add(n);
-              anchor.before(n);
-              newNodeNodes.push(n);
-              nodes.push(n);
-            }
-          }
-        } else if (isNode(node)) {
-          itemOwner.elements.add(node);
-          anchor.before(node);
-          newNodeNodes.push(node);
-          nodes.push(node);
-        } else if (isArray(node)) {
-          for (const n of node) {
-            if (isNode(n)) {
-              itemOwner.elements.add(n);
-              anchor.before(n);
-              newNodeNodes.push(n);
-              nodes.push(n);
-            }
-          }
-        }
-
-        itemNodeMap.set(identity, newNodeNodes);
-        prevNode = newNodeNodes[newNodeNodes.length - 1] || prevNode;
+        const newItemNodes = createItemDOMNodes({
+          itemSignal,
+          index: i,
+          childFn,
+          itemOwner,
+          anchor,
+          nodes,
+        });
+        itemNodeMap.set(identity, newItemNodes);
+        prevNode = newItemNodes[newItemNodes.length - 1] || prevNode;
       }
     }
-
-    // Dispose removed items
-    for (const key of currentKeys) {
-      if (!newKeys.has(key)) {
-        const owner = itemOwners.get(key);
-        if (owner) {
-          disposeOwner(owner);
-          itemOwners.delete(key);
-        }
-        const sig = itemSignalMap.get(key);
-        if (sig) {
-          const stop = (sig as any)[REACTIVE]?.stop;
-          if (isFunction(stop)) stop();
-          itemSignalMap.delete(key);
-        }
-        itemNodeMap.delete(key);
-      }
-    }
+    disposeRemovedItems(currentKeys, newKeys, itemOwners, itemSignalMap, itemNodeMap);
   };
 
-  let eachStop: (() => void) | undefined;
   if (isUse(eachFn)) {
     const derived = use(eachFn, () => sync());
-    eachStop = (derived as any)[REACTIVE]?.stop;
+    const eachStop = (derived as any)[REACTIVE]?.stop;
+    registerEachCleanup(containerOwner, itemOwners, itemSignalMap, itemNodeMap, eachStop);
   } else {
     sync();
+    registerEachCleanup(containerOwner, itemOwners, itemSignalMap, itemNodeMap);
   }
 
-  const stop = () => {
-    if (eachStop) eachStop();
-    for (const [, owner] of itemOwners) {
-      disposeOwner(owner);
-    }
-    itemOwners.clear();
-    itemSignalMap.clear();
-    itemNodeMap.clear();
-  };
-  if (containerOwner) containerOwner.cleanups.push(stop);
+  return { nodes, stop: () => cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap) };
+}
 
-  return { nodes, stop };
+function registerEachCleanup(
+  containerOwner: any,
+  itemOwners: Map<any, any>,
+  itemSignalMap: Map<any, any>,
+  itemNodeMap: Map<any, Node[]>,
+  eachStop?: () => void,
+): void {
+  if (!containerOwner) return;
+  containerOwner.cleanups.push(() => {
+    if (eachStop) eachStop();
+    cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap);
+  });
+}
+
+function cleanupEachMaps(
+  itemOwners: Map<any, any>,
+  itemSignalMap: Map<any, any>,
+  itemNodeMap: Map<any, Node[]>,
+): void {
+  for (const [, owner] of itemOwners) disposeOwner(owner);
+  itemOwners.clear();
+  itemSignalMap.clear();
+  itemNodeMap.clear();
 }
 
 // ── createEachElement ─────────────────────────────────
@@ -307,6 +407,6 @@ export function createEachElement(
   const el = adapter.createElement(tag) as Element;
   setProps(el, props, cleanups);
   const childFn = children[0];
-  renderEachOnElement(el, eachFn, childFn, keyFn);
+  renderEachOnElement({ container: el, eachFn, childFn, keyFn });
   return el;
 }
