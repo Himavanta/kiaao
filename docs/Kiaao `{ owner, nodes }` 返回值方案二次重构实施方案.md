@@ -3,15 +3,45 @@
 **状态**：草案
 **关联**：[Owner 树架构重构实施方案](./Owner树架构重构实施方案.md)
 **日期**：2026年6月23日
-**版本**：1.0
+**版本**：1.1
 
 ## 一、背景与动机
 
 在第一次 Owner 树架构重构（`currentOwner` 方案）中，我们成功将生命周期宿主从 DOM 树迁移到了 JS 内存中的树形 Owner 结构，并实现了 Fragment 无容器、异步安全清理、`createApp` 入口等关键目标。然而，该方案保留了一个最小化的全局上下文变量 `currentOwner`，用于在同步 `h()` 调用期间传递当前组件的 Owner 引用。
 
-`currentOwner` 的存在虽然经过严格作用域限定，但它仍然是模块级可变状态，在某些场景（如异步组件 Promise 回调）下需要显式地临时恢复和恢复，增加了实现的脆弱性和理解成本。此外，全局上下文的存在对多语言实现（Rust/Go/Swift 等）不够友好，也使得水合（Hydration）中的节点认领逻辑多了一层间接性。
+`currentOwner` 的存在虽然经过严格作用域限定，但在以下场景中暴露出结构性缺陷：
 
-本次二次重构的目标是**彻底消除全局上下文 `currentOwner`**，通过修改 `h()` 的返回值为携带所有权信息的对象 `{ owner, nodes }`，使父子 Owner 关系的建立完全显式化、自包含化。重构完成后，框架核心将不依赖任何模块级可变状态来管理组件生命周期，为跨语言实现、水合优化以及未来的架构演进提供更干净的基础。
+### 1.1 异步回调式组件的归属丢失
+
+考虑以下代码：
+
+```tsx
+function Comp() {
+  return fetch().then(() => (
+    <div>
+      <Demo />
+    </div>
+  ));
+}
+```
+
+执行时序如下：
+
+1. `handleComponent` 设置 `currentOwner` 为 `Comp` 的 Owner。
+2. `Comp` 函数执行，启动 `fetch()`，返回一个 Promise（`.then()` 尚未执行）。
+3. `handleComponent` 检测到 Promise，进入异步路径，**立即恢复 `currentOwner` 为父级**。
+4. 若干时间后，`fetch` 完成，`.then()` 回调执行。**此时 `currentOwner` 已指向 `Comp` 的父级（或 `null`）。**
+5. `.then()` 回调内部调用 `h(Demo)`。`Demo` 组件的 Owner 通过 `createOwner(currentOwner.get())` 创建，其 `parent` 被错误地设置为 `Comp` 的父级——而不是 `Comp`。
+
+**根本原因**：`currentOwner` 是一个依赖同步执行栈的全局变量。`.then()` 回调是一个全新的执行帧，`currentOwner` 栈在组件函数返回时已经回退。框架无法在异步回调中恢复正确的上下文。这不仅导致 `Demo` 的 Owner 归属错误，还导致 `processChildren` 处理信号绑定时将清理函数注册到错误的 Owner 上，造成资源泄漏或提前清理。
+
+### 1.2 为什么需要二次重构
+
+上述问题不是 `currentOwner` 方案的实现疏漏，而是架构层面的必然局限。任何依赖全局同步栈的上下文传递机制，都无法跨越异步边界。要彻底解决这一问题，必须消除对全局上下文的依赖——这正是 `{ owner, nodes }` 返回值方案的核心能力。
+
+此外，`currentOwner` 的存在对多语言实现（Rust/Go/Swift 等）不够友好，需要模拟线程安全的上下文栈。水合（Hydration）中的节点认领逻辑也多了一层间接性。消除全局状态将使 Kiaao 的核心更纯粹、更易于跨语言实现和长期维护。
+
+**本次二次重构的目标**：彻底消除全局上下文 `currentOwner`，通过修改 `h()` 的返回值为携带所有权信息的对象 `{ owner, nodes }`，使父子 Owner 关系的建立完全显式化、自包含化。
 
 ## 二、前置条件
 
@@ -31,6 +61,7 @@
 
 ```ts
 interface HResult {
+  [HRESULT_SYMBOL]: true; // 内部标记
   owner: Owner;
   nodes: Node[];
 }
@@ -45,12 +76,6 @@ interface HResult {
 
 ```ts
 const HRESULT_SYMBOL = Symbol("kiaao.hresult");
-
-interface HResult {
-  [HRESULT_SYMBOL]: true;
-  owner: Owner;
-  nodes: Node[];
-}
 
 function createHResult(owner: Owner, nodes: Node[]): HResult {
   return {
@@ -71,30 +96,36 @@ function isHResult(value: unknown): value is HResult {
 
 对象格式 `{ owner, nodes }` 比元组 `[Owner, Node[]]` 更具可读性和可维护性，避免了魔法索引 `[0]`、`[1]`。在性能上，对象字面量与短数组的分配和访问开销几乎相同，不会引入可测量的性能衰退。
 
-## 四、详细设计：`h()` 的改造
+## 四、父子关系的显式建立：核心变化
 
-### 4.1 返回值格式统一
+### 4.1 `createOwner` 不再设置 `parent`
 
-无论何种模式（DOM、组件、指令、Fragment），`h()` 均返回 `HResult`。内部实现统一为：
+在第一次重构中，`createOwner` 通过 `currentOwner` 获取父 Owner 并自动建立关系。在本次重构中，**`createOwner` 不再承担建立父子关系的职责**。它只创建一个 `parent = null` 的孤立 Owner。
 
 ```ts
-function h(tag, props?, ...children): HResult {
-  // 字符串标签 → DOM 模式
-  if (typeof tag === "string") {
-    return handleDomMode(tag, props, children);
-  }
-  // 指令函数
-  if (isDirective(tag)) {
-    return handleDirectiveMode(tag, props, children);
-  }
-  // 组件函数
-  return handleComponent(tag, props, children);
+function createOwner(): Owner {
+  return {
+    parent: null, // 初始为 null，由调用方负责设置
+    children: [],
+    cleanups: [],
+    mountCallbacks: [],
+    unmountCallbacks: [],
+    elements: new Set(),
+    disposed: false,
+  };
 }
 ```
 
-### 4.2 组件模式（同步）
+父子关系的建立转移到**接收 `HResult` 的一方**。无论是同步组件还是异步组件，父组件在拿到子组件的 `HResult` 后，显式执行挂载：
 
-`handleComponent` 不再依赖 `currentOwner`，而是从子组件的返回值中提取 `childOwner`，显式建立父子关系：
+```ts
+owner.children.push(childResult.owner);
+childResult.owner.parent = owner;
+```
+
+这统一了同步和异步场景的处理逻辑，不再需要“修复”异步回调中的归属错误——因为根本没有错误可修。子 Owner 在创建时就没有预设父级，只是在被父级接收时才建立关系。
+
+### 4.2 同步组件模式
 
 ```ts
 function handleComponent(tag, props, children): HResult {
@@ -103,8 +134,9 @@ function handleComponent(tag, props, children): HResult {
 
   // 执行组件函数，获取子组件的 HResult
   const childResult = tag(props, context);
-  if (childResult.nodes[0] && isPlaceholderComment(childResult.nodes[0])) {
-    // 异步组件处理
+
+  // 异步路径
+  if (isAsyncPlaceholder(childResult.nodes)) {
     return handleAsyncComponent(childResult, owner, context);
   }
 
@@ -119,55 +151,62 @@ function handleComponent(tag, props, children): HResult {
 }
 ```
 
-### 4.3 异步组件
+### 4.3 异步组件模式
 
-异步组件 Promise resolve 后，不再需要手动恢复 `currentOwner`，只需将真实节点包装为 `HResult` 返回：
+异步组件 Promise resolve 后，同样执行与同步组件完全相同的挂载逻辑：
 
 ```ts
-function handleAsyncComponent(promiseResult, owner, context): HResult {
+function handleAsyncComponent(
+  promiseResult: HResult,
+  owner: Owner,
+  context: ComponentContext,
+): HResult {
   const placeholder = createComment("async");
   owner.elements.add(placeholder);
 
   const placeholderResult = createHResult(owner, [placeholder]);
 
-  promiseResult.then((realResult) => {
-    const realNodes = Array.isArray(realResult.nodes) ? realResult.nodes : [realResult.nodes];
-    owner.elements.add(...realNodes);
-    placeholder.replaceWith(...realNodes);
-    triggerMount(owner);
-  });
+  promiseResult
+    .then((childResult) => {
+      // 显式建立父子关系——与同步组件完全相同的逻辑
+      owner.children.push(childResult.owner);
+      childResult.owner.parent = owner;
+
+      // 将真实节点注册到当前 Owner
+      childResult.nodes.forEach((n) => owner.elements.add(n));
+      owner.elements.delete(placeholder);
+
+      // 替换占位符
+      placeholder.replaceWith(...childResult.nodes);
+
+      // 触发挂载
+      triggerMount(owner);
+    })
+    .catch((err) => {
+      // 错误处理...
+    });
 
   return placeholderResult;
 }
 ```
 
+**关键点**：`.then()` 回调中的父子关系建立代码与同步组件完全一致。这不是“修复”，而是“挂载”——因为 `childResult.owner` 在创建时 `parent` 就是 `null`，不存在“错误归属”需要修复。异步只是延迟了挂载时机，不改变挂载逻辑。
+
 ### 4.4 DOM 元素模式
 
-DOM 元素的创建仍然在组件函数内部进行，此时 Owner 由当前组件的 `handleComponent` 栈帧提供。在 `[Owner, Node[]]` 方案中，我们需要一种方式来获取“当前正在渲染的组件 Owner”。由于我们彻底消除了 `currentOwner`，这个 Owner 必须通过调用链传递。
-
-**解决方案**：在 `handleComponent` 内部，将当前 Owner 通过闭包传递给 `h()` 的 DOM 模式。具体实现：`handleComponent` 在调用 `tag(props, context)` 之前，将 `owner` 绑定到一个内部版本的 `h` 上（如 `h.owner = owner`），但这种方式又回退到全局状态。更优雅的方式是：修改 `processChildren` 和 `handleDomMode` 接受显式的 `owner` 参数，该参数从 `handleComponent` 逐层传递下来。
-
-由于本次重构是第二次迭代，我们可以安全地对内部 API 进行这样的修改。消费方（`handleComponent`、`when`/`each`、指令系统）都已经在第一次重构中熟悉了 Owner 概念，接受 `owner` 参数是自然的。
-
-因此，`handleDomMode` 的签名变为：
+DOM 元素的创建仍然在组件函数内部进行。`handleDomMode` 接受显式的 `owner` 参数，该参数从 `handleComponent` 逐层传递下来：
 
 ```ts
 function handleDomMode(tag, props, children, owner: Owner): HResult {
   const el = createElement(tag);
   // ... 处理 props
-  const childNodes = processChildren(children, owner); // 传入 owner
+  const childNodes = processChildren(children, owner);
   // ... 插入子节点
   return createHResult(owner, [el]);
 }
 ```
 
-`processChildren` 改为：
-
-```ts
-function processChildren(children: any[], owner: Owner): Node[] {
-  // 处理过程中，遇到信号绑定则通过 owner.cleanups 注册清理
-}
-```
+`processChildren` 同样接收 `owner` 参数，处理信号绑定时将清理函数注册到该 Owner 的 `cleanups` 中。
 
 ### 4.5 指令模式
 
@@ -185,22 +224,9 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 }
 ```
 
-### 4.6 Fragment
-
-Fragment 直接返回 `createHResult(owner, childrenNodes)`。
-
 ## 五、对 `currentOwner` 的消除
 
-完成上述改造后，`currentOwner` 变量、`createCurrentOwner()` 函数、以及 `set`/`get` 访问将**完全移除**。`h()` 内部不再有任何模块级可变状态。
-
-组件嵌套时的父子关系通过以下机制建立：
-
-1. 父组件调用 `handleComponent(Child, ...)`。
-2. `Child` 组件函数返回一个 `HResult`，其中包含 `Child` 的 Owner 和节点。
-3. 父组件从返回值中提取 `childResult.owner`，执行 `parent.children.push(childResult.owner)` 和 `childResult.owner.parent = parent`，显式挂载。
-4. 父组件自己的 `h()` 调用返回 `HResult`，其中包含父组件的 Owner，继续向上传递。
-
-这形成了一个完全自包含的递归链，不依赖任何全局状态。
+完成上述改造后，`currentOwner` 变量、`createCurrentOwner()` 函数、以及 `set`/`get` 访问将**完全移除**。`h()` 内部不再有任何模块级可变状态。组件嵌套时的父子关系通过 `HResult` 的显式传递和挂载完成，形成完全自包含的递归链。
 
 ## 六、消费方适配范围
 
@@ -217,7 +243,7 @@ Fragment 直接返回 `createHResult(owner, childrenNodes)`。
 | `createApp`           | `const nodes = h(App)`      | `const { owner, nodes } = h(App)`        |
 | 动画扩展              | 可能调用 `h()`              | 适配新返回值                             |
 
-**改动面较大，但每处改动都是机械性的**——将 `const nodes = h(...)` 替换为 `const { owner, nodes } = h(...)`，并在父级将 `owner` 挂载到自己的 `children` 上。
+改动面较大，但每处改动都是机械性的——将 `const nodes = h(...)` 替换为 `const { owner, nodes } = h(...)`，并在父级将 `owner` 挂载到自己的 `children` 上。
 
 ## 七、实施路径
 
@@ -247,13 +273,14 @@ Fragment 直接返回 `createHResult(owner, childrenNodes)`。
 
 对于 `when`/`each`，它们内部已经为每个分支/条目创建了 Owner，本次只需要适配 `h()` 返回值的解构。
 
-对于指令系统，它不创建自己的 Owner，但需要从 `HResult` 中提取节点以进行遍历。指令函数本身的 `ctx.onMount` 等仍注册到当前 Owner（现在通过 `handleComponent` 传递的 `owner` 参数），无需改动。
+对于指令系统，它不创建自己的 Owner，但需要从 `HResult` 中提取节点以进行遍历。指令函数本身的 `ctx.onMount` 等仍注册到当前 Owner（现在通过参数传递），无需改动。
 
 ## 九、优势总结
 
-- **彻底消除全局状态**：不再有任何模块级可变状态参与组件生命周期，代码更纯粹、更易理解。
-- **异步安全**：不再需要在 Promise 回调中临时恢复 `currentOwner`，完全消除了这一类 bug 的可能性。
-- **跨语言友好**：所有所有权信息通过函数返回值传递，这是所有编程语言的原生能力，极大降低了用其他语言实现 Kiaao 的门槛。
+- **彻底消除全局状态**：不再有任何模块级可变状态参与组件生命周期。代码更纯粹、更易理解。
+- **异步安全**：`.then()` 回调中创建的组件通过 `HResult` 携带 Owner，父组件延迟挂载，与同步组件逻辑完全统一。不再需要“修复”归属错误。
+- **createOwner 更纯粹**：`createOwner` 只负责创建，不负责建立关系。父子关系由接收返回值的一方显式建立，职责单一。
+- **跨语言友好**：所有所有权信息通过函数返回值传递，这是所有编程语言的原生能力。
 - **水合自然**：在水合适配器中，`h()` 返回的 `HResult` 可直接携带认领的 DOM 节点及其 Owner，无需额外的映射表。
 - **调试直观**：在控制台展开 `h()` 的返回值，可以直接看到该组件的 Owner 和所有节点。
 
@@ -264,6 +291,6 @@ Fragment 直接返回 `createHResult(owner, childrenNodes)`。
 
 ## 十一、结论
 
-`{ owner, nodes }` 方案是 Kiaao 架构演进的必然一步。它在第一次重构建立的树形 Owner 基础上，以最小的概念增量彻底消除了全局上下文，使框架核心达到了前所未有的纯粹性。通过分两步走的策略，我们在保持快速交付的同时，稳步迈向一个无全局状态、跨语言友好的响应式 UI 运行时。
+`{ owner, nodes }` 方案是 Kiaao 架构演进的必然一步。它在第一次重构建立的树形 Owner 基础上，以最小的概念增量彻底消除了全局上下文，使框架核心达到了前所未有的纯粹性。通过让 `createOwner` 不再预设父子关系、将挂载逻辑统一在父组件接收返回值时执行，同步和异步场景实现了完全一致的处理模式——异步组件的归属不再是需要特殊处理的“修复”，而是自然的延迟挂载。
 
-**当前进度**：第一次重构（`currentOwner` 方案）即将完成；本文档作为第二次重构的蓝图，将在第一次重构稳定后启动实施。
+**当前进度**：第一次重构（`currentOwner` 方案）已接近完成；本文档作为第二次重构的蓝图，将在第一次重构稳定后启动实施。
