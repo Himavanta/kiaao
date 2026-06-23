@@ -79,6 +79,7 @@ interface HResult {
 
 ```ts
 const HRESULT_SYMBOL = Symbol("kiaao.hresult");
+// 需导入 isObject 来自 "../utils/type-guards.ts"
 
 function createHResult(owner: Owner | null, nodes: Node[], cleanups?: (() => void)[]): HResult {
   const result: HResult = {
@@ -93,7 +94,7 @@ function createHResult(owner: Owner | null, nodes: Node[], cleanups?: (() => voi
 }
 
 function isHResult(value: unknown): value is HResult {
-  return typeof value === "object" && value !== null && HRESULT_SYMBOL in value;
+  return isObject(value) && HRESULT_SYMBOL in value;
 }
 ```
 
@@ -212,7 +213,7 @@ function handleAsyncComponent(
       owner.elements.delete(placeholder);
 
       // 替换占位符
-      placeholder.replaceWith(...allNodes);
+      adapter.replaceWith(placeholder, ...allNodes);
 
       // 触发挂载
       triggerMount(owner);
@@ -233,12 +234,13 @@ DOM 元素的创建完全在组件函数内部进行，**不需要知道当前�
 
 ```ts
 function handleDomMode(tag, props, children): HResult {
-  const el = createElement(tag);
-  setProps(el, props);
+  const adapter = getAdapter();
+  const el = adapter.createElement(tag);
+  const extraCleanups: (() => void)[] = [];
+  setProps(el, props, extraCleanups);
   const { nodes: childNodes, cleanups: orphanCleanups } = processChildren(children);
-  childNodes.forEach((n) => el.appendChild(n));
-  // owner 字段为 null，归属由父级 handleComponent 后置处理
-  return createHResult(null, [el], orphanCleanups);
+  childNodes.forEach((n) => adapter.append(el, n));
+  return createHResult(null, [el], [...orphanCleanups, ...extraCleanups]);
 }
 ```
 
@@ -366,9 +368,9 @@ function createApp(component, props?) {
   nodes.forEach((n) => rootOwner.elements.add(n));
 
   return {
-    mount(container) {
-      const target = resolveContainer(container);
-      target.append(...nodes);
+    mount(container: Element) {
+      const adapter = getAdapter();
+      nodes.forEach((n) => adapter.append(container, n));
       triggerMount(rootOwner);
     },
     unmount() {
