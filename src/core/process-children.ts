@@ -1,40 +1,52 @@
 // kiaao — Child node processing for h()
-// Owner-aware: signal binding cleanups register to currentOwner.
+// Returns { nodes, cleanups } — cleanups are orphan signal binding stops
+// that flow upward through HResult.  During transition they are also
+// registered to currentOwner (if present) for backward compatibility.
 
-import { getAdapter } from "./types.ts";
+import { getAdapter, REACTIVE, type ProcessChildrenResult, isHResult } from "./types.ts";
 import { currentOwner } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
-import { REACTIVE } from "./types.ts";
-import { isBoolean, isNil, isNode, isObject } from "../utils/type-guards.ts";
+import { isNil, isNode, isObject } from "../utils/type-guards.ts";
 
 /**
- * 处理子节点数组，返回扁平化的 Node 数组。
+ * 处理子节点数组，返回扁平化的 Node 数组和孤儿的清理函数。
+ *
  * - 数组被递归展开
  * - null/undefined/boolean 被跳过
  * - Node 直接保留
- * - 信号（Signal）创建文本占位节点 + 派生绑定，清理函数注册到当前 Owner
+ * - HResult 提取其中 nodes 和 cleanups
+ * - 信号（Signal）创建文本占位节点 + 派生绑定
  * - 其他值转为文本节点
  */
-export function processChildren(children: any[]): Node[] {
-  const result: Node[] = [];
+export function processChildren(children: any[]): ProcessChildrenResult {
+  const nodes: Node[] = [];
+  const cleanups: (() => void)[] = [];
   const adapter = getAdapter();
 
-  for (const child of children) {
+  for (const child of children.flat(Infinity)) {
+    if (isNil(child) || child === true || child === false) continue;
+
     if (Array.isArray(child)) {
-      result.push(...processChildren(child));
+      const sub = processChildren(child);
+      nodes.push(...sub.nodes);
+      cleanups.push(...sub.cleanups);
       continue;
     }
-
-    if (isNil(child) || isBoolean(child)) continue;
 
     if (isNode(child)) {
-      result.push(child);
+      nodes.push(child);
       continue;
     }
 
-    // SSR 节点对象（非 DOM 环境）
+    if (isHResult(child)) {
+      nodes.push(...child.nodes);
+      if (child.cleanups) cleanups.push(...child.cleanups);
+      continue;
+    }
+
     if (isObject(child) && "type" in (child as any)) {
-      result.push(child as Node);
+      // SSR 节点对象
+      nodes.push(child as Node);
       continue;
     }
 
@@ -45,15 +57,17 @@ export function processChildren(children: any[]): Node[] {
       });
       const stop = (derived as any)[REACTIVE]?.stop;
       if (stop) {
+        cleanups.push(stop);
+        // 过渡期：同时注册到 currentOwner（如存在）
         const owner = currentOwner.get();
         if (owner) owner.cleanups.push(stop);
       }
-      result.push(textNode);
+      nodes.push(textNode);
       continue;
     }
 
-    result.push(adapter.createTextNode(String(child)) as Text);
+    nodes.push(adapter.createTextNode(String(child)) as Text);
   }
 
-  return result;
+  return { nodes, cleanups };
 }

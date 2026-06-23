@@ -136,7 +136,7 @@ export function createWhenElement(options: {
       } else {
         // Static mode
         if (show) {
-          const nodes = processChildren(children);
+          const { nodes } = processChildren(children);
           for (const node of nodes) {
             el.append(node);
             branchOwner.elements.add(node);

@@ -56,7 +56,7 @@ function handleDomMode(tag: string, props: any, children: any[]): Node[] {
   // 普通元素
   const el: any = adapter.createElement(tag);
   setProps(el, isObject(props) ? props : null);
-  const childNodes = processChildren(children);
+  const { nodes: childNodes } = processChildren(children);
   for (const node of childNodes) {
     adapter.append(el, node);
   }

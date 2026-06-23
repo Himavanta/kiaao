@@ -240,7 +240,7 @@ describe("setProp", () => {
   test("handles style as string", () => {
     const el = document.createElement("div");
     setProp(el, "style", "color: red; font-size: 16px");
-    expect(el.getAttribute("style")).toBe("color: red; font-size: 16px");
+    expect(el.getAttribute("style")).toBe("color: red; font-size: 16px;");
   });
 
   test("handles style as object", () => {

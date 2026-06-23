@@ -1,6 +1,8 @@
 // kiaao — Core types: Owner, RenderAdapter, signal internals, symbols
 // Platform-agnostic. No DOM dependencies.
 
+import { isObject } from "../utils/type-guards.ts";
+
 // ── Symbols ─────────────────────────────────────────────
 
 /** REACTIVE Symbol — 标记信号函数，指向内部状态对象 */
@@ -12,7 +14,46 @@ export const DIRECT_KEY = Symbol("direct");
 /** SSR_COMPONENT Symbol — 标记 SSR 变体组件 */
 export const SSR_COMPONENT = Symbol("kiaao.ssr");
 
-// ── Public API Types ───────────────────────────────────
+// ── HResult Types ───────────────────────────────────────
+
+/** HResult Symbol — 标记 h() 返回的 HResult 对象 */
+export const HRESULT_SYMBOL = Symbol("kiaao.hresult");
+
+/** h() 返回值：携带所有权信息和节点 */
+export interface HResult {
+  [HRESULT_SYMBOL]: true;
+  owner: Owner | null;
+  nodes: Node[];
+  cleanups?: (() => void)[];
+}
+
+/** processChildren 的返回值类型 */
+export interface ProcessChildrenResult {
+  nodes: Node[];
+  cleanups: (() => void)[];
+}
+
+/** 创建 HResult 对象 */
+export function createHResult(
+  owner: Owner | null,
+  nodes: Node[],
+  cleanups?: (() => void)[],
+): HResult {
+  const result: HResult = {
+    [HRESULT_SYMBOL]: true as const,
+    owner,
+    nodes,
+  };
+  if (cleanups && cleanups.length > 0) {
+    result.cleanups = cleanups;
+  }
+  return result;
+}
+
+/** 判断一个值是否为 HResult */
+export function isHResult(value: unknown): value is HResult {
+  return isObject(value) && HRESULT_SYMBOL in value;
+}
 
 /** @internal 用于类型层面区分信号和普通函数的 brand */
 export declare const GETTER_BRAND: unique symbol;
