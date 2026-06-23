@@ -3,9 +3,9 @@
 // Adapts the React JSX calling convention (children inside props)
 // to kiaao's h(tag, props, ...children).
 
-import { h } from "../dom/h.ts";
-import type { Context } from "../dom/h.ts";
-import { Fragment } from "../dom/fragment.ts";
+import { h, Fragment } from "../core/h.ts";
+import type { Context } from "../core/component.ts";
+import type { Children } from "../core/types.ts";
 import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
 import type { DirectiveContext } from "../dom/directive.ts";
 
@@ -24,14 +24,11 @@ function normalizeChildren(children: unknown): unknown[] | undefined {
   return [children];
 }
 
-function createJsxElement(type: any, props: Record<string, any> | null, key?: any): Node {
-  // Normal element or component: forward props.children as rest args
+function createJsxElement(type: any, props: Record<string, any> | null, key?: any): Children {
   if (isNil(props)) return h(type);
 
   const { children, ...rest } = props;
 
-  // JSX 编译器将 key 从 props 中提取为第三个参数，但 kiaao 的 h()
-  // 和指令系统需要通过 props.key 访问它（如 GroupMotion 的 keyToElMap）
   if (!isUndefined(key)) {
     rest.key = key;
   }
@@ -55,9 +52,10 @@ export { createJsxElement as jsxDEV };
 // ── JSX Type Declarations ──────────────────────────────
 
 export namespace JSX {
-  export interface Element extends Node {}
+  // h() now returns Children (Node | Node[]), so JSX.Element must be the union
+  export type Element = Children;
   export interface ElementClass {
-    (props: Record<string, any>, context?: Context): Node;
+    (props: Record<string, any>, context?: Context): Children;
     (el: Element, props: Record<string, any>, ctx: DirectiveContext): void;
   }
   export interface ElementChildrenAttribute {

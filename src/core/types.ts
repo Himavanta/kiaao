@@ -29,6 +29,9 @@ export interface Setter<T> {
   (updater: (prev: T) => T): T;
 }
 
+/** h() 返回类型：单个节点或节点数组 */
+export type Children = Node | Node[];
+
 // ── Signal Internal Types ──────────────────────────────
 
 /** 定义节点（use(init)）的内部状态 */
