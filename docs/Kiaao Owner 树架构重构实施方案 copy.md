@@ -1,9 +1,9 @@
 # Kiaao Owner 树架构重构实施方案
 
-**状态**：定稿
+**状态**：草案
 **关联**：[跨端架构改造方案讨论](./跨端架构改造方案讨论.md)、[Kiaao 框架架构演进探讨](./架构演进探讨.md)
 **日期**：2026年6月23日
-**版本**：4.0
+**版本**：3.0
 
 ## 一、背景与动机
 
@@ -15,7 +15,7 @@ Kiaao 当前的响应式系统将组件实例、副作用清理函数等运行�
 
 根本原因在于**生命周期以 DOM 树为宿主**——当需要卸载一个组件或分支时，必须递归遍历其 DOM 子树来寻找需要清理的元数据。这违反了“逻辑所有权”原则：一个作用域（组件、`when`/`each` 分支）创建的资源，理应由该作用域自己管理，而不是分散挂靠在外部的 DOM 节点上。
 
-本次重构的目标是将生命周期宿主从 DOM 树迁回 JS 内存，引入**树形 Owner 架构**，使框架的清理逻辑与 DOM 树解耦。
+本次重构的目标是将生命周期宿主从 DOM 树迁回 JS 内存，引入**树形 Owner 架构**，并通过修改 `h()` 的返回值为 `[Owner, Node[]]`，彻底消除全局上下文变量，使框架的清理逻辑与 DOM 树完全解耦。
 
 ## 二、目标架构概述：树形 Owner 池
 
@@ -30,18 +30,18 @@ Kiaao 当前的响应式系统将组件实例、副作用清理函数等运行�
 
 ### 2.2 与当前架构的关键差异
 
-| 维度         | 当前架构（DOM 绑定）                         | Owner 树架构                                          |
-| ------------ | -------------------------------------------- | ----------------------------------------------------- |
-| 生命周期宿主 | DOM 节点（`INSTANCE_KEY` 等）                | `Owner` 对象（JS 内存）                               |
-| 卸载清理     | 递归遍历 DOM 树（`disposeNode`）             | 递归遍历 `owner.children` 树（`disposeOwner`）        |
-| 多根组件     | 必须用 `<div style="display:contents">` 包裹 | 直接返回 `Node[]`，无容器                             |
-| 异步组件     | 依赖 wrapper + 标志位防止泄漏                | 占位 Owner + 注释占位符                               |
-| 全局上下文   | 无（但元数据挂在 DOM 上）                    | **最小化**：`currentOwner`，仅用于同步 `h()` 调用期间 |
-| 引用方向     | 双向（DOM 持有实例，实例持有订阅）           | 单向（Owner 持有渲染元素引用）                        |
+| 维度         | 当前架构（DOM 绑定）                         | Owner 树架构                                    |
+| ------------ | -------------------------------------------- | ----------------------------------------------- |
+| 生命周期宿主 | DOM 节点（`INSTANCE_KEY` 等）                | `Owner` 对象（JS 内存）                         |
+| 卸载清理     | 递归遍历 DOM 树（`disposeNode`）             | 递归遍历 `owner.children` 树（`disposeOwner`）  |
+| 多根组件     | 必须用 `<div style="display:contents">` 包裹 | 直接返回 `Node[]`，无容器                       |
+| 异步组件     | 依赖 wrapper + 标志位防止泄漏                | 占位 Owner + 注释占位符                         |
+| 全局上下文   | 无（但元数据挂在 DOM 上）                    | **彻底消除**：父子关系通过 `h()` 返回值显式传递 |
+| 引用方向     | 双向（DOM 持有实例，实例持有订阅）           | 单向（Owner 持有渲染元素引用）                  |
 
 ### 2.3 Owner 数据结构：树形结构
 
-采用**树形结构**。每个 Owner 直接持有其子 Owner 的引用，不需要全局池来维护关系。
+采用**树形结构**而非扁平映射。每个 Owner 直接持有其子 Owner 的引用，不需要全局池来维护关系。
 
 ```ts
 interface Owner {
@@ -57,6 +57,7 @@ interface Owner {
 
 **为什么选择树形结构**：
 
+- **父子关系通过 `h()` 返回值显式建立**：父组件从子组件的返回值中直接拿到子 Owner，然后执行 `parent.children.push(child)` 和 `child.parent = parent`。不需要全局映射来中转。
 - **遍历和清理更高效**：`disposeOwner` 和 `triggerMount` 直接遍历 `children` 数组，不需要扫描全局池或维护反向索引。
 - **调试更直观**：在控制台展开根 Owner，可以看到完整的组件树结构和每个节点的 `elements`。
 - **消除了对 `ownerPool` 全局 Map 的需求**：整个所有权树从根 Owner 出发即可完整遍历。
@@ -126,84 +127,103 @@ function disposeOwner(owner: Owner): void {
 }
 ```
 
-### 2.4 最小化全局上下文：`currentOwner`
+### 2.4 彻底消除全局上下文：`h()` 返回 `[Owner, Node[]]`
 
-**设计动因**：在纯运行时 + JSX 静态编译的约束下，需要一种机制在同步执行期间将当前组件的 Owner 传递给子组件的 `handleComponent` 和 DOM 元素的 `h()` 调用。
+**旧架构的根本问题**：`h()` 返回 `Node`（或 `Node[]`），不包含所有权信息。组件嵌套时，父组件无法从子组件的返回值中知道“这些节点属于哪个 Owner”，因此需要一个模块级的 `currentOwner` 变量来桥接。
 
-**机制**：
+**新方案**：`h()` 返回 `[Owner, Node[]]`——一个携带所有权信息的真实节点元组。可以理解为 kiaao 自己的“VNode”，但它是**已解析的真实节点**，不是描述对象，不需要 Diff。
 
-- `currentOwner` 是一个模块级变量，通过 `createCurrentOwner()` 封装为 getter/setter 模式。
-- 仅在 `handleComponent` 同步执行期间被设置（调用组件函数前 push，调用后 pop）。
-- 不跨越异步边界（`await`、`setTimeout` 等）。
-- 异步组件在同步阶段已经创建了 Owner 并绑定了 `context`，之后的异步回调不需要读 `currentOwner`。
+```ts
+// h() 新的返回类型
+type HResult = [Owner, Node[]];
+```
 
-**与废弃的全局组件实例栈的区别**：
-
-| 废弃的全局实例栈                            | 这个 Owner 栈                                            |
-| ------------------------------------------- | -------------------------------------------------------- |
-| 用于在异步回调中追踪组件上下文              | 仅用于同步 `h()` 调用期间创建 Owner                      |
-| `context.use` 需要在 `await` 后也能取到实例 | `context.use` 在组件函数执行期间直接操作 Owner，不依赖栈 |
-| 异步边界后栈状态不可靠，导致归属错误        | 异步边界前 Owner 已创建，`context` 已绑定，归属明确      |
-
-**`currentOwner` 的职责仅限两项**：
-
-1. 创建子组件 Owner 时确定父级。
-2. `processChildren` 处理信号绑定时注册清理函数（将通过 `context.use` 逐步替代）。
-
-## 三、详细设计方案
-
-### 3.1 `h()` 的改造：保持返回 `Node[]`
-
-**目标**：`h()` 返回类型保持 `Node[]`（类型签名放宽为 `Node | Node[]`）。内部实现仅从 DOM 绑定切换到 Owner 管理，不改变消费方的接口约定。
-
-**组件模式（同步）**：
+**核心流程（以组件嵌套为例）**：
 
 ```ts
 function handleComponent(tag, props) {
   // 1. 创建当前组件的 Owner
   const owner = createOwner();
 
-  // 2. 确定父 Owner 并建立关系
-  const parentOwner = currentOwner.get();
-  if (parentOwner) {
-    parentOwner.children.push(owner);
-    owner.parent = parentOwner;
-  }
-
-  // 3. 创建与 Owner 绑定的 context
+  // 2. 创建与 Owner 绑定的 context
   const context = createContext(owner);
 
-  // 4. 设置当前上下文，执行组件函数
-  const prevOwner = currentOwner.get();
-  currentOwner.set(owner);
-  const result = tag(props, context);
-  currentOwner.set(prevOwner);
+  // 3. 执行组件函数，拿到子组件的 Owner 和节点
+  const [childOwner, nodes] = tag(props, context);
 
-  // 5. 异步路径
-  if (result instanceof Promise) {
-    return handleAsyncComponent(result, owner, context);
-  }
+  // 4. 显式建立父子关系——不需要任何全局变量
+  owner.children.push(childOwner);
+  childOwner.parent = owner;
 
-  // 6. 同步路径：将节点注册到当前 Owner
-  const nodes = Array.isArray(result) ? result.flat(Infinity) : [result];
+  // 5. 将子组件的节点注册到当前 Owner
   nodes.forEach((n) => owner.elements.add(n));
-  return nodes;
+
+  // 6. 返回当前 Owner 和节点
+  return [owner, nodes];
 }
 ```
 
-**指令模式**：遍历 children（已扁平化数组），对每个 `Element` 调用指令函数，跳过非 Element 并在开发模式警告。最终返回原 children 数组。指令函数的 `ctx.onMount`/`onUnmount`/`use` 注册到当前 `currentOwner`。
+**全局上下文被彻底消除**：
 
-**Fragment**：直接返回 children 数组，不创建任何包裹节点。
+- `processChildren` 处理信号绑定时，通过 `context.use`（已绑定 Owner）创建派生，清理函数自动注册到 `owner.cleanups`，不需要读取任何全局变量。
+- DOM 元素 `h('div')` 的返回值 `[owner, [el]]` 中，`owner` 由调用方传入（或通过局部变量获取），不需要模块级状态。
+- 子组件的 Owner 通过返回值向上传递给父组件，父组件显式挂载，不依赖隐式上下文。
+
+## 三、详细设计方案
+
+### 3.1 `h()` 的改造：统一返回 `[Owner, Node[]]`
+
+**目标**：`h()` 在所有模式下返回 `[Owner, Node[]]` 元组。类型签名变更为 `h(...): [Owner, Node[]]`。JSX 运行时（`jsx-runtime/index.ts`）的 `createJsxElement` 返回类型同步更新。
+
+**改造点**：
+
+- **DOM 模式**（`tag` 为字符串）：创建 DOM 元素，处理 props 和 children。返回 `[owner, [el]]`，其中 `owner` 由调用方传入（在组件函数内部调用时，即为当前组件的 Owner）。
+- **组件模式**（`tag` 为函数，非指令）：委托给 `handleComponent`，内部完成 Owner 创建、父子关系建立、节点注册。
+- **指令模式**（`tag` 为函数，带 `DIRECT_KEY` 标记）：遍历 children，对每个 Element 调用指令函数，返回 `[currentOwner, children]`。
+- **Fragment**：直接返回 `[owner, children]`，不创建任何包裹节点。
+
+**组件模式（同步）的详细实现**：
+
+```ts
+function handleComponent(tag, props, parentOwner?: Owner): [Owner, Node[]] {
+  // 1. 创建当前组件的 Owner
+  const owner = createOwner();
+
+  // 2. 创建与 Owner 绑定的 context
+  const context = createContext(owner);
+
+  // 3. 执行组件函数，拿到子组件的 Owner 和节点
+  const [childOwner, nodes] = tag(props, context);
+
+  // 4. 异步路径
+  if (nodes.length === 1 && isPlaceholderComment(nodes[0])) {
+    return handleAsyncComponent(childOwner, nodes, owner, context);
+  }
+
+  // 5. 同步路径：显式建立父子关系
+  owner.children.push(childOwner);
+  childOwner.parent = owner;
+
+  // 6. 将子组件的节点注册到当前 Owner
+  nodes.forEach((n) => owner.elements.add(n));
+
+  return [owner, nodes];
+}
+```
+
+**指令模式**：遍历 children（已扁平化数组），对每个 `Element` 调用指令函数，跳过非 Element 并在开发模式警告。最终返回 `[currentOwner, children]`。指令函数的 `ctx.onMount`/`onUnmount`/`use` 注册到当前 Owner。
+
+**Fragment**：直接返回 `[owner, children]`，不创建任何包裹节点。
 
 ### 3.2 彻底消除 `display: contents`
 
 **场景**：
 
-| 场景                   | 当前做法                                 | 新做法                    |
-| ---------------------- | ---------------------------------------- | ------------------------- |
-| `<>...</>`（Fragment） | `<div style="display:contents">` 容器    | 返回 `Node[]`，无任何包裹 |
-| 异步组件加载中         | `<div style="display:contents">` wrapper | 注释占位 + `replaceWith`  |
-| 组件返回多个根元素     | Fragment 包裹                            | 直接返回 `Node[]`         |
+| 场景                   | 当前做法                                 | 新做法                             |
+| ---------------------- | ---------------------------------------- | ---------------------------------- |
+| `<>...</>`（Fragment） | `<div style="display:contents">` 容器    | 返回 `[owner, Node[]]`，无任何包裹 |
+| 异步组件加载中         | `<div style="display:contents">` wrapper | 注释占位 + `replaceWith`           |
+| 组件返回多个根元素     | Fragment 包裹                            | 直接返回 `[owner, Node[]]`         |
 
 `display:contents` 将不再出现在框架源码中。用户自行使用的 `display:contents` 不受影响。
 
@@ -213,7 +233,7 @@ function handleComponent(tag, props) {
 
 1. 调用异步组件函数前，Owner 已创建，`context` 已绑定。
 2. 组件函数返回 Promise 后，创建注释节点 `<!--async-->`，注册到 Owner 的 `elements`。
-3. 返回 `[placeholderComment]`（包裹在 `Node[]` 中）。
+3. 返回 `[owner, [placeholderComment]]`。
 4. 父组件将注释节点插入 DOM 的预期位置。
 5. Promise resolve 后，获取真实节点（`realNodes: Node[]`）。
 6. 将 `realNodes` 注册到 Owner 的 `elements`，从 `elements` 中移除注释节点。
@@ -235,7 +255,7 @@ const B = () => <A />;
 
 ### 3.5 指令系统的简化
 
-指令通过 `ctx.onMount`/`onUnmount`/`use` 注册的回调，现在直接注册到当前 Owner 的对应队列中。指令不再需要操作 DOM 节点的 Symbol 属性来挂载生命周期信息。
+指令通过 `ctx.onMount`/`onUnmount`/`use` 注册的回调，直接注册到当前 Owner 的对应队列中。指令不再需要操作 DOM 节点的 Symbol 属性来挂载生命周期信息。
 
 **指令不创建自己的 Owner**：指令的清理回调注册到宿主元素所属的组件或分支 Owner 上。当宿主元素被移除时，其所属 Owner 的清理逻辑会自动处理指令注册的回调。
 
@@ -278,15 +298,6 @@ function triggerMount(owner: Owner, visited: Set<Owner> = new Set()) {
 
 **循环引用防护**：通过 `visited: Set<Owner>` 参数防止异常情况下的循环引用导致无限递归。
 
-**`createApp` 中的顺序约定**：
-
-```ts
-target.append(...nodes); // ① 先将 DOM 插入文档
-triggerMount(rootOwner); // ② 再从 Owner 触发 onMount
-```
-
-此顺序确保 `onMount` 回调中 DOM 已存在于文档中，可安全读取布局信息。
-
 ### 3.8 Portal 组件
 
 Portal 在当前架构中从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM（`appendChild` / `removeChild`），因为其内容已经是被 `h()` 创建好的真实节点，不需要再走 `mount` 流程。
@@ -312,7 +323,7 @@ Portal 在当前架构中从不依赖全局 `mount`/`unmount` 函数。它直接
 ```
 src/
   core/                  # 无渲染依赖的核心
-    owner.ts             # Owner 数据结构与创建/销毁、currentOwner
+    owner.ts             # Owner 数据结构与创建/销毁
     signal.ts            # 信号系统
     runtime.ts           # use() 等
     h.ts                 # h() 核心（调用 adapter）
@@ -395,7 +406,7 @@ Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM�
 - `use(initial)` / `use(...deps, fn)` / `use(signal)`
 - `context.onMount` / `context.onUnmount` / `context.use`
 - `direct(fn)` 及其指令签名
-- `h(tag, props, ...children)` 的类型签名（放宽为 `Node | Node[]`）
+- `h(tag, props, ...children)` 的类型签名（变更为返回 `[Owner, Node[]]`，但调用方式不变）
 - `when` / `each` 属性指令的用法（第一阶段保持不变）
 - `Portal`、`lazy`、`createMotion` / `createGroupMotion` 等扩展 API
 
@@ -403,11 +414,11 @@ Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM�
 
 本次重构接受**彻底的破坏性变更**，不考虑旧版本兼容。目标是一次性完成核心改造。
 
-### 第一阶段：Owner 树核心 + `h()` 适配（基础改造）
+### 第一阶段：Owner 树核心 + `h()` 返回值改造（基础改造）
 
-1. 实现 `owner.ts`：树形 `Owner` 数据结构、`createOwner`、`disposeOwner`、`createCurrentOwner`。
-2. 实现 `currentOwner` 的 getter/setter 封装，在 `h()` 组件模式中使用。
-3. 修改 `h.ts`：同步组件/指令/Fragment 返回数组，内部通过 `currentOwner` 注册资源。
+1. 实现 `owner.ts`：树形 `Owner` 数据结构、`createOwner`、`disposeOwner`。
+2. 修改 `h.ts`：所有模式返回 `[Owner, Node[]]`。实现 `handleComponent`（同步）、`handleAsyncComponent`（异步）、`handleDomMode`、`handleDirectiveMode`。
+3. 修改 `processChildren`：通过 `context.use` 创建信号绑定，不依赖全局变量。
 4. 移除 Fragment 的 `display:contents` 容器。
 5. 适配 `component.ts`、`directives.ts`（`when`/`each`）到 Owner 模型。
 6. 实现 `createApp` API，废弃全局 `mount`/`unmount`。
@@ -436,17 +447,15 @@ Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM�
 ## 六、边界情况与注意事项
 
 1. **信号绑定时机**：信号与文本节点/元素属性的绑定在组件函数执行期间即完成。通过 `context.use` 创建派生，清理函数自动注册到当前 Owner，不依赖全局变量。DOM 节点本身的注册在组件返回后批量完成。
-2. **`processChildren` 的 `currentOwner` 依赖**：`processChildren` 内部处理信号绑定时通过读取模块级 `currentOwner` 注册清理函数。该依赖需要在代码注释中显式标注，确保调用方（`when.ts`、`each.ts` 等）在调用前正确设置了 `currentOwner`。
-3. **异常路径**：`handleComponent` 中增加 `try/finally`，确保即使组件函数抛出异常，`currentOwner` 也能被恢复。对已创建的 Owner，在 `finally` 中检查是否已注册任何资源——若无，调用 `disposeOwner(owner)` 清理。
-4. **多种节点类型（HTML/SVG/注释/文本）**：Owner 的 `elements` 可以持有任意渲染元素，卸载时统一通过 adapter 移除。
-5. **`each` 的锚点节点**：归属于容器的 Owner，不属于任何列表项的 Owner。
-6. **`each` 的 key 重复**：检测 key 冲突，开发模式下输出警告。
-7. **多个 Owner 共享节点**：透传组件等场景可能导致多个 Owner 的 `elements` 中包含同一节点。在 `removeElement` 中增加存在性检查（`el.parentNode && removeElement(el)`），确保幂等性。开发模式下输出警告。
-8. **异步组件 Promise reject**：注释占位符已绑定到 Owner，`disposeOwner` 可正常清理。
-9. **SSR 清理**：SSR adapter 的 `removeElement` 实现为空操作。
-10. **`FinalizationRegistry` 兜底**：仅作为开发模式的辅助提示，GC 回调时机不可控，不能作为主要保障。
-11. **`triggerMount` 循环引用防护**：通过 `visited: Set<Owner>` 参数防止异常情况下的循环引用导致无限递归。
-12. **树形遍历防护**：`disposeOwner` 通过 `disposed` 标记防止同一 Owner 被重复销毁。
+2. **异常路径**：`handleComponent` 中增加 `try/finally`，确保即使组件函数抛出异常，Owner 树结构不被破坏。对已创建的 Owner，在 `finally` 中检查是否已注册任何资源——若无，调用 `disposeOwner(owner)` 清理。
+3. **多种节点类型（HTML/SVG/注释/文本）**：Owner 的 `elements` 可以持有任意渲染元素，卸载时统一通过 adapter 移除。
+4. **`each` 的锚点节点**：归属于容器的 Owner，不属于任何列表项的 Owner。
+5. **`each` 的 key 重复**：检测 key 冲突，开发模式下输出警告。
+6. **多个 Owner 共享节点**：透传组件等场景可能导致多个 Owner 的 `elements` 中包含同一节点。在 `removeElement` 中增加存在性检查，开发模式下输出警告。
+7. **异步组件 Promise reject**：注释占位符已绑定到 Owner，`disposeOwner` 可正常清理。
+8. **SSR 清理**：SSR adapter 的 `removeElement` 实现为空操作。
+9. **`FinalizationRegistry` 兜底**：仅作为开发模式的辅助提示，GC 回调时机不可控，不能作为主要保障。
+10. **树形遍历防护**：`triggerMount` 和 `disposeOwner` 均通过 `visited` 集合或 `disposed` 标记防止循环引用导致的无限递归。
 
 ## 七、未来展望
 
@@ -474,34 +483,17 @@ Owner 重构完成后，可将 `when`/`each` 改造为独立的 `Show`/`Each`/`C
 
 ### 7.5 多语言实现
 
-Kiaao 的核心（信号系统、组件模型、Owner 树）不依赖 JS 高级 API（无 Proxy、无 Reflect、无 WeakRef 强依赖），且通过 `RenderAdapter` 接口将渲染层完全抽象。`currentOwner` 通过简单的 getter/setter 封装，在任何支持闭包和可变状态的语言中均可轻易实现。
+Kiaao 的核心（信号系统、组件模型、Owner 树）不依赖 JS 高级 API（无 Proxy、无 Reflect、无 WeakRef 强依赖），且通过 `RenderAdapter` 接口将渲染层完全抽象。这使得 Kiaao 可以相对容易地用其它语言实现（Rust/WASM、Swift、Go、Kotlin 等），只需实现信号系统、Owner 树和 `RenderAdapter` 接口即可获得完整的响应式 UI 运行时。
 
-## 八、方案决策记录
+## 八、总结
 
-在方案设计过程中，曾深入探讨了修改 `h()` 返回值为 `[Owner, Node[]]` 以彻底消除全局上下文的方案。该方案的核心优势是父子关系完全通过函数返回值显式传递，无需任何模块级状态。经过对比分析，最终选择了 `currentOwner` 方案，理由如下：
-
-1. **改动范围可控**：`[Owner, Node[]]` 方案需要适配所有消费 `h()` 返回值的模块（`processChildren`、`handleDomMode`、指令系统、`when`/`each`、JSX 运行时、`createApp` 等），改动面覆盖框架几乎所有核心模块。`currentOwner` 方案的改动集中在 Owner 核心和组件处理逻辑。
-
-2. **实施风险更低**：大面积改动容易引入回归 bug。`currentOwner` 方案可以聚焦于 Owner 树本身的正确性，消费方逻辑不变。
-
-3. **概念复杂度更低**：框架维护者需要理解 `currentOwner` 栈的 push/pop 机制，但不需要理解 `[Owner, Node[]]` 元组在消费方如何提取和传递。
-
-4. **性能更优**：`[Owner, Node[]]` 方案每次 `h()` 调用都需要额外分配一个双元素数组。虽开销极小，但 `currentOwner` 方案没有此开销。
-
-5. **渐进式迁移路径清晰**：如果未来需要彻底消除全局上下文，可以在 Owner 树稳定后平滑迁移到 `[Owner, Node[]]` 方案。届时 Owner 树已经稳定，只需改 `h()` 的返回值格式和消费方的适配逻辑。
-
-**详细对比见**：[`currentOwner` vs `[Owner, Node[]]` 方案对比](./owner方案对比.md)
-
-## 九、总结
-
-本次重构以 **树形 Owner 架构** 替代 **DOM 绑定** 作为 kiaao 生命周期管理的核心。Fragment 不再需要 `display:contents` 容器，异步组件使用注释占位 + `replaceWith` 实现了更干净的 DOM 结构，代码按 `core/dom` 分层为后续的跨端、水合和多语言实现奠定了基础。
+本次重构以 **树形 Owner 架构** 替代 **DOM 绑定** 作为 kiaao 生命周期管理的核心，并通过 **`h()` 返回 `[Owner, Node[]]`** 彻底消除了全局上下文变量。Fragment 不再需要 `display:contents` 容器，异步组件使用注释占位 + `replaceWith` 实现了更干净的 DOM 结构，代码按 `core/dom` 分层为后续的跨端、水合和多语言实现奠定了基础。
 
 **关键设计决策**：
 
-- Owner 采用树形结构（`parent` / `children`），遍历和清理效率高，调试直观。
-- 采用 `currentOwner` 作为最小化全局上下文，通过 getter/setter 封装，作用域严格限定在同步 `h()` 调用期间。
-- `h()` 保持返回 `Node[]`，消费方接口不变，改动范围可控。
-- 信号绑定通过 `context.use` 创建派生，清理函数自动注册到当前 Owner。
+- Owner 采用树形结构（`parent` / `children`），父子关系通过 `h()` 返回值显式建立，不需要全局映射或隐式上下文。
+- `h()` 返回 `[Owner, Node[]]`——携带所有权信息的真实节点元组，是 kiaao 自己的“VNode”，但不进行 Diff。
+- 信号绑定通过 `context.use` 创建派生，清理函数自动注册到当前 Owner，不依赖全局变量。
 - 废弃全局 `mount`/`unmount`，由 `createApp` API 替代，根 Owner 由应用实例管理。
 - `when`/`each` 第一阶段保持属性指令形态，仅做底层实现切换。控制流组件化（`Show`/`Each`/`Case`）作为后续独立迭代。
 
