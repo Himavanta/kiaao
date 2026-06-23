@@ -22,3 +22,4 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 - 不要使用for循环，使用for-in 或者for-of来代替
 - 函数参数超过3个时使用对象解构传递
 - 函数体代码行数控制在30行内，最多不超过50行
+- 完成任务自行使用LSP检查类型已经 vp check --fix 检查代码
