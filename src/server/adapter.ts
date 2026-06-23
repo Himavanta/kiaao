@@ -22,7 +22,7 @@ function escapeAttr(s: string): string {
 interface SSRElement {
   type: "element";
   tag: string;
-  attrs: Record<string, string>;
+  attrs: Record<string, string | boolean>;
   children: SSRNode[];
 }
 
@@ -66,7 +66,11 @@ export function serializeSSRNode(node: SSRNode): string {
   const tag = node.tag;
   let attrs = "";
   for (const [key, val] of Object.entries(node.attrs)) {
-    attrs += ` ${key}="${escapeAttr(val)}"`;
+    if (val === true) {
+      attrs += ` ${key}`;
+    } else if (val !== false && val != null) {
+      attrs += ` ${key}="${escapeAttr(String(val))}"`;
+    }
   }
 
   if (VOID_ELEMENTS.has(tag)) return `<${tag}${attrs} />`;
@@ -96,7 +100,6 @@ export const ssrAdapter: RenderAdapter = {
 
   before(_ref: unknown, _child: unknown): void {
     // SSR 中不需要 DOM 级别的 before/append 顺序管理
-    // 子节点顺序由 createElement 时的 children.push 维护
   },
 
   append(parent: unknown, child: unknown): void {
@@ -126,10 +129,25 @@ export const ssrAdapter: RenderAdapter = {
   setProp(el: unknown, key: string, value: unknown): void {
     const element = el as SSRElement;
     if (element.type !== "element") return;
+
+    // null/undefined/false → 不输出
+    if (value == null || value === false) return;
+
     // prop: 前缀 → SSR 不输出
     if (key.startsWith("prop:")) return;
     // attr: 前缀 → 去掉前缀后存储
     const actualKey = key.startsWith("attr:") ? key.slice(5) : key;
+
+    // 事件属性不输出
+    if (actualKey.startsWith("on")) return;
+
+    if (value === true) {
+      // 布尔值 true → bare attribute（如 <input disabled>）
+      element.attrs[actualKey] = true;
+      return;
+    }
+
+    // style / aria- / data- / FORCE_ATTRIBUTE 都作为字符串输出
     element.attrs[actualKey] = String(value);
   },
 };

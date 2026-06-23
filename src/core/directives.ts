@@ -152,19 +152,23 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
   const nodes: Node[] = [];
   const itemOwners: Map<any, any> = new Map();
   const itemSignalMap: Map<any, any> = new Map();
+  /** Track each identity's DOM nodes so we can reuse them across syncs */
+  const itemNodeMap: Map<any, Node[]> = new Map();
   const containerOwner = createOwner();
 
   const sync = () => {
-    while (anchor.previousSibling) container.removeChild(anchor.previousSibling);
     const source = toValue(eachFn);
     const items = isArray(source) ? source : [];
     const newKeys = new Set<any>();
     const currentKeys = new Set(itemOwners.keys());
 
+    let prevNode: Node | null = null;
+
     for (const [i, rawValue] of items.entries()) {
       const identity = keyFn ? keyFn(rawValue, i) : i;
       newKeys.add(identity);
 
+      // Sync item signal
       if (itemSignalMap.has(identity)) {
         itemSignalMap.get(identity)!(rawValue);
       } else {
@@ -173,6 +177,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
       }
       const itemSignal = itemSignalMap.get(identity)!;
 
+      // Sync item owner
       let itemOwner = itemOwners.get(identity);
       if (!itemOwner) {
         itemOwner = createOwner();
@@ -181,42 +186,73 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
         itemOwners.set(identity, itemOwner);
       }
 
-      let node: any;
-      try {
-        node = childFn(itemSignal, i);
-      } catch (err) {
-        console.error("[kiaao] each item render error:", err);
-        continue;
-      }
+      if (itemNodeMap.has(identity)) {
+        // Identity already exists — reuse DOM nodes
+        const existingNodes = itemNodeMap.get(identity)!;
 
-      if (isHResult(node)) {
-        // 提取子 Owner 并建立父子关系
-        if (node.owner) {
-          itemOwner.children.push(node.owner);
-          node.owner.parent = itemOwner;
-        }
-        for (const n of node.nodes) {
-          if (isNode(n)) {
-            itemOwner.elements.add(n);
-            anchor.before(n);
-            nodes.push(n);
+        // Check if the node group needs repositioning
+        const firstNode = existingNodes[0];
+        if (firstNode) {
+          const needsMove =
+            prevNode === null
+              ? container.firstChild !== firstNode && container.firstChild !== anchor
+              : firstNode.previousSibling !== prevNode;
+          if (needsMove) {
+            // Move group to the end (before anchor), reverse-order to preserve sequence
+            for (let j = existingNodes.length - 1; j >= 0; j--) {
+              anchor.before(existingNodes[j]);
+            }
           }
         }
-      } else if (isNode(node)) {
-        itemOwner.elements.add(node);
-        anchor.before(node);
-        nodes.push(node);
-      } else if (isArray(node)) {
-        for (const n of node) {
-          if (isNode(n)) {
-            itemOwner.elements.add(n);
-            anchor.before(n);
-            nodes.push(n);
+
+        prevNode = existingNodes[existingNodes.length - 1] || prevNode;
+      } else {
+        // New identity — render fresh DOM nodes
+        let node: any;
+        try {
+          node = childFn(itemSignal, i);
+        } catch (err) {
+          console.error("[kiaao] each item render error:", err);
+          continue;
+        }
+
+        const newNodeNodes: Node[] = [];
+
+        if (isHResult(node)) {
+          if (node.owner) {
+            itemOwner.children.push(node.owner);
+            node.owner.parent = itemOwner;
+          }
+          for (const n of node.nodes) {
+            if (isNode(n)) {
+              itemOwner.elements.add(n);
+              anchor.before(n);
+              newNodeNodes.push(n);
+              nodes.push(n);
+            }
+          }
+        } else if (isNode(node)) {
+          itemOwner.elements.add(node);
+          anchor.before(node);
+          newNodeNodes.push(node);
+          nodes.push(node);
+        } else if (isArray(node)) {
+          for (const n of node) {
+            if (isNode(n)) {
+              itemOwner.elements.add(n);
+              anchor.before(n);
+              newNodeNodes.push(n);
+              nodes.push(n);
+            }
           }
         }
+
+        itemNodeMap.set(identity, newNodeNodes);
+        prevNode = newNodeNodes[newNodeNodes.length - 1] || prevNode;
       }
     }
 
+    // Dispose removed items
     for (const key of currentKeys) {
       if (!newKeys.has(key)) {
         const owner = itemOwners.get(key);
@@ -230,6 +266,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
           if (isFunction(stop)) stop();
           itemSignalMap.delete(key);
         }
+        itemNodeMap.delete(key);
       }
     }
   };
@@ -249,6 +286,7 @@ function renderEachOnElement(container: Element, eachFn: any, childFn: any, keyF
     }
     itemOwners.clear();
     itemSignalMap.clear();
+    itemNodeMap.clear();
   };
   if (containerOwner) containerOwner.cleanups.push(stop);
 
@@ -263,10 +301,11 @@ export function createEachElement(
   children: any[],
   eachFn: any,
   keyFn?: any,
+  cleanups?: (() => void)[],
 ): Element {
   const adapter = getAdapter();
   const el = adapter.createElement(tag) as Element;
-  setProps(el, props);
+  setProps(el, props, cleanups);
   const childFn = children[0];
   renderEachOnElement(el, eachFn, childFn, keyFn);
   return el;

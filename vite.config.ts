@@ -6,9 +6,7 @@ export default defineConfig({
   },
   pack: {
     entry: ["src/index.ts", "src/*/index.ts", "src/astro/client.ts", "src/astro/server.ts"],
-    dts: {
-      tsgo: true,
-    },
+    dts: true,
     platform: "neutral",
     exports: true,
     deps: { skipNodeModulesBundle: true },

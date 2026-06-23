@@ -25,6 +25,18 @@ export function createOwner(): Owner {
 
 // ── disposeOwner ──────────────────────────────────────
 
+/** 安全执行生命周期回调，同步错误和异步 rejection 均捕获 */
+function safeCall(fn: () => void | Promise<void>, label: string): void {
+  try {
+    const result = fn();
+    if (result && typeof result.then === "function") {
+      result.catch((err: unknown) => console.error(`[kiaao] ${label}:`, err));
+    }
+  } catch (err) {
+    console.error(`[kiaao] ${label}:`, err);
+  }
+}
+
 /**
  * 销毁一个 Owner 及其所有子 Owner。
  *
@@ -41,21 +53,13 @@ export function disposeOwner(owner: Owner): void {
 
   // 1. Execute unmount callbacks
   for (const cb of owner.unmountCallbacks) {
-    try {
-      cb();
-    } catch (e) {
-      console.error("[kiaao] onUnmount error:", e);
-    }
+    safeCall(cb, "onUnmount");
   }
   owner.unmountCallbacks.length = 0;
 
   // 2. Execute cleanup callbacks
   for (const cleanup of owner.cleanups) {
-    try {
-      cleanup();
-    } catch (e) {
-      console.error("[kiaao] cleanup error:", e);
-    }
+    safeCall(cleanup, "cleanup");
   }
   owner.cleanups.length = 0;
 
@@ -87,11 +91,7 @@ export function triggerMount(owner: Owner, visited: Set<Owner> = new Set()): voi
 
   // Execute mount callbacks
   for (const cb of owner.mountCallbacks) {
-    try {
-      cb();
-    } catch (e) {
-      console.error("[kiaao] onMount error:", e);
-    }
+    safeCall(cb, "onMount");
   }
   owner.mountCallbacks.length = 0;
 

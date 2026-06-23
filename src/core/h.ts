@@ -50,8 +50,9 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
 
   if (props?.each !== undefined) {
     const { each, key, ...rest } = props;
-    const el = createEachElement(tag, rest, children, each, key);
-    return createHResult(null, [el]);
+    const orphanCleanups: (() => void)[] = [];
+    const el = createEachElement(tag, rest, children, each, key, orphanCleanups);
+    return createHResult(null, [el], orphanCleanups);
   }
 
   // 普通元素

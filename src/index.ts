@@ -33,7 +33,7 @@ export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
 export { direct } from "./core/direct.ts";
 
 // Types
-export type { Getter, Setter, Children } from "./core/types.ts";
+export type { Children } from "./core/types.ts";
 export type { UseFunction } from "./core/signal.ts";
 export type { Context } from "./core/component.ts";
 export type { DirectiveFunction, DirectiveContext } from "./core/direct.ts";

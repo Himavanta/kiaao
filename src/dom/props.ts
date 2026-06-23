@@ -28,10 +28,17 @@ export function setProp(el: any, rawKey: string, value: any): void {
     if (isString(value)) {
       adapter.setProp(el, rawKey, value);
     } else if (isObject(value)) {
-      const cssText = Object.entries(value)
-        .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
-        .join("; ");
-      adapter.setProp(el, rawKey, cssText);
+      // DOM 模式：增量合并，只影响指定属性
+      // SSR 模式：序列化为 cssText 字符串输出
+      const elStyle = (el as any).style;
+      if (elStyle && typeof elStyle === "object") {
+        Object.assign(elStyle, value);
+      } else {
+        const cssText = Object.entries(value)
+          .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v}`)
+          .join("; ");
+        adapter.setProp(el, rawKey, cssText);
+      }
     }
     return;
   }
