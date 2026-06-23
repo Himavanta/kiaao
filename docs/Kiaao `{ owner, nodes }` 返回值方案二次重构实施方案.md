@@ -3,7 +3,7 @@
 **状态**：草案
 **关联**：[Owner 树架构重构实施方案](./Owner树架构重构实施方案.md)
 **日期**：2026年6月23日
-**版本**：1.3
+**版本**：2.0
 
 ## 一、背景与动机
 
@@ -57,18 +57,21 @@ function Comp() {
 
 ## 三、核心设计：`HResult` 对象
 
-我们将 `h()` 的返回值从 `Node | Node[]` 改为一个统一的 `HResult` 对象，其中包含 `owner` 和 `nodes` 两个字段。
+我们将 `h()` 的返回值从 `Node | Node[]` 改为一个统一的 `HResult` 对象，其中包含 `owner`、`nodes` 以及可选的 `cleanups` 字段。
 
 ```ts
 interface HResult {
   [HRESULT_SYMBOL]: true; // 内部标记
-  owner: Owner | null;
-  nodes: Node[];
+  owner: Owner | null; // 当前 h() 调用关联的 Owner。组件模式为组件实例 Owner，普通元素可为 null
+  nodes: Node[]; // 当前 h() 调用产生的顶级 DOM 节点数组（已扁平化）
+  cleanups?: (() => void)[]; // 临时清理函数。当 processChildren 在无 Owner 上下文时创建信号绑定，stop 函数暂存于此，
+  // 由上层 handleComponent 统一注册到正确 Owner
 }
 ```
 
-- **`owner`**：当前 `h()` 调用所关联的 Owner。对于组件模式，是该组件实例的 Owner；对于 DOM 元素模式，由于归属在父级 `handleComponent` 中后置处理，此处可以为 `null`；对于 Fragment，是当前组件 Owner；对于指令模式，是指令宿主元素所属的 Owner。
+- **`owner`**：对于组件模式，是该组件实例的 Owner；对于 DOM 元素模式，由于归属在父级 `handleComponent` 中后置处理，此处可以为 `null`；对于 Fragment，是当前组件 Owner；对于指令模式，是指令宿主元素所属的 Owner。
 - **`nodes`**：当前 `h()` 调用产生的顶级 DOM 节点数组（已扁平化）。
+- **`cleanups`**：仅当 `processChildren` 处理隐式信号绑定（如 `{signal}`）且没有直接 Owner 可使用时，暂存清理函数于此。`handleComponent` 或 `when`/`each` 等上层拥有 Owner 的调用方负责提取并注册到正确的 `owner.cleanups` 中。
 
 ### 3.1 类型标记
 
@@ -77,12 +80,16 @@ interface HResult {
 ```ts
 const HRESULT_SYMBOL = Symbol("kiaao.hresult");
 
-function createHResult(owner: Owner | null, nodes: Node[]): HResult {
-  return {
-    [HRESULT_SYMBOL]: true,
+function createHResult(owner: Owner | null, nodes: Node[], cleanups?: (() => void)[]): HResult {
+  const result: HResult = {
+    [HRESULT_SYMBOL]: true as const,
     owner,
     nodes,
   };
+  if (cleanups && cleanups.length > 0) {
+    result.cleanups = cleanups;
+  }
+  return result;
 }
 
 function isHResult(value: unknown): value is HResult {
@@ -105,9 +112,13 @@ function isHResult(value: unknown): value is HResult {
 `createOwner` 只创建一个 `parent = null` 的孤立 Owner。父子关系的建立转移到**接收 `HResult` 的一方**。无论是同步组件还是异步组件，父组件在拿到子组件的 `HResult` 后，显式执行挂载：
 
 ```ts
-owner.children.push(childResult.owner);
-childResult.owner.parent = owner;
+if (item.owner) {
+  owner.children.push(item.owner);
+  item.owner.parent = owner;
+}
 ```
+
+这统一了同步和异步场景的处理逻辑，不再需要“修复”异步回调中的归属错误——因为根本没有错误可修。子 Owner 在创建时就没有预设父级，只是在被父级接收时才建立关系。
 
 ### 4.2 同步组件模式
 
@@ -135,6 +146,10 @@ function handleComponent(tag, props, children): HResult {
         owner.children.push(item.owner);
         item.owner.parent = owner;
       }
+      // ★ 处理子项携带的孤儿清理函数
+      if (item.cleanups) {
+        owner.cleanups.push(...item.cleanups);
+      }
       allNodes.push(...item.nodes);
     } else if (item instanceof Node) {
       allNodes.push(item);
@@ -150,8 +165,8 @@ function handleComponent(tag, props, children): HResult {
 
 **关键点**：
 
-- `h('div')` 在组件函数内部被调用时，**不需要知道当前组件 Owner**。它返回一个 `HResult`，其中 `owner` 可以是 `null`，`nodes` 包含 `<div>` 节点。
-- `handleComponent` 拿到返回值后，统一将所有节点注册到当前 `owner.elements` 中。这正是早期讨论中确立的“后置绑定”机制——DOM 节点与 Owner 的绑定在组件函数返回之后完成。
+- `h('div')` 在组件函数内部被调用时，**不需要知道当前组件 Owner**。它返回一个 `HResult`，其中 `owner` 为 `null`，`nodes` 包含 `<div>` 节点，可能携带 `cleanups`。
+- `handleComponent` 拿到返回值后，统一将所有节点注册到当前 `owner.elements` 中，将所有 `cleanups` 注册到 `owner.cleanups` 中。这正是早期讨论中确立的“后置绑定”机制——DOM 节点和清理函数的归属在组件函数返回之后完成。
 - 子组件的 Owner 在 `HResult` 中携带，`handleComponent` 通过 `item.owner` 获取并建立父子关系。
 
 ### 4.3 异步组件模式
@@ -181,6 +196,10 @@ function handleAsyncComponent(
           if (item.owner) {
             owner.children.push(item.owner);
             item.owner.parent = owner;
+          }
+          // 处理孤儿清理函数
+          if (item.cleanups) {
+            owner.cleanups.push(...item.cleanups);
           }
           allNodes.push(...item.nodes);
         } else if (item instanceof Node) {
@@ -216,38 +235,48 @@ DOM 元素的创建完全在组件函数内部进行，**不需要知道当前�
 function handleDomMode(tag, props, children): HResult {
   const el = createElement(tag);
   setProps(el, props);
-  const childNodes = processChildren(children);
+  const { nodes: childNodes, cleanups: orphanCleanups } = processChildren(children);
   childNodes.forEach((n) => el.appendChild(n));
-  // owner 字段可为 null，归属由父级 handleComponent 后置处理
-  return createHResult(null, [el]);
+  // owner 字段为 null，归属由父级 handleComponent 后置处理
+  return createHResult(null, [el], orphanCleanups);
 }
 ```
 
 **关键点**：
 
 - `h('div')` 返回的 `HResult` 中 `owner` 为 `null`。这个 `<div>` 节点最终会被包含在组件函数的返回值中，由 `handleComponent` 统一注册到当前组件的 `owner.elements` 中。
-- `setProps` 中如果有响应式属性绑定，其清理函数也通过 `processChildren` 的机制处理——`processChildren` 在处理信号时，需要将清理函数注册到某个 Owner。这个 Owner 可以通过参数传递，也可以在 `handleComponent` 后置处理时统一注册。
+- 信号绑定产生的清理函数通过 `processChildren` 返回的 `orphanCleanups` 暂存，放入 `HResult.cleanups`，由上层 `handleComponent` 统一处理。
+- `setProps` 中如果有响应式属性绑定，其清理函数也通过类似机制处理——`setProps` 可以将自己产生的清理函数附加到传入的临时数组，或通过返回值传递。
 
 ### 4.5 `processChildren` 的适配
 
-`processChildren` 需要识别 `HResult` 对象并从中提取 `nodes`。信号绑定的清理函数注册可以通过 `owner` 参数（由 `handleComponent` 传入）或后置处理：
+`processChildren` 不再要求外部传入 `owner`。它返回两个值：`nodes` 和 `orphanCleanups`。信号绑定产生的清理函数如果没有 Owner 可注册，则放入 `orphanCleanups` 数组，随 `HResult` 向上传递。
 
 ```ts
-function processChildren(children: any[], owner?: Owner): Node[] {
-  const result: Node[] = [];
+interface ProcessChildrenResult {
+  nodes: Node[];
+  cleanups: (() => void)[];
+}
+
+function processChildren(children: any[]): ProcessChildrenResult {
+  const nodes: Node[] = [];
+  const cleanups: (() => void)[] = [];
+
   for (const child of children.flat(Infinity)) {
     if (child == null || typeof child === "boolean") continue;
     if (Array.isArray(child)) {
-      result.push(...processChildren(child, owner));
+      const sub = processChildren(child);
+      nodes.push(...sub.nodes);
+      cleanups.push(...sub.cleanups);
       continue;
     }
     if (child instanceof Node) {
-      result.push(child);
+      nodes.push(child);
       continue;
     }
-    // ★ 新增：识别 HResult 对象并提取 nodes
     if (isHResult(child)) {
-      result.push(...child.nodes);
+      nodes.push(...child.nodes);
+      if (child.cleanups) cleanups.push(...child.cleanups);
       continue;
     }
     if (isUse(child)) {
@@ -255,31 +284,32 @@ function processChildren(children: any[], owner?: Owner): Node[] {
       const [derived] = use(child, () => {
         textNode.textContent = String(child());
       });
-      if (owner) owner.cleanups.push(derived[REACTIVE].stop);
-      result.push(textNode);
+      // 没有 Owner 可注册 → 暂存入 cleanups 数组
+      cleanups.push(derived[REACTIVE].stop);
+      nodes.push(textNode);
       continue;
     }
-    result.push(createTextNode(String(child)));
+    nodes.push(createTextNode(String(child)));
   }
-  return result;
+
+  return { nodes, cleanups };
 }
 ```
 
-调用方 `handleDomMode` 可以传入 `null` 作为 `owner`，因为 `handleDomMode` 本身不持有 Owner。信号绑定的清理函数可以在 `handleComponent` 后置处理时统一注册——`handleComponent` 在拿到 `HResult` 后，遍历其中的 `nodes`，找到信号文本节点并注册清理。另一种方式是让 `processChildren` 接收 `owner` 参数，由调用方（如 `handleComponent` 或 `when`/`each`）传入当前 Owner。
-
-**推荐后者**——`processChildren` 接收 `owner` 参数，调用方负责传入。这样 `handleDomMode` 也需要接收 `owner` 参数，从 `handleComponent` 或 `when`/`each` 逐层传递下来。
-
 ### 4.6 指令模式
 
-指令模式需要先解包 `HResult`，提取其中的 `nodes`，再在这些 `nodes` 中找到 `Element` 来调用指令函数：
+指令模式需要先解包 `HResult`，提取其中的 `nodes`，再在这些 `nodes` 中找到 `Element` 来调用指令函数。指令函数的清理回调注册到由调用方传入的 `owner` 参数上。
 
 ```ts
 function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
   // 先解包所有 HResult，提取实际的 Node
   const allNodes: Node[] = [];
+  const allCleanups: (() => void)[] = [];
+
   for (const child of children.flat(Infinity)) {
     if (isHResult(child)) {
       allNodes.push(...child.nodes);
+      if (child.cleanups) allCleanups.push(...child.cleanups);
     } else if (child instanceof Node) {
       allNodes.push(child);
     }
@@ -293,11 +323,11 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
     }
   }
 
-  return createHResult(owner, allNodes);
+  return createHResult(owner, allNodes, allCleanups);
 }
 ```
 
-**关键点**：指令函数接收的 `children` 是 `Element[]`（已经解包），不是 `HResult[]`。指令内部的逻辑完全不需要改动。指令的清理回调注册到传入的 `owner` 参数上。
+**关键点**：指令函数接收的 `children` 是 `Element[]`（已经解包），不是 `HResult[]`。指令内部的逻辑完全不需要改动。指令的清理回调注册到传入的 `owner` 参数上，孤儿清理函数继续向上传递。
 
 ## 五、对 `currentOwner` 的消除
 
@@ -307,19 +337,70 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 所有消费 `h()` 返回值的模块都需要从处理 `Node | Node[]` 改为处理 `HResult`。具体包括：
 
-| 模块                  | 当前代码                    | 新代码                                               |
-| --------------------- | --------------------------- | ---------------------------------------------------- |
-| `handleComponent`     | `return nodes`              | `return createHResult(owner, nodes)`                 |
-| `handleDomMode`       | `return el`                 | `return createHResult(null, [el])`                   |
-| `handleDirectiveMode` | `return children`           | `return createHResult(owner, nodes)`                 |
-| `processChildren`     | 接收 `children`             | 接收 `children` + 可选 `owner`，识别 `HResult`       |
-| `setProps`            | 可能通过全局获取 Owner      | 通过调用方传入的 `owner` 参数注册清理                |
-| `when`/`each` 内部    | 调用 `h()` 拿到 `Node[]`    | 调用 `h()` 拿到 `HResult`，提取 `.nodes` 和 `.owner` |
-| JSX 运行时            | `return h(...)` 返回 `Node` | `return h(...)` 返回 `HResult`                       |
-| `createApp`           | `const nodes = h(App)`      | `const { owner, nodes } = h(App)`                    |
-| 动画扩展              | 可能调用 `h()`              | 适配新返回值                                         |
+| 模块                  | 当前代码                    | 新代码                                                                 |
+| --------------------- | --------------------------- | ---------------------------------------------------------------------- |
+| `handleComponent`     | `return nodes`              | `return createHResult(owner, nodes)`                                   |
+| `handleDomMode`       | `return el`                 | `return createHResult(null, [el], orphanCleanups)`                     |
+| `handleDirectiveMode` | `return children`           | `return createHResult(owner, nodes, cleanups)`                         |
+| `processChildren`     | 返回 `Node[]`               | 返回 `{ nodes, cleanups }`                                             |
+| `setProps`            | 可能通过全局获取 Owner      | 将清理函数返回或暂存                                                   |
+| `when`/`each` 内部    | 调用 `h()` 拿到 `Node[]`    | 调用 `h()` 拿到 `HResult`，提取 `.nodes` 和 `.owner`，处理 `.cleanups` |
+| JSX 运行时            | `return h(...)` 返回 `Node` | `return h(...)` 返回 `HResult`                                         |
+| `createApp`           | `const nodes = h(App)`      | `const { owner, nodes } = h(App)`，处理 `.cleanups`                    |
+| 动画扩展              | 可能调用 `h()`              | 适配新返回值                                                           |
 
-改动面较大，但每处改动都是机械性的——将 `const nodes = h(...)` 替换为 `const { owner, nodes } = h(...)`，并在父级将 `owner` 挂载到自己的 `children` 上。
+改动面较大，但每处改动都是机械性的——将 `const nodes = h(...)` 替换为 `const { owner, nodes } = h(...)`，并在父级将 `owner` 挂载到自己的 `children` 上，将 `cleanups` 注册到自己的 `owner.cleanups` 中。
+
+### 6.1 `createApp` 的后置处理
+
+`createApp` 内部调用 `h(App)` 渲染根组件后，需要处理返回值：
+
+```ts
+function createApp(component, props?) {
+  const rootOwner = createOwner();
+  const { owner: appOwner, nodes } = h(component, props);
+  // 建立根组件的父子关系
+  rootOwner.children.push(appOwner);
+  appOwner.parent = rootOwner;
+  // 将根节点注册到根 Owner（或者让根 Owner 持有这些节点）
+  nodes.forEach((n) => rootOwner.elements.add(n));
+
+  return {
+    mount(container) {
+      const target = resolveContainer(container);
+      target.append(...nodes);
+      triggerMount(rootOwner);
+    },
+    unmount() {
+      disposeOwner(rootOwner);
+    },
+  };
+}
+```
+
+### 6.2 `when`/`each` 的处理
+
+`when`/`each` 在渲染分支或列表项时，调用 `h()` 并处理返回的 `HResult`：
+
+```ts
+// when 分支渲染
+const result = h(component, props);
+if (isHResult(result)) {
+  // 建立父子关系
+  if (result.owner) {
+    branchOwner.children.push(result.owner);
+    result.owner.parent = branchOwner;
+  }
+  // 注册清理函数
+  if (result.cleanups) {
+    branchOwner.cleanups.push(...result.cleanups);
+  }
+  // 注册节点
+  result.nodes.forEach((n) => branchOwner.elements.add(n));
+  // 插入 DOM
+  // ...
+}
+```
 
 ## 七、实施路径
 
@@ -327,8 +408,8 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 1. 定义 `HResult` 接口与 Symbol 标记。
 2. 实现 `createHResult` 和 `isHResult` 工具函数。
-3. 修改 `h()` 的所有内部实现，返回 `HResult`。
-4. 修改 `processChildren` 接收可选 `owner` 参数。
+3. 修改 `processChildren` 返回 `{ nodes, cleanups }`。
+4. 修改 `h()` 的所有内部实现，返回 `HResult`。
 
 ### 第二阶段：消除 `currentOwner`
 
@@ -347,7 +428,7 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 由于第一次重构已经建立了树形 Owner 结构，本次重构只需要改变 `h()` 的返回值格式和父子关系的建立点。`disposeOwner`、`triggerMount`、`createApp` 等核心逻辑保持不变。
 
-对于 `when`/`each`，它们内部已经为每个分支/条目创建了 Owner，本次只需要适配 `h()` 返回值的解构，并在拿到 `HResult` 后显式建立父子关系。
+对于 `when`/`each`，它们内部已经为每个分支/条目创建了 Owner，本次只需要适配 `h()` 返回值的解构，并在拿到 `HResult` 后显式建立父子关系和注册清理函数。
 
 对于指令系统，它不创建自己的 Owner，但需要从 `HResult` 中提取节点以进行遍历。指令函数本身的 `ctx.onMount` 等仍注册到当前 Owner（现在通过参数传递），无需改动。
 
@@ -355,6 +436,7 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 - **彻底消除全局状态**：不再有任何模块级可变状态参与组件生命周期。代码更纯粹、更易理解。
 - **异步安全**：`.then()` 回调中创建的组件通过 `HResult` 携带 Owner，父组件延迟挂载，与同步组件逻辑完全统一。不再需要“修复”归属错误。
+- **清理函数不丢失**：通过 `HResult.cleanups` 机制，隐式信号绑定的清理函数可以安全地向上传递到正确的 Owner。
 - **createOwner 更纯粹**：`createOwner` 只负责创建，不负责建立关系。父子关系由接收返回值的一方显式建立，职责单一。
 - **跨语言友好**：所有所有权信息通过函数返回值传递，这是所有编程语言的原生能力。
 - **水合自然**：在水合适配器中，`h()` 返回的 `HResult` 可直接携带认领的 DOM 节点及其 Owner，无需额外的映射表。
@@ -367,6 +449,6 @@ function handleDirectiveMode(tag, props, children, owner: Owner): HResult {
 
 ## 十一、结论
 
-`{ owner, nodes }` 方案是 Kiaao 架构演进的必然一步。它在第一次重构建立的树形 Owner 基础上，以最小的概念增量彻底消除了全局上下文，使框架核心达到了前所未有的纯粹性。通过让 `createOwner` 不再预设父子关系、将挂载逻辑统一在父组件接收返回值时执行，同步和异步场景实现了完全一致的处理模式——异步组件的归属不再是需要特殊处理的“修复”，而是自然的延迟挂载。
+`{ owner, nodes }` 方案是 Kiaao 架构演进的必然一步。它在第一次重构建立的树形 Owner 基础上，以最小的概念增量彻底消除了全局上下文，使框架核心达到了前所未有的纯粹性。通过让 `createOwner` 不再预设父子关系、将挂载逻辑统一在父组件接收返回值时执行，同步和异步场景实现了完全一致的处理模式——异步组件的归属不再是需要特殊处理的“修复”，而是自然的延迟挂载。`HResult.cleanups` 字段的引入，优雅地解决了隐式信号绑定在无全局上下文时清理函数的归属问题。
 
 **当前进度**：第一次重构（`currentOwner` 方案）已接近完成；本文档作为第二次重构的蓝图，将在第一次重构稳定后启动实施。
