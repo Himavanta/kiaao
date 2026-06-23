@@ -48,7 +48,7 @@ interface Owner {
   cleanups: (() => void)[]; // 清理回调（派生停止、指令 onUnmount 等）
   mountCallbacks: (() => void)[]; // 挂载回调（onMount 注册的回调）
   unmountCallbacks: (() => void)[]; // 卸载回调（onUnmount 注册的回调）
-  elements: Set<unknown>; // 该作用域创建的渲染元素引用（DOM 环境为 Node，跨端时为对应平台元素）
+  elements: Set<unknown>; // 该作用域创建的顶层渲染元素引用（DOM 环境为 Node，跨端时为对应平台元素）
   disposed: boolean; // 是否已销毁
 }
 
@@ -137,18 +137,18 @@ function disposeOwner(owner: Owner): void {
 }
 ```
 
-### 2.4 `currentOwner` 机制
+### 2.4 同步执行上下文：`currentOwner`
 
-Owner 的创建依赖于同步执行期间的 `currentOwner` 栈。这个机制需要与之前废弃的“全局组件实例栈”明确区分。
+**设计动因**：在组件嵌套时（A 组件内部调用 B 组件），B 的 Owner 需要知道其父级是 A 的 Owner。`h()` 在同步执行期间通过 `currentOwner` 栈来追踪当前正在执行的组件函数对应的 Owner。
 
 **机制**：
 
-- `currentOwner` 是一个模块级变量，指向当前正在执行的组件函数的 Owner。
-- 当 `h()` 进入组件模式时（`typeof tag === 'function'` 且非指令），在创建新 Owner 后，将 `currentOwner` 设为这个新 Owner，调用组件函数，调用结束后恢复为父 Owner。
-- **Owner 在组件函数执行前创建**，这意味着 `context`（与 Owner 绑定）在组件函数执行期间已经有效。`context.onMount`/`onUnmount`/`use` 直接操作当前 Owner 的对应队列。
-- **DOM 节点与 Owner 的绑定在组件函数返回后进行**：`handleComponent` 拿到组件函数返回的节点后，将节点注册到 Owner 的 `elements` 中。
+- `currentOwner` 是一个模块级变量，仅在 `h()` 的同步执行期间有效。
+- 当 `h()` 进入组件模式时，在创建新 Owner 后，将 `currentOwner` 设为这个新 Owner，调用组件函数，调用结束后恢复为父 Owner。
+- `currentOwner` 只在 **同步** 的 `h()` 调用期间被 push/pop，不跨越异步边界（`await`、`setTimeout` 等）。
+- 异步组件在同步阶段已经创建了 Owner 并绑定了 `context`，之后的异步回调不需要读 `currentOwner`。
 
-**与废弃的全局实例栈的区别**：
+**与废弃的全局组件实例栈的区别**：
 
 | 废弃的全局实例栈                            | 这个 Owner 栈                                            |
 | ------------------------------------------- | -------------------------------------------------------- |
@@ -156,21 +156,10 @@ Owner 的创建依赖于同步执行期间的 `currentOwner` 栈。这个机制�
 | `context.use` 需要在 `await` 后也能取到实例 | `context.use` 在组件函数执行期间直接操作 Owner，不依赖栈 |
 | 异步边界后栈状态不可靠，导致归属错误        | 异步边界前 Owner 已创建，`context` 已绑定，归属明确      |
 
-**异步组件的处理**：
+**为什么接受它**：在纯运行时 + JSX 静态编译的约束下，需要一个同步执行期间的机制来确定组件的嵌套关系。`currentOwner` 是当前约束下的最小化解决方案——它的作用域被严格限制，且只在两个明确场景中使用：
 
-对于异步组件（`async function` 或返回 Promise 的函数），Owner 在组件函数执行前创建，`context` 在此时绑定。组件函数内部的 `await` 不会改变 `context` 的归属——`context` 对象在闭包中，始终指向同一个 Owner。
-
-```ts
-async function Comp(props, { use, onMount }) {
-  const [data] = use(null);
-  // await 之后，context 仍然有效
-  const result = await fetch("/api");
-  onMount(() => console.log("mounted"));
-  return <div>{result}</div>;
-}
-```
-
-组件函数返回后，如果是异步组件（返回 Promise），`handleComponent` 创建注释占位符并立即绑定到 Owner。Promise resolve 后，真实节点替换注释占位符并注册到 Owner。
+1. 创建子组件 Owner 时确定父级。
+2. `processChildren` 处理信号绑定时注册清理函数。
 
 ## 三、详细设计方案
 
@@ -243,7 +232,7 @@ function handleComponent(tag, props) {
 5. Promise resolve 后，获取真实节点（`realNodes: Node[]`）。
 6. 将 `realNodes` 注册到 Owner 的 `elements`，从 `elements` 中移除注释节点。
 7. 调用 `placeholderComment.replaceWith(...realNodes)` 替换注释节点。
-8. 在真实节点上递归触发 `triggerMount`（执行各层 Owner 的 `mountCallbacks`）。
+8. 从 Owner 出发递归触发 `triggerMount`。
 
 **卸载安全**：如果在 Promise resolve 前父 Owner 被卸载，`disposeOwner(owner)` 会执行 `cleanups`、移除注释节点，并可取消正在进行的异步操作。Promise reject 时注释节点仍然存在于 DOM 中，`disposeOwner` 可正常清理。
 
@@ -273,7 +262,44 @@ const B = () => <A />;
 - `else` 分支和映射表模式各自拥有独立的 Owner。
 - `each` 的锚点节点归属于容器的 Owner，不属于任何列表项的 Owner。
 
-### 3.7 水合与跨端准备
+### 3.7 生命周期系统：`triggerMount` 改为 Owner 遍历
+
+**当前**：`triggerMount` 递归遍历 DOM 树的 `childNodes`，找到挂有 `INSTANCE_KEY` 的节点触发 `mountCallbacks`。
+
+**新**：`triggerMount` 从 Owner 出发，递归遍历 `ownerPool` 中的子 Owner 集合：
+
+```ts
+function triggerMount(owner: Owner, visited: Set<Owner> = new Set()) {
+  if (visited.has(owner)) return;
+  visited.add(owner);
+
+  // 触发当前 Owner 的挂载回调
+  for (const cb of owner.mountCallbacks) {
+    safeCall(cb, "onMount");
+  }
+  owner.mountCallbacks.length = 0;
+
+  // 递归触发所有子 Owner
+  const children = ownerPool.get(owner);
+  if (children) {
+    for (const child of children) {
+      triggerMount(child, visited);
+    }
+  }
+}
+```
+
+**异步组件 resolve 后的触发**：`handleAsyncComponent` 在 Promise resolve 后调用 `triggerMount(owner)`，传入异步组件的 Owner，从 Owner 树出发触发所有子组件的挂载回调。
+
+**`mount` 与 `unmount` 的废弃**：当前全局 `mount`/`unmount` 函数被 `createApp` API 取代（见 4.1 节）。`createApp` 内部通过闭包持有根 Owner，`app.mount()` 和 `app.unmount()` 直接操作该 Owner，不需要从 DOM 节点反向查找。
+
+### 3.8 SSR 适配
+
+- SSR adapter 的 `removeElement` 实现为空操作（SSR 无 DOM）。
+- `renderToString` 结束时遍历 `ownerPool` 清理所有未销毁的 Owner（执行 cleanups，跳过 element 移除）。
+- 为后续水合预留：基于 Owner 路径生成稳定 ID，序列化到 HTML 注释或属性中。
+
+### 3.9 水合与跨端准备
 
 **代码组织**：
 
@@ -314,18 +340,54 @@ interface RenderAdapter {
 
 当前 `src/dom-utils.ts` 中的函数可逐步迁移为 DOM adapter 的实现。
 
-## 四、对当前各系统的影响汇总
+## 四、对外 API 变更
 
-| 系统          | 影响程度                                | 用户感知             |
-| ------------- | --------------------------------------- | -------------------- |
-| 组件系统      | 内部重构（Owner 替代实例）              | 无变化               |
-| 指令系统      | 内部简化，不再操作 DOM Symbol           | 无变化               |
-| `when`/`each` | 内部清理从 DOM 遍历切换到 Owner 管理    | 无变化               |
-| 异步组件      | 占位从 wrapper 变为注释 + `replaceWith` | DOM 更干净，行为不变 |
-| 动画扩展      | 无影响                                  | 无变化               |
-| Portal        | 内部简化                                | 无变化               |
-| 生命周期 API  | 无影响                                  | 无变化               |
-| SSR           | 适配器层变化                            | 无变化               |
+### 4.1 新增：`createApp`
+
+```ts
+function createApp(component: ComponentFunction, props?: Record<string, any>): App;
+
+interface App {
+  mount(container: string | Node): void;
+  unmount(): void;
+}
+```
+
+**使用示例**：
+
+```tsx
+import { createApp, use } from "kiaao";
+
+function App() {
+  const [count, setCount] = use(0);
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount((c) => c + 1)}>+1</button>
+    </div>
+  );
+}
+
+const app = createApp(App);
+app.mount("#app");
+// 稍后
+app.unmount();
+```
+
+`createApp` 内部创建根 Owner，`app.mount()` 和 `app.unmount()` 通过闭包持有根 Owner，直接操作 Owner 树进行挂载和卸载。
+
+### 4.2 废弃：全局 `mount` 和 `unmount`
+
+全局 `mount(root, container)` 和 `unmount(root)` 将被移除。所有挂载/卸载操作通过 `createApp` 返回的应用实例进行。
+
+### 4.3 保持不变的 API
+
+- `use(initial)` / `use(...deps, fn)` / `use(signal)`
+- `context.onMount` / `context.onUnmount` / `context.use`
+- `direct(fn)` 及其指令签名
+- `h(tag, props, ...children)` 的类型签名（放宽为 `Node | Node[]`）
+- `when` / `each` 属性指令的用法（第一阶段保持不变）
+- `Portal`、`lazy`、`createMotion` / `createGroupMotion` 等扩展 API
 
 ## 五、实施路径
 
@@ -338,8 +400,9 @@ interface RenderAdapter {
 3. 修改 `h.ts`：内部全部以 `Node[]` 处理，同步组件/指令/Fragment 返回数组。
 4. 移除 Fragment 的 `display:contents` 容器。
 5. 适配 `component.ts`、`directives.ts`（`when`/`each`）到 Owner 模型。
-6. 移除旧的 DOM 绑定符号（`INSTANCE_KEY`、`DISPOSE_KEY`、`LOCAL_EFFECTS` 等）或标记为废弃。
-7. 所有现有测试适配。
+6. 实现 `createApp` API，废弃全局 `mount`/`unmount`。
+7. 移除旧的 DOM 绑定符号（`INSTANCE_KEY`、`DISPOSE_KEY`、`LOCAL_EFFECTS` 等）或标记为废弃。
+8. 所有现有测试适配。
 
 ### 第二阶段：异步组件改造
 
@@ -352,7 +415,7 @@ interface RenderAdapter {
 1. 将 DOM 操作集中到 `dom/adapter.ts`，实现 `RenderAdapter` 接口。
 2. 核心代码（`core/`）不再直接使用 `document.*`，改为通过注入的 adapter 调用。
 3. 确认 SSR adapter 可复用相同接口。
-4. SSR 渲染完成后遍历 `ownerPool` 清理所有未销毁的 Owner（模拟卸载但不操作 DOM，因为 SSR 输出为字符串）。
+4. SSR 渲染完成后遍历 `ownerPool` 清理所有未销毁的 Owner（执行 cleanups，跳过 element 移除）。
 
 ### 第四阶段：测试与文档
 
@@ -360,26 +423,7 @@ interface RenderAdapter {
 2. 更新框架规范、引导文档中涉及 DOM 结构变化的部分。
 3. 标记破坏性变更。
 
-## 六、对外 API 兼容性
-
-以下 API 签名和行为**保持不变**：
-
-- `use(initial)` / `use(...deps, fn)` / `use(signal)`
-- `context.onMount` / `context.onUnmount` / `context.use`
-- `direct(fn)` 及其指令签名
-- `h(tag, props, ...children)` 的类型签名（放宽为 `Node | Node[]`）
-- `when` / `each` 属性指令的用法（第一阶段保持不变）
-- `mount` / `unmount`
-- `Portal`、`lazy`、`createMotion` / `createGroupMotion` 等扩展 API
-
-**内部破坏性变更**（用户代码不可见）：
-
-- 废弃所有基于 DOM 节点的元数据 Symbol（`INSTANCE_KEY` 等）
-- `disposeNode` 函数移除，替换为 `disposeOwner`
-- Fragment 不再生成 `display:contents` 容器
-- 异步组件不再使用 `display:contents` wrapper
-
-## 七、边界情况与注意事项
+## 六、边界情况与注意事项
 
 1. **信号绑定时机**：信号与文本节点/元素属性的绑定在组件函数执行期间即完成（通过 `processChildren` 传入当前 Owner），清理函数注册到 `owner.cleanups`。DOM 节点本身的注册在组件返回后批量完成。
 2. **异常路径**：`h()` 的组件模式中增加 `try/finally`，确保即使组件函数抛出异常，`currentOwner` 也能被恢复。对已创建的 Owner，在 `finally` 中检查是否已注册任何资源——若无，调用 `disposeOwner(owner)` 清理。
@@ -388,34 +432,35 @@ interface RenderAdapter {
 5. **`each` 的 key 重复**：检测 key 冲突，开发模式下输出警告。
 6. **多个 Owner 共享节点**：透传组件等场景可能导致多个 Owner 的 `elements` 中包含同一节点。在 `removeElement` 中增加存在性检查，开发模式下输出警告。
 7. **异步组件 Promise reject**：注释占位符已绑定到 Owner，`disposeOwner` 可正常清理。
-8. **SSR 清理**：`renderToString` 结束时遍历 `ownerPool` 清理所有未销毁的 Owner（模拟卸载，但不操作 DOM）。
+8. **SSR 清理**：SSR adapter 的 `removeElement` 实现为空操作。
 9. **`FinalizationRegistry` 兜底**：仅作为开发模式的辅助提示，GC 回调时机不可控，不能作为主要保障。
+10. **`triggerMount` 循环引用防护**：通过 `visited: Set<Owner>` 参数防止循环引用导致的无限递归。
 
-## 八、未来展望
+## 七、未来展望
 
 以下方向在本次重构中不实施，但设计方案时已预留扩展空间：
 
-### 8.1 控制流组件化
+### 7.1 控制流组件化
 
 Owner 重构完成后，可将 `when`/`each` 改造为独立的 `Show`/`Each`/`Case` 组件。组件形态在 Owner 模型下更自然，模块边界更清晰，更有利于跨端支持。属性指令可保留作为兼容层或语法糖，内部委托给组件实现。
 
 **命名**：`Show`（条件显隐）、`Each`（列表渲染）、`Case`（多分支选择）。
 
-### 8.2 控制流组件的注释占位
+### 7.2 控制流组件的注释占位
 
 `Show`/`Case`/`Each` 在条件不满足或不匹配时，返回注释节点作为位置标记，确保后续恢复挂载时能精确定位。`Each` 的锚点机制扩展为每个条目范围的结束标记。这与异步组件的注释占位 + `replaceWith` 机制一致。
 
-### 8.3 控制流组件的多根节点与透传
+### 7.3 控制流组件的多根节点与透传
 
 - **`Show`/`Case`**：多根节点只是 `elements` 集合中有多个条目，清理逻辑不变。透传组件的节点由透传组件自己的 Owner 管理，`Show` 只持有子 Owner 的引用。
 - **`Each`**：key 绑定到条目 Owner，移动/移除操作基于条目 Owner 的所有节点。多根条目的节点管理由条目 Owner 统一负责，`Each` 只操作条目 Owner 层级。
 
-### 8.4 跨端与水合
+### 7.4 跨端与水合
 
 - 通过 adapter 接口替换渲染目标，支持 Canvas、Native 等平台。
 - 基于 Owner 树的稳定结构，在 SSR 时生成基于 Owner 路径的 ID，客户端水合时通过 ID 精准注入数据和事件。
 
-## 九、总结
+## 八、总结
 
 本次重构以 **Owner 池** 替代 **DOM 绑定** 作为 kiaao 生命周期管理的核心，解决了 Fragment 的容器依赖、异步清理安全、以及水合/跨端扩展的结构性障碍。`h()` 内部统一返回 `Node[]` 使得多根组件和 Fragment 可以完全脱离 `display:contents`。异步组件使用注释占位与 `replaceWith` 实现了更干净的 DOM 结构和更安全的清理流程。代码按 `core/dom` 分层为后续的跨端和水合奠定了基础。
 
@@ -424,7 +469,9 @@ Owner 重构完成后，可将 `when`/`each` 改造为独立的 `Show`/`Each`/`C
 - Owner 池采用 `Map<Owner, Set<Owner>>` 结构，保证 O(1) 查找子节点，并通过显式清理 + 可选的 `FinalizationRegistry` 兜底来保证内存安全。
 - Owner 在组件函数执行前创建，`context` 与 Owner 绑定，确保异步场景下的 100% 归属覆盖。
 - DOM 节点与 Owner 的绑定在组件函数返回后进行，简化了 `h()` 内部逻辑。
+- 接受 `currentOwner` 作为同步执行期间的最小化上下文机制——它只在两个明确场景中使用（创建子 Owner 的父级归属 + 信号绑定清理注册），不跨异步边界，不是旧全局实例栈的重现。
 - 渲染元素引用字段命名为 `elements`，避免与特定平台绑定。
 - `when`/`each` 第一阶段保持属性指令形态，仅做底层实现切换。控制流组件化（`Show`/`Each`/`Case`）作为后续独立迭代。
+- 废弃全局 `mount`/`unmount`，由 `createApp` API 替代，根 Owner 由应用实例管理。
 
-所有对外 API 保持不变，开发者使用 kiaao 的方式不受影响。
+所有开发者直接使用的 API（`use`、`context`、`direct`、`h()`）保持不变，使用 kiaao 的方式在大部分场景下不受影响。`mount`/`unmount` 的变更是本次唯一的对外破坏性变更。
