@@ -3,6 +3,7 @@
 **状态**：草案
 **关联**：[跨端架构改造方案讨论](./跨端架构改造方案讨论.md)、[Kiaao 框架架构演进探讨](./架构演进探讨.md)
 **日期**：2026年6月23日
+**版本**：2.0
 
 ## 一、背景与动机
 
@@ -291,15 +292,25 @@ function triggerMount(owner: Owner, visited: Set<Owner> = new Set()) {
 
 **异步组件 resolve 后的触发**：`handleAsyncComponent` 在 Promise resolve 后调用 `triggerMount(owner)`，传入异步组件的 Owner，从 Owner 树出发触发所有子组件的挂载回调。
 
-**`mount` 与 `unmount` 的废弃**：当前全局 `mount`/`unmount` 函数被 `createApp` API 取代（见 4.1 节）。`createApp` 内部通过闭包持有根 Owner，`app.mount()` 和 `app.unmount()` 直接操作该 Owner，不需要从 DOM 节点反向查找。
+### 3.8 Portal 组件
 
-### 3.8 SSR 适配
+Portal 在当前架构中从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM（`appendChild` / `removeChild`），因为其内容已经是被 `h()` 创建好的真实节点，不需要再走 `mount` 流程。
+
+在 Owner 架构下，Portal 的挂载/卸载完全融入 Owner 树：
+
+1. 父组件挂载（`app.mount()`）→ 触发根 Owner 的 `triggerMount` → 递归遍历子 Owner → 到达 Portal 的 Owner → 调用 Portal 的 `onMount`。
+2. Portal 的 `onMount` 内部：将内容节点从原来的父容器移动到目标容器（通过 adapter 的 DOM 操作），然后调用子 Owner 的 `triggerMount`（从 Owner 出发，不依赖 DOM 遍历）。
+3. 父组件卸载（`app.unmount()`）→ `disposeOwner(rootOwner)` → 递归销毁 Portal 的 Owner → 调用 Portal 的 `onUnmount` → 从目标容器移除内容。
+
+**完全不需要全局 `mount`/`unmount`。** Portal 不受此次 API 变更的影响。
+
+### 3.9 SSR 适配
 
 - SSR adapter 的 `removeElement` 实现为空操作（SSR 无 DOM）。
 - `renderToString` 结束时遍历 `ownerPool` 清理所有未销毁的 Owner（执行 cleanups，跳过 element 移除）。
 - 为后续水合预留：基于 Owner 路径生成稳定 ID，序列化到 HTML 注释或属性中。
 
-### 3.9 水合与跨端准备
+### 3.10 水合与跨端准备
 
 **代码组织**：
 
@@ -380,7 +391,11 @@ app.unmount();
 
 全局 `mount(root, container)` 和 `unmount(root)` 将被移除。所有挂载/卸载操作通过 `createApp` 返回的应用实例进行。
 
-### 4.3 保持不变的 API
+### 4.3 Portal 不受影响
+
+Portal 组件从不依赖全局 `mount`/`unmount` 函数。它直接操作 DOM，其挂载/卸载逻辑完全融入 Owner 树。此次 API 变更对 Portal 无任何影响。
+
+### 4.4 保持不变的 API
 
 - `use(initial)` / `use(...deps, fn)` / `use(signal)`
 - `context.onMount` / `context.onUnmount` / `context.use`
@@ -472,6 +487,6 @@ Owner 重构完成后，可将 `when`/`each` 改造为独立的 `Show`/`Each`/`C
 - 接受 `currentOwner` 作为同步执行期间的最小化上下文机制——它只在两个明确场景中使用（创建子 Owner 的父级归属 + 信号绑定清理注册），不跨异步边界，不是旧全局实例栈的重现。
 - 渲染元素引用字段命名为 `elements`，避免与特定平台绑定。
 - `when`/`each` 第一阶段保持属性指令形态，仅做底层实现切换。控制流组件化（`Show`/`Each`/`Case`）作为后续独立迭代。
-- 废弃全局 `mount`/`unmount`，由 `createApp` API 替代，根 Owner 由应用实例管理。
+- 废弃全局 `mount`/`unmount`，由 `createApp` API 替代，根 Owner 由应用实例管理。Portal 组件完全融入 Owner 树，不受此次 API 变更影响。
 
 所有开发者直接使用的 API（`use`、`context`、`direct`、`h()`）保持不变，使用 kiaao 的方式在大部分场景下不受影响。`mount`/`unmount` 的变更是本次唯一的对外破坏性变更。
