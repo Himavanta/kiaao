@@ -76,7 +76,7 @@ export type NullableProps = Props | null | undefined;
 export type ComponentResult = HResult | HResult[] | Promise<HResult | HResult[]>;
 
 /** 可合并到 Owner 树的渲染结果 */
-export type MergeableResult = HResult | HResult[] | HostNode;
+export type MergeableResult = HostNode;
 
 /** 清理函数 */
 export type CleanupFn = () => void;

@@ -29,7 +29,7 @@ import {
 // ── Helper: flatten result to nodes ────────────────
 
 /** 将渲染结果统一为 Node 数组，处理 HResult/Node/Node[] 三种形式 */
-function toNodes(result: HResult | HostNode | HostNode[]): HostNode[] {
+function toNodes(result: HostNode): HostNode[] {
   if (isHResult(result)) return [...result.nodes];
   if (getAdapter().isNode(result)) return [result];
   if (isArray(result)) return result as HostNode[];
@@ -252,8 +252,8 @@ function createItemDOMNodes(options: {
 function repositionItemGroup(options: {
   anchor: HostNode;
   existingNodes: HostNode[];
-  prevNode: HostNode | null;
-}): HostNode | null {
+  prevNode: HostNode;
+}): HostNode {
   const { anchor, existingNodes, prevNode } = options;
   if (isEmpty(existingNodes)) return prevNode;
   // 将节点组移动到 anchor 前，已在正确位置时 no-op
@@ -336,7 +336,7 @@ function renderEachOnElement(options: {
     const items = isArray(source) ? source : [];
     const newKeys = new Set<any>();
     const currentKeys = new Set(itemOwners.keys());
-    let prevNode: HostNode | null = null;
+    let prevNode: HostNode = null;
 
     for (const [i, rawValue] of items.entries()) {
       const identity = keyFn ? keyFn(rawValue, i) : i;

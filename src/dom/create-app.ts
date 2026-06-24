@@ -2,8 +2,7 @@
 // Replaces the old global mount/unmount functions.
 
 import { getAdapter } from "../adapter/index.ts";
-import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
-import { type HResult } from "./types.ts";
+import { createOwner, disposeOwner, triggerMount, type HResult } from "../core/index.ts";
 
 export interface App {
   mount(container: Element): void;

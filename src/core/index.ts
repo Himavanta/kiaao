@@ -26,10 +26,6 @@ export { setProps } from "./props.ts";
 // Children processing
 export { processChildren } from "./process-children.ts";
 
-// Application
-export { createApp } from "./create-app.ts";
-export type { App } from "./create-app.ts";
-
 // Type-guards
 export {
   isArray,

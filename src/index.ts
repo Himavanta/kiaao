@@ -12,7 +12,7 @@ try {
 export * from "./core/index.ts";
 
 // DOM-specific exports
-export { Portal, lazy, isNode, isElement, isSVGElement } from "./dom/index.ts";
+export { Portal, lazy, createApp, isNode, isElement, isSVGElement } from "./dom/index.ts";
 
 // JSX runtime
 export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
