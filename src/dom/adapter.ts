@@ -1,7 +1,7 @@
 // kiaao — Browser RenderAdapter implementation
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
-import { isObject } from "../core/index.ts";
+import { isObject, attrToString } from "../core/index.ts";
 import type { RenderAdapter, HostNode } from "../core/index.ts";
 
 // ── SVG ───────────────────────────────────────────────
@@ -126,7 +126,7 @@ export const browserAdapter: RenderAdapter = {
         return;
       }
       // SSR 路径（不应走到这里，兜底）
-      el.setAttribute("style", String(value));
+      el.setAttribute("style", attrToString(value));
       return;
     }
 
@@ -140,7 +140,7 @@ export const browserAdapter: RenderAdapter = {
         el.removeAttribute(key);
         return;
       }
-      el.setAttribute(key, isObject(value) ? JSON.stringify(value) : String(value));
+      el.setAttribute(key, attrToString(value));
       return;
     }
     if (FORCE_ATTRIBUTE.has(key) || key.startsWith("aria-") || key.startsWith("data-")) {
@@ -152,7 +152,7 @@ export const browserAdapter: RenderAdapter = {
         el.removeAttribute(key);
         return;
       }
-      el.setAttribute(key, isObject(value) ? JSON.stringify(value) : String(value));
+      el.setAttribute(key, attrToString(value));
       return;
     }
     el[key] = value;

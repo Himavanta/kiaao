@@ -1,7 +1,7 @@
 // kiaao — SSR RenderAdapter implementation
 // Creates lightweight serializable node trees for string rendering.
 
-import { definitionMode, isNil, isNotNil, isObject } from "../core/index.ts";
+import { definitionMode, isNil, isNotNil, isObject, attrToString } from "../core/index.ts";
 import type { RenderAdapter, HostNode } from "../core/index.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
@@ -163,6 +163,6 @@ export const ssrAdapter: RenderAdapter = {
     }
 
     // 所有属性都作为字符串输出到 SSR
-    element.attrs[actualKey] = String(value);
+    element.attrs[actualKey] = attrToString(value);
   },
 };

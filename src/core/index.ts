@@ -46,6 +46,7 @@ export {
   isPromise,
   isPlainObject,
   isRecord,
+  attrToString,
 } from "./type-guards.ts";
 
 // Core types

@@ -26,3 +26,7 @@ export const isPromise = (v: any): v is Promise<any> => v instanceof Promise;
 export const isPlainObject = (v: any): v is Record<string, any> => !!v && v.constructor === Object;
 export const isRecord = (v: any): v is Record<string, any> =>
   !!v && typeof v === "object" && !isArray(v) && !isPromise(v);
+
+/** 将值转为属性字符串：对象 JSON 序列化，其他直接 String */
+export const attrToString = (value: unknown): string =>
+  isObject(value) ? JSON.stringify(value) : String(value as unknown as string | number | boolean);
