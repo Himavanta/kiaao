@@ -7,7 +7,14 @@ import { createOwner, disposeOwner } from "./owner.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
 import { use, toValue, isUse } from "./signal.ts";
-import { isFunction, isSingle, isUndefined, isArray, isPlainObject } from "./type-guards.ts";
+import {
+  isFunction,
+  isSingle,
+  isUndefined,
+  isArray,
+  isPlainObject,
+  isEmpty,
+} from "./type-guards.ts";
 import {
   getSignalState,
   isHResult,
@@ -248,7 +255,7 @@ function repositionItemGroup(options: {
   prevNode: HostNode | null;
 }): HostNode | null {
   const { anchor, existingNodes, prevNode } = options;
-  if (!existingNodes.length) return prevNode;
+  if (isEmpty(existingNodes)) return prevNode;
   // 将节点组移动到 anchor 前，已在正确位置时 no-op
   for (const n of [...existingNodes].reverse()) {
     getAdapter().before(anchor, n);

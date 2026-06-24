@@ -1,8 +1,7 @@
 // kiaao — SSR RenderAdapter implementation
 // Creates lightweight serializable node trees for string rendering.
 
-import { definitionMode } from "../core/index.ts";
-import { isNil, isNotNil } from "../core/index.ts";
+import { definitionMode, isNil, isNotNil, isObject } from "../core/index.ts";
 import type { RenderAdapter } from "../core/index.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
@@ -129,7 +128,7 @@ export const ssrAdapter: RenderAdapter = {
   },
 
   isNode(value: unknown): value is SSRNode {
-    return typeof value === "object" && value !== null && "type" in value;
+    return isObject(value) && "type" in value;
   },
 
   createStaticDerived(fn, _deps) {

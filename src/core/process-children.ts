@@ -5,7 +5,7 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { isUse, use } from "./signal.ts";
-import { isNil, isObject, isArray } from "./type-guards.ts";
+import { isNil, isObject, isArray, isSingle } from "./type-guards.ts";
 import {
   type ProcessChildrenResult,
   isHResult,
@@ -18,7 +18,7 @@ import {
  * 将扁平化 children 数组归一化：单元素展开，多元素保持数组。
  */
 export function normalizeChildren<T>(children: T[]): T | T[] {
-  return children.length === 1 ? children[0] : children;
+  return isSingle(children) ? children[0] : children;
 }
 
 /**
