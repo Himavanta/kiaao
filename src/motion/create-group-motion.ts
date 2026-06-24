@@ -6,8 +6,8 @@ import { animate } from "motion/mini";
 
 import { direct, type DirectiveContext } from "../core/direct.ts";
 import { use } from "../core/signal.ts";
+import { isEmpty, isDefined } from "../core/type-guards.ts";
 import { type Signal, type Props } from "../core/types.ts";
-import { isEmpty, isDefined } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,
   type Generation,

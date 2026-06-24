@@ -3,14 +3,7 @@
 // Signal<T> replaces [Getter<T>, Setter<T>] — signal() reads, signal(v) writes.
 
 import { getAdapter } from "../adapter/index.ts";
-import {
-  isFunction,
-  isNotEmpty,
-  isNotNil,
-  isSingle,
-  isEmpty,
-  isDefined,
-} from "../utils/type-guards.ts";
+import { isFunction, isNotEmpty, isNotNil, isSingle, isEmpty, isDefined } from "./type-guards.ts";
 import {
   REACTIVE,
   type Signal,

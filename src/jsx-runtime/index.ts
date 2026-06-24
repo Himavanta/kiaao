@@ -6,8 +6,8 @@
 import type { Context } from "../core/component.ts";
 import type { DirectiveContext } from "../core/direct.ts";
 import { h, Fragment } from "../core/h.ts";
+import { isArray, isNil, isUndefined } from "../core/type-guards.ts";
 import type { HResult, Props, NullableProps } from "../core/types.ts";
-import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 

@@ -3,8 +3,9 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import type { Context } from "../core/component.ts";
+import { isArray, isString } from "../core/type-guards.ts";
 import { SSR_COMPONENT } from "../core/types.ts";
-import { isArray, isNode, isString } from "../utils/type-guards.ts";
+import { isNode } from "./type-guards.ts";
 
 export function Portal(
   props: { to: string | HTMLElement; children: any },

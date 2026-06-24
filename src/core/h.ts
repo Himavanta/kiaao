@@ -3,24 +3,22 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
-import {
-  isBoolean,
-  isElement,
-  isFunction,
-  isNotEmpty,
-  isNode,
-  isNotNil,
-  isObject,
-  isString,
-  isDefined,
-  isNil,
-} from "../utils/type-guards.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 import { createOwner } from "./owner.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
+import {
+  isBoolean,
+  isFunction,
+  isNotEmpty,
+  isNotNil,
+  isObject,
+  isString,
+  isDefined,
+  isNil,
+} from "./type-guards.ts";
 import {
   type HResult,
   createHResult,
@@ -107,15 +105,15 @@ function handleDirectiveMode(
   for (const child of flatChildren) {
     if (isHResult(child)) {
       allNodes.push(...child.nodes);
-    } else if (isNode(child)) {
+    } else if (getAdapter().isNode(child)) {
       allNodes.push(child);
     }
   }
 
   for (const child of allNodes) {
-    if (isElement(child)) {
+    if (getAdapter().isNode(child)) {
       const ctx = createDirectiveContext(owner);
-      (tag as DirectiveFunction)(child, dirProps, ctx);
+      (tag as DirectiveFunction)(child as any, dirProps, ctx);
     } else if (process.env.NODE_ENV !== "production") {
       if (isNotNil(child) && !isBoolean(child)) {
         console.warn("[kiaao] directive skipped non-Element child:", child);

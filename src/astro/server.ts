@@ -1,7 +1,7 @@
 // kiaao — Astro server renderer
 
+import { isFunction } from "../core/type-guards.ts";
 import { renderToString } from "../server/index.ts";
-import { isFunction } from "../utils/type-guards.ts";
 
 export default {
   name: "kiaao",

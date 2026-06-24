@@ -3,18 +3,11 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { getAdapter } from "../adapter/index.ts";
-import {
-  isFunction,
-  isNode,
-  isSingle,
-  isUndefined,
-  isArray,
-  isPlainObject,
-} from "../utils/type-guards.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
 import { use, toValue, isUse } from "./signal.ts";
+import { isFunction, isSingle, isUndefined, isArray, isPlainObject } from "./type-guards.ts";
 import {
   getSignalState,
   isHResult,
@@ -31,7 +24,7 @@ import {
 /** 将渲染结果统一为 Node 数组，处理 HResult/Node/Node[] 三种形式 */
 function toNodes(result: HResult | HostNode | HostNode[]): HostNode[] {
   if (isHResult(result)) return [...result.nodes];
-  if (isNode(result)) return [result];
+  if (getAdapter().isNode(result)) return [result];
   if (isArray(result)) return result as HostNode[];
   return [];
 }
@@ -122,7 +115,7 @@ function renderEachMode(options: {
     keyFn,
     cleanups: owner ? owner.cleanups : undefined,
   });
-  for (const n of nodes) if (isNode(n)) owner.elements.add(n);
+  for (const n of nodes) if (getAdapter().isNode(n)) owner.elements.add(n);
 }
 
 function renderStaticMode(options: {
@@ -248,7 +241,7 @@ function createItemDOMNodes(options: {
       itemOwner.children.push(node.owner);
       node.owner.parent = itemOwner;
     }
-    for (const n of node.nodes) if (isNode(n)) addNode(n);
+    for (const n of node.nodes) if (getAdapter().isNode(n)) addNode(n);
   } else {
     for (const n of toNodes(node)) addNode(n);
   }

@@ -4,8 +4,8 @@
 // registered to currentOwner (if present) for backward compatibility.
 
 import { getAdapter } from "../adapter/index.ts";
-import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 import { isUse, use } from "./signal.ts";
+import { isNil, isObject, isArray } from "./type-guards.ts";
 import {
   type ProcessChildrenResult,
   isHResult,
@@ -39,7 +39,7 @@ export function processChildren(children: any[]): ProcessChildrenResult {
       continue;
     }
 
-    if (isNode(child)) {
+    if (getAdapter().isNode(child)) {
       nodes.push(child);
       continue;
     }

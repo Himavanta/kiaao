@@ -1,7 +1,7 @@
 // kiaao — Core types: Owner, RenderAdapter, signal internals, symbols
 // Platform-agnostic. No DOM dependencies.
 
-import { isObject, isNotNil, isNotEmpty } from "../utils/type-guards.ts";
+import { isObject, isNotNil, isNotEmpty } from "./type-guards.ts";
 
 // ── Symbols ─────────────────────────────────────────────
 

@@ -7,7 +7,7 @@
 import { setAdapter, getAdapter, setRenderMode, getRenderMode } from "../adapter/index.ts";
 import type { ComponentFunction } from "../core/component.ts";
 import { h } from "../core/h.ts";
-import { isObject, isDefined } from "../utils/type-guards.ts";
+import { isObject, isDefined } from "../core/type-guards.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
 
 export function renderToString(

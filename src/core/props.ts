@@ -3,8 +3,8 @@
 // setProp/event binding to adapter.
 
 import { getAdapter } from "../adapter/index.ts";
-import { isRecord } from "../utils/type-guards.ts";
 import { isUse, use } from "./signal.ts";
+import { isRecord } from "./type-guards.ts";
 import { getSignalState, type HostNode, type NullableProps, type CleanupFn } from "./types.ts";
 
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）

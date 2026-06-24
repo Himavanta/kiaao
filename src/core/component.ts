@@ -3,9 +3,9 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
-import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
+import { isPromise, isArray, isNotEmpty } from "./type-guards.ts";
 import {
   type Signal,
   type Owner,
@@ -105,7 +105,7 @@ function mergeResults(items: MergeableResult, owner: Owner): HostNode[] {
         owner.cleanups.push(...item.cleanups);
       }
       allNodes.push(...item.nodes);
-    } else if (isNode(item)) {
+    } else if (getAdapter().isNode(item)) {
       allNodes.push(item);
     }
   }
