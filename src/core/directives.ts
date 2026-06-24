@@ -3,7 +3,7 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { getSignalState, getAdapter, isHResult, type Owner } from "./types.ts";
+import { getSignalState, getAdapter, isHResult, type Owner, type CleanupFn } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { setProps } from "../dom/props.ts";
 import { processChildren } from "./process-children.ts";
@@ -133,11 +133,7 @@ function renderStaticMode(options: {
 }
 
 /** 订阅 whenFn 变化，非信号时立即执行一次初始渲染 */
-function subscribeWhenFn(
-  whenFn: unknown,
-  renderBranch: () => void,
-  cleanups: (() => void)[],
-): void {
+function subscribeWhenFn(whenFn: unknown, renderBranch: () => void, cleanups: CleanupFn[]): void {
   if (isUse(whenFn)) {
     const derived = use(whenFn, () => renderBranch());
     const stop = getSignalState(derived)?.stop;
@@ -157,7 +153,7 @@ export function createWhenElement(options: {
   eachFn?: unknown;
   keyFn?: unknown;
   elseFn?: () => any;
-  cleanups?: (() => void)[];
+  cleanups?: CleanupFn[];
 }): Element {
   const { tag, props, children, whenFn, eachFn, keyFn, elseFn, cleanups } = options;
   const adapter = getAdapter();
@@ -414,7 +410,7 @@ export function createEachElement(options: {
   children: any[];
   eachFn: any;
   keyFn?: any;
-  cleanups?: (() => void)[];
+  cleanups?: CleanupFn[];
 }): Element {
   const { tag, props, children, eachFn, keyFn, cleanups } = options;
   const adapter = getAdapter();

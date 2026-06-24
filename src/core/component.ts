@@ -12,6 +12,8 @@ import {
   isHResult,
   getAdapter,
   type NullableProps,
+  type ComponentResult,
+  type MergeableResult,
 } from "./types.ts";
 import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
@@ -24,10 +26,7 @@ export interface Context {
   use: UseFunction;
 }
 
-export type ComponentFunction<P = any> = (
-  props: P,
-  context: Context,
-) => HResult | HResult[] | Promise<HResult | HResult[]>;
+export type ComponentFunction<P = any> = (props: P, context: Context) => ComponentResult;
 
 // ── Safe Signal ──────────────────────────────────────
 
@@ -87,7 +86,7 @@ export function createContext(owner: Owner): Context {
  * 将子 HResult 的 owner、nodes、cleanups 合并到当前 owner。
  * 处理单值和数组（Fragment 返回多个根元素）。
  */
-function mergeResults(items: any[], owner: Owner): Node[] {
+function mergeResults(items: MergeableResult, owner: Owner): Node[] {
   const allNodes: Node[] = [];
   const list = isArray(items) ? items : [items];
 
@@ -115,7 +114,7 @@ function mergeResults(items: any[], owner: Owner): Node[] {
 
 // ── handleAsyncComponent ──────────────────────────────
 
-function handleAsyncComponent(promise: Promise<any>, owner: Owner): HResult {
+function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
   const adapter = getAdapter();
   const placeholder = adapter.createComment("async") as Comment;
   owner.elements.add(placeholder);
@@ -157,9 +156,9 @@ export function handleComponent(
     compProps = { ...compProps, children: normalizeChildren(children) };
   }
 
-  let result: any;
+  let result: ComponentResult;
   try {
-    result = (tag as any)(compProps, context);
+    result = tag(compProps, context);
   } catch (e) {
     console.error("[kiaao] component error:", e);
     disposeOwner(owner);

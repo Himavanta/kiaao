@@ -3,7 +3,7 @@
 
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { h } from "./h.ts";
-import { isHResult, getAdapter } from "./types.ts";
+import { getAdapter } from "./types.ts";
 import type { ComponentFunction } from "./component.ts";
 
 export interface App {
@@ -20,10 +20,8 @@ export function createApp(component: ComponentFunction, props?: Record<string, a
 
   // 渲染组件 → 获取 HResult
   const hr = h(component, props);
-  const appOwner = isHResult(hr) ? hr.owner : null;
-  const nodes: Node[] = isHResult(hr) ? [...hr.nodes] : [];
+  const appOwner = hr.owner;
 
-  // 建立根组件的父子关系——通过 Owner 树递归 dispose，无需共享 elements 引用
   if (appOwner) {
     rootOwner.children.push(appOwner);
     appOwner.parent = rootOwner;
@@ -32,7 +30,7 @@ export function createApp(component: ComponentFunction, props?: Record<string, a
   return {
     mount(container: Element): void {
       const adapter = getAdapter();
-      for (const node of nodes) {
+      for (const node of hr.nodes) {
         adapter.append(container, node);
       }
       triggerMount(rootOwner);

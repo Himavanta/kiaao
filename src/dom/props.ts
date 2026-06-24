@@ -2,7 +2,7 @@
 // Platform-agnostic: all DOM operations go through RenderAdapter.
 // browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
-import { getAdapter, getSignalState, type NullableProps } from "../core/types.ts";
+import { getAdapter, getSignalState, type NullableProps, type CleanupFn } from "../core/types.ts";
 import { isUse, use } from "../core/signal.ts";
 import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
@@ -56,7 +56,7 @@ export function setProp(el: Element, rawKey: string, value: any): void {
 
 // ── setProps ───────────────────────────────────────────
 
-export function setProps(el: Element, props: NullableProps = {}, cleanups?: (() => void)[]): void {
+export function setProps(el: Element, props: NullableProps = {}, cleanups?: CleanupFn[]): void {
   if (!isRecord(props)) return;
 
   for (const key of Object.keys(props)) {

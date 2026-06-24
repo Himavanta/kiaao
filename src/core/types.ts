@@ -24,13 +24,13 @@ export interface HResult {
   [HRESULT_SYMBOL]: true;
   owner: Owner | null;
   nodes: Node[];
-  cleanups?: (() => void)[];
+  cleanups?: CleanupFn[];
 }
 
 /** processChildren 的返回值类型 */
 export interface ProcessChildrenResult {
   nodes: Node[];
-  cleanups: (() => void)[];
+  cleanups: CleanupFn[];
 }
 
 /** 创建 HResult 对象 */
@@ -66,6 +66,15 @@ export type Props = Record<string, any>;
 
 /** 组件/元素的属性对象类型——可空，配合 `= {}` 默认参数使用 */
 export type NullableProps = Props | null | undefined;
+
+/** 组件函数返回值的类型：同步结果为 HResult 或 HResult 数组，异步结果为 Promise */
+export type ComponentResult = HResult | HResult[] | Promise<HResult | HResult[]>;
+
+/** 可合并到 Owner 树的渲染结果 */
+export type MergeableResult = HResult | HResult[] | Node;
+
+/** 清理函数 */
+export type CleanupFn = () => void;
 
 /** h() 返回类型：单个节点或节点数组 */
 export type Children = Node | Node[];
@@ -106,9 +115,9 @@ export function getSignalState<T>(signal: Signal<T>): SignalState<T> | undefined
 export interface Owner {
   parent: Owner | null;
   children: Owner[];
-  cleanups: (() => void)[];
-  mountCallbacks: (() => void)[];
-  unmountCallbacks: (() => void)[];
+  cleanups: CleanupFn[];
+  mountCallbacks: CleanupFn[];
+  unmountCallbacks: CleanupFn[];
   elements: Set<unknown>;
   disposed: boolean;
 }

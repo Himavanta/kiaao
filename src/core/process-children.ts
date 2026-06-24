@@ -3,7 +3,13 @@
 // that flow upward through HResult.  During transition they are also
 // registered to currentOwner (if present) for backward compatibility.
 
-import { getAdapter, type ProcessChildrenResult, isHResult, getSignalState } from "./types.ts";
+import {
+  getAdapter,
+  type ProcessChildrenResult,
+  isHResult,
+  getSignalState,
+  type CleanupFn,
+} from "./types.ts";
 import { isUse, use } from "./signal.ts";
 import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
@@ -19,7 +25,7 @@ import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
  */
 export function processChildren(children: any[]): ProcessChildrenResult {
   const nodes: Node[] = [];
-  const cleanups: (() => void)[] = [];
+  const cleanups: CleanupFn[] = [];
   const adapter = getAdapter();
 
   for (const child of children) {

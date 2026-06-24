@@ -1,7 +1,14 @@
 // kiaao — h() function: creates real DOM or dispatches to SSR mode
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
-import { getAdapter, type HResult, createHResult, isHResult, type NullableProps } from "./types.ts";
+import {
+  getAdapter,
+  type HResult,
+  createHResult,
+  isHResult,
+  type NullableProps,
+  type CleanupFn,
+} from "./types.ts";
 import { createOwner } from "./owner.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { processChildren } from "./process-children.ts";
@@ -37,7 +44,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
   // 控制流指令
   if (isDefined(props?.when)) {
     const { when, each, key, else: elseFn, ...rest } = props;
-    const orphanCleanups: (() => void)[] = [];
+    const orphanCleanups: CleanupFn[] = [];
     const el = createWhenElement({
       tag,
       props: rest,
@@ -53,7 +60,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
 
   if (isDefined(props?.each)) {
     const { each, key, ...rest } = props;
-    const orphanCleanups: (() => void)[] = [];
+    const orphanCleanups: CleanupFn[] = [];
     const el = createEachElement({
       tag,
       props: rest,
@@ -67,7 +74,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
 
   // 普通元素
   const el: any = adapter.createElement(tag);
-  const orphanCleanups: (() => void)[] = [];
+  const orphanCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, orphanCleanups);
   const { nodes: childNodes, cleanups: childCleanups } = processChildren(children);
   for (const node of childNodes) {
