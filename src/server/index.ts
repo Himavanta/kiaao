@@ -5,9 +5,9 @@
 //   const html = renderToString(MyComponent, { name: "kiaao" });
 
 import { setAdapter, getAdapter, setRenderMode, getRenderMode } from "../adapter/index.ts";
-import type { ComponentFunction } from "../core/component.ts";
-import { h } from "../core/h.ts";
-import { isObject, isDefined } from "../core/type-guards.ts";
+import type { ComponentFunction } from "../core/index.ts";
+import { h } from "../core/index.ts";
+import { isObject, isDefined } from "../core/index.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
 
 export function renderToString(

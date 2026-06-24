@@ -3,7 +3,7 @@
 // Generic setProps (iteration + reactive binding) moved to core/props.ts.
 
 import { getAdapter } from "../adapter/index.ts";
-import { isNil, isObject, isString } from "../core/type-guards.ts";
+import { isNil, isObject, isString } from "../core/index.ts";
 
 // 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
 export const EVENT_RE = /^on[A-Z]/;

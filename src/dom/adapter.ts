@@ -1,8 +1,8 @@
 // kiaao — Browser RenderAdapter implementation
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
-import { isObject } from "../core/type-guards.ts";
-import type { RenderAdapter } from "../core/types.ts";
+import { isObject } from "../core/index.ts";
+import type { RenderAdapter } from "../core/index.ts";
 
 // ── SVG ───────────────────────────────────────────────
 

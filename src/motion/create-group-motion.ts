@@ -4,10 +4,10 @@
 
 import { animate } from "motion/mini";
 
-import { direct, type DirectiveContext } from "../core/direct.ts";
-import { use } from "../core/signal.ts";
-import { isEmpty, isDefined } from "../core/type-guards.ts";
-import { type Signal, type Props, type HostNode } from "../core/types.ts";
+import { direct, type DirectiveContext } from "../core/index.ts";
+import { use } from "../core/index.ts";
+import { isEmpty, isDefined } from "../core/index.ts";
+import { type Signal, type Props, type HostNode } from "../core/index.ts";
 import {
   type ElementMotionConfig,
   type Generation,

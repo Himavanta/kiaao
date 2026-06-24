@@ -3,7 +3,7 @@
 // Provides setAdapter/getAdapter for RenderAdapter registration,
 // setRenderMode/getRenderMode for platform mode (dom/ssr/hydrate).
 
-import type { RenderAdapter } from "../core/types.ts";
+import type { RenderAdapter } from "../core/index.ts";
 
 // ── RenderAdapter ─────────────────────────────────────
 

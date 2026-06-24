@@ -1,9 +1,9 @@
 // kiaao — SSR RenderAdapter implementation
 // Creates lightweight serializable node trees for string rendering.
 
-import { definitionMode } from "../core/signal.ts";
-import { isNil, isNotNil } from "../core/type-guards.ts";
-import type { RenderAdapter } from "../core/types.ts";
+import { definitionMode } from "../core/index.ts";
+import { isNil, isNotNil } from "../core/index.ts";
+import type { RenderAdapter } from "../core/index.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 

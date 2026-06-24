@@ -9,42 +9,15 @@ try {
   }
 } catch {}
 
-// Reactive core (platform-agnostic)
-export { use, isUse, toValue } from "./core/signal.ts";
-export type { RenderMode } from "./adapter/index.ts";
+export * from "./core/index.ts";
 
-// DOM rendering (new h() with Owner tree)
-export { h, Fragment } from "./core/h.ts";
-
-// Components
-export { createApp } from "./core/create-app.ts";
-export type { App } from "./core/create-app.ts";
-export type { ComponentFunction, Context } from "./core/component.ts";
-
-// Portal, lazy
+// DOM-specific exports
 export { Portal } from "./dom/portal.ts";
 export { lazy } from "./dom/lazy.ts";
+export { isNode, isElement, isSVGElement } from "./dom/type-guards.ts";
 
 // JSX runtime
 export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";
 
-// Directive system
-export { direct } from "./core/direct.ts";
-export type { DirectiveFunction, DirectiveContext } from "./core/direct.ts";
-
-// Signal types
-export type { UseFunction } from "./core/signal.ts";
-
-// Core framework types
-export type {
-  Signal,
-  HResult,
-  Owner,
-  Props,
-  NullableProps,
-  CleanupFn,
-  ComponentResult,
-  MergeableResult,
-  RenderAdapter,
-  ProcessChildrenResult,
-} from "./core/types.ts";
+// Adapter (platform config)
+export type { RenderMode } from "./adapter/index.ts";

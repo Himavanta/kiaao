@@ -3,8 +3,8 @@
 // built-in async component mechanism (h() detects Promise return values).
 
 import { getRenderMode } from "../adapter/index.ts";
-import type { ComponentFunction } from "../core/component.ts";
-import { h } from "../core/h.ts";
+import type { ComponentFunction } from "../core/index.ts";
+import { h } from "../core/index.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,

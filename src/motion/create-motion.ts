@@ -2,10 +2,10 @@
 // Business/animation signal separation. Users operate business signal directly,
 // the animation signal lags behind to allow exit animations to complete.
 
-import { direct, type DirectiveContext } from "../core/direct.ts";
-import { use } from "../core/signal.ts";
-import { isEmpty, isNotEmpty } from "../core/type-guards.ts";
-import { type Signal, type Props, type HostNode } from "../core/types.ts";
+import { direct, type DirectiveContext } from "../core/index.ts";
+import { use } from "../core/index.ts";
+import { isEmpty, isNotEmpty } from "../core/index.ts";
+import { type Signal, type Props, type HostNode } from "../core/index.ts";
 import {
   type ElementMotionConfig,
   type Generation,

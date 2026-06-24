@@ -3,7 +3,7 @@
 
 import { animate } from "motion/mini";
 
-import { isNil } from "../core/type-guards.ts";
+import { isNil } from "../core/index.ts";
 
 // ── Motion State ──────────────────────────────────────
 

@@ -2,9 +2,9 @@
 // Renders content into a specified DOM container outside the component tree.
 
 import { getAdapter } from "../adapter/index.ts";
-import type { Context } from "../core/component.ts";
-import { isArray, isString } from "../core/type-guards.ts";
-import { SSR_COMPONENT } from "../core/types.ts";
+import type { Context } from "../core/index.ts";
+import { isArray, isString } from "../core/index.ts";
+import { SSR_COMPONENT } from "../core/index.ts";
 import { isNode } from "./type-guards.ts";
 
 export function Portal(
