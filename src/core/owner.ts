@@ -2,6 +2,7 @@
 // Platform-agnostic. No DOM dependencies.
 
 import { removeNode, type Owner } from "./types.ts";
+import { isFunction } from "../utils/type-guards.ts";
 
 // ── createOwner ───────────────────────────────────────
 
@@ -28,7 +29,7 @@ export function createOwner(): Owner {
 function safeCall(fn: () => void | Promise<void>, label: string): void {
   try {
     const result = fn();
-    if (result && typeof result.then === "function") {
+    if (result && isFunction((result as any).then)) {
       result.catch((err: unknown) => console.error(`[kiaao] ${label}:`, err));
     }
   } catch (err) {

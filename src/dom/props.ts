@@ -31,7 +31,7 @@ export function setProp(el: any, rawKey: string, value: any): void {
       // DOM 模式：增量合并，只影响指定属性
       // SSR 模式：序列化为 cssText 字符串输出
       const elStyle = (el as any).style;
-      if (elStyle && typeof elStyle === "object") {
+      if (elStyle && isObject(elStyle)) {
         Object.assign(elStyle, value);
       } else {
         const cssText = Object.entries(value)
