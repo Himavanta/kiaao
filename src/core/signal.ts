@@ -73,7 +73,8 @@ function createSignal<T>(fn: Signal<T>, state: SignalState<T>): Signal<T> {
 
 // ── Definition Mode ────────────────────────────────────
 
-function definitionMode<T>(initialValue: T): Signal<T> {
+/** @internal 创建定义模式的信号，adapter 的 createStaticDerived 使用 */
+export function definitionMode<T>(initialValue: T): Signal<T> {
   const state: DefinitionState<T> = {
     value: initialValue,
     subs: new Set(),

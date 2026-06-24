@@ -7,6 +7,7 @@ import { getAdapter } from "../adapter/index.ts";
 import {
   type Signal,
   type Owner,
+  type HostNode,
   REACTIVE,
   type HResult,
   createHResult,
@@ -86,8 +87,8 @@ export function createContext(owner: Owner): Context {
  * 将子 HResult 的 owner、nodes、cleanups 合并到当前 owner。
  * 处理单值和数组（Fragment 返回多个根元素）。
  */
-function mergeResults(items: MergeableResult, owner: Owner): Node[] {
-  const allNodes: Node[] = [];
+function mergeResults(items: MergeableResult, owner: Owner): HostNode[] {
+  const allNodes: HostNode[] = [];
   const list = isArray(items) ? items : [items];
 
   for (const item of list) {

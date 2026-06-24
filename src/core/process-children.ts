@@ -4,7 +4,13 @@
 // registered to currentOwner (if present) for backward compatibility.
 
 import { getAdapter } from "../adapter/index.ts";
-import { type ProcessChildrenResult, isHResult, getSignalState, type CleanupFn } from "./types.ts";
+import {
+  type ProcessChildrenResult,
+  isHResult,
+  getSignalState,
+  type CleanupFn,
+  type HostNode,
+} from "./types.ts";
 import { isUse, use } from "./signal.ts";
 import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
@@ -19,7 +25,7 @@ import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
  * - 其他值转为文本节点
  */
 export function processChildren(children: any[]): ProcessChildrenResult {
-  const nodes: Node[] = [];
+  const nodes: HostNode[] = [];
   const cleanups: CleanupFn[] = [];
   const adapter = getAdapter();
 

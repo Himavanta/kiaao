@@ -3,6 +3,7 @@
 
 import type { RenderAdapter } from "../core/types.ts";
 import { isNil, isNotNil } from "../utils/type-guards.ts";
+import { definitionMode } from "../core/signal.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 
@@ -125,6 +126,15 @@ export const ssrAdapter: RenderAdapter = {
 
   removeEventListener(): void {
     // SSR: 事件绑定不输出
+  },
+
+  isNode(value: unknown): value is SSRNode {
+    return typeof value === "object" && value !== null && "type" in value;
+  },
+
+  createStaticDerived(fn, _deps) {
+    const value = fn(undefined);
+    return definitionMode(value);
   },
 
   setProp(el: unknown, key: string, value: unknown): void {

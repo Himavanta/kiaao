@@ -12,6 +12,7 @@ import {
   type Props,
   type Signal,
   type HResult,
+  type HostNode,
 } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { setProps } from "../dom/props.ts";
@@ -28,17 +29,17 @@ import {
 // ── Helper: flatten result to nodes ────────────────
 
 /** 将渲染结果统一为 Node 数组，处理 HResult/Node/Node[] 三种形式 */
-function toNodes(result: HResult | Node | Node[]): Node[] {
+function toNodes(result: HResult | HostNode | HostNode[]): HostNode[] {
   if (isHResult(result)) return [...result.nodes];
   if (isNode(result)) return [result];
-  if (isArray(result)) return result.filter(isNode);
+  if (isArray(result)) return result as HostNode[];
   return [];
 }
 
 /** 将节点列表追加到元素并注册到 Owner */
-function appendNodes(el: Element, nodes: Node[], owner: Owner): void {
+function appendNodes(el: Element, nodes: HostNode[], owner: Owner): void {
   for (const node of nodes) {
-    el.append(node);
+    el.append(node as Node);
     owner.elements.add(node);
   }
 }
@@ -138,7 +139,7 @@ function renderStaticMode(options: {
   }
   const { nodes, cleanups } = processChildren(children);
   for (const node of nodes) {
-    el.append(node);
+    el.append(node as Node);
     owner.elements.add(node);
   }
   owner.cleanups.push(...cleanups);
@@ -223,8 +224,8 @@ function createItemDOMNodes(options: {
   childFn: any;
   itemOwner: Owner;
   anchor: any;
-  nodes: Node[];
-}): Node[] {
+  nodes: HostNode[];
+}): HostNode[] {
   const { itemSignal, index: i, childFn, itemOwner, anchor, nodes } = options;
   let node: any;
   try {
@@ -234,10 +235,10 @@ function createItemDOMNodes(options: {
     return [];
   }
 
-  const newNodes: Node[] = [];
-  const addNode = (n: Node) => {
+  const newNodes: HostNode[] = [];
+  const addNode = (n: HostNode) => {
     itemOwner.elements.add(n);
-    anchor.before(n);
+    anchor.before(n as Node);
     newNodes.push(n);
     nodes.push(n);
   };
@@ -258,16 +259,16 @@ function createItemDOMNodes(options: {
 function repositionItemGroup(options: {
   container: Element;
   anchor: any;
-  existingNodes: Node[];
-  prevNode: Node | null;
-}): Node | null {
+  existingNodes: HostNode[];
+  prevNode: HostNode | null;
+}): HostNode | null {
   const { container, anchor, existingNodes, prevNode } = options;
   if (!existingNodes.length) return prevNode;
-  const firstNode = existingNodes[0];
+  const firstNode = existingNodes[0] as Node;
   const needsMove =
     prevNode === null
       ? container.firstChild !== firstNode && container.firstChild !== anchor
-      : firstNode.previousSibling !== prevNode;
+      : (firstNode as Node).previousSibling !== (prevNode as Node);
   if (needsMove) {
     for (const n of [...existingNodes].reverse()) {
       anchor.before(n);
@@ -306,7 +307,7 @@ function disposeRemovedItems(options: {
   newKeys: Set<unknown>;
   itemOwners: Map<unknown, Owner>;
   itemSignalMap: Map<unknown, Signal<any>>;
-  itemNodeMap: Map<unknown, Node[]>;
+  itemNodeMap: Map<unknown, HostNode[]>;
 }): void {
   const { currentKeys, newKeys, itemOwners, itemSignalMap, itemNodeMap } = options;
   for (const key of currentKeys) {
@@ -339,17 +340,17 @@ function renderEachOnElement(options: {
   const adapter = getAdapter();
   const anchor = adapter.createComment("each") as Comment;
   container.append(anchor);
-  const nodes: Node[] = [];
+  const nodes: HostNode[] = [];
   const itemOwners: Map<unknown, Owner> = new Map();
   const itemSignalMap: Map<unknown, Signal<any>> = new Map();
-  const itemNodeMap: Map<unknown, Node[]> = new Map();
+  const itemNodeMap: Map<unknown, HostNode[]> = new Map();
 
   const sync = () => {
     const source = toValue(eachFn);
     const items = isArray(source) ? source : [];
     const newKeys = new Set<any>();
     const currentKeys = new Set(itemOwners.keys());
-    let prevNode: Node | null = null;
+    let prevNode: HostNode | null = null;
 
     for (const [i, rawValue] of items.entries()) {
       const identity = keyFn ? keyFn(rawValue, i) : i;
@@ -408,7 +409,7 @@ function renderEachOnElement(options: {
 function cleanupEachMaps(
   itemOwners: Map<unknown, Owner>,
   itemSignalMap: Map<unknown, Signal<any>>,
-  itemNodeMap: Map<unknown, Node[]>,
+  itemNodeMap: Map<unknown, HostNode[]>,
 ): void {
   for (const [, owner] of itemOwners) disposeOwner(owner);
   itemOwners.clear();

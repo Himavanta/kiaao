@@ -14,6 +14,11 @@ export const DIRECT_KEY = Symbol("direct");
 /** SSR_COMPONENT Symbol — 标记 SSR 变体组件 */
 export const SSR_COMPONENT = Symbol("kiaao.ssr");
 
+// ── Host Node Type ─────────────────────────────────────
+
+/** 宿主节点类型——由各平台 adapter 定义具体是什么（DOM 平台是 Node，SSR 是 SSRNode） */
+export type HostNode = unknown;
+
 // ── HResult Types ───────────────────────────────────────
 
 /** HResult Symbol — 标记 h() 返回的 HResult 对象 */
@@ -23,21 +28,21 @@ export const HRESULT_SYMBOL = Symbol("kiaao.hresult");
 export interface HResult {
   [HRESULT_SYMBOL]: true;
   owner: Owner | null;
-  nodes: Node[];
+  nodes: HostNode[];
   cleanups?: CleanupFn[];
 }
 
 /** processChildren 的返回值类型 */
 export interface ProcessChildrenResult {
-  nodes: Node[];
+  nodes: HostNode[];
   cleanups: CleanupFn[];
 }
 
 /** 创建 HResult 对象 */
 export function createHResult(
   owner: Owner | null,
-  nodes: Node[],
-  cleanups?: (() => void)[],
+  nodes: HostNode[],
+  cleanups?: CleanupFn[],
 ): HResult {
   const result: HResult = {
     [HRESULT_SYMBOL]: true as const,
@@ -71,7 +76,7 @@ export type NullableProps = Props | null | undefined;
 export type ComponentResult = HResult | HResult[] | Promise<HResult | HResult[]>;
 
 /** 可合并到 Owner 树的渲染结果 */
-export type MergeableResult = HResult | HResult[] | Node;
+export type MergeableResult = HResult | HResult[] | HostNode;
 
 /** 清理函数 */
 export type CleanupFn = () => void;
@@ -123,18 +128,21 @@ export interface Owner {
 
 /** 渲染适配器：所有平台渲染操作通过此接口 */
 export interface RenderAdapter {
-  createElement(tag: string): unknown;
-  createTextNode(text: string): unknown;
-  createComment(text: string): unknown;
-  before(ref: unknown, child: unknown): void;
-  append(parent: unknown, child: unknown): void;
-  remove(node: unknown): void;
-  replaceWith(oldNode: unknown, ...newNodes: unknown[]): void;
+  createElement(tag: string): HostNode;
+  createTextNode(text: string): HostNode;
+  createComment(text: string): HostNode;
+  before(ref: HostNode, child: HostNode): void;
+  append(parent: HostNode, child: HostNode): void;
+  remove(node: HostNode): void;
+  replaceWith(oldNode: HostNode, ...newNodes: HostNode[]): void;
+  setProp(el: HostNode, key: string, value: unknown): void;
+  addEventListener(el: HostNode, type: string, handler: (...args: any[]) => void): void;
+  removeEventListener(el: HostNode, type: string, handler: (...args: any[]) => void): void;
+  /** 判断值是否为合法的宿主节点 */
+  isNode(value: unknown): value is HostNode;
   /**
-   * 设置元素属性。浏览器 adapter 内部根据属性名决定走
-   * setAttribute 还是 property 赋值；Lynx 等平台直接设值即可。
+   * 可选：创建静态派生信号。SSR adapter 用于跳过响应式依赖追踪，直接求值。
+   * DOM adapter 不实现此方法，core 走默认完整派生路径。
    */
-  setProp(el: unknown, key: string, value: unknown): void;
-  addEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
-  removeEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
+  createStaticDerived?: <T>(fn: (...args: any[]) => T, deps: Signal<any>[]) => Signal<T>;
 }

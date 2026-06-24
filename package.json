@@ -25,6 +25,7 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./adapter": "./dist/adapter/index.js",
     "./astro": "./dist/astro/index.js",
     "./astro/client": "./dist/astro/client.js",
     "./astro/server": "./dist/astro/server.js",

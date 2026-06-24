@@ -92,6 +92,10 @@ export const browserAdapter: RenderAdapter = {
     el.addEventListener(type, handler as EventListener);
   },
 
+  isNode(value: unknown): value is Node {
+    return value instanceof Node;
+  },
+
   setProp(el: any, key: string, value: unknown): void {
     // attr: 前缀 → 强制 setAttribute
     if (key.startsWith("attr:")) {

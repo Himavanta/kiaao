@@ -8,6 +8,7 @@ import {
   isHResult,
   type NullableProps,
   type CleanupFn,
+  type HostNode,
 } from "./types.ts";
 import { createOwner } from "./owner.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
@@ -101,7 +102,7 @@ function handleDirectiveMode(
 
   // 解包 children 中的 HResult
   const flatChildren = children.flat(Infinity);
-  const allNodes: Node[] = [];
+  const allNodes: HostNode[] = [];
 
   for (const child of flatChildren) {
     if (isHResult(child)) {
