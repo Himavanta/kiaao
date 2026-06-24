@@ -24,11 +24,11 @@ import {
  * 通过 keyFn 比对新旧数组，返回被移除的 key 数组。
  * 使用 Set 差集计算，避免索引位移误判。
  */
-function findRemovedKeys(
-  oldArray: any[],
-  newArray: any[],
-  keyFn: (item: any, index: number) => any,
-): any[] {
+function findRemovedKeys<T, K>(
+  oldArray: T[],
+  newArray: T[],
+  keyFn: (item: T, index: number) => K,
+): K[] {
   const newKeys = new Set(newArray.map((item, i) => keyFn(item, i)));
   const removed: any[] = [];
 
@@ -45,9 +45,9 @@ function findRemovedKeys(
 /**
  * 启动指定 key 对应的退出动画，收集动画 Promise。
  */
-function collectRemovedKeyAnimations(
-  removedKeys: any[],
-  keyToElMap: Map<any, Element>,
+function collectRemovedKeyAnimations<K>(
+  removedKeys: K[],
+  keyToElMap: Map<K, Element>,
   propsMap: Map<Element, ElementMotionConfig>,
 ): Promise<any>[] {
   const anims: Promise<any>[] = [];
@@ -72,15 +72,15 @@ function collectRemovedKeyAnimations(
 
 // ── Signal Change Handler ─────────────────────────────
 
-interface HandleGroupSignalChangeOptions {
-  oldArray: any[];
-  newArray: any[];
+interface HandleGroupSignalChangeOptions<T, K> {
+  oldArray: T[];
+  newArray: T[];
   generation: Generation;
   elements: Set<Element>;
   propsMap: Map<Element, ElementMotionConfig>;
-  keyToElMap: Map<any, Element>;
-  keyFn: ((item: any, index: number) => any) | undefined;
-  visibleItems: (v: any) => void;
+  keyToElMap: Map<K, Element>;
+  keyFn: ((item: T, index: number) => K) | undefined;
+  visibleItems: (v: T[]) => void;
 }
 
 /**
@@ -91,7 +91,9 @@ interface HandleGroupSignalChangeOptions {
  *
  * 代际标记确保快速连续切换时只有最后一次调用生效。
  */
-async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions): Promise<void> {
+async function handleGroupSignalChange<T, K>(
+  options: HandleGroupSignalChangeOptions<T, K>,
+): Promise<void> {
   const { oldArray, newArray, generation, elements, propsMap, keyToElMap, keyFn, visibleItems } =
     options;
   const myTick = ++generation.tick;
@@ -131,14 +133,14 @@ async function handleGroupSignalChange(options: HandleGroupSignalChangeOptions):
  * @param context 组件 context（可选）。传入时信号清理绑定到组件生命周期。
  * @returns [visibleItems, GroupMotion]
  */
-export function createGroupMotion(
-  signal: Signal<any>,
-  keyFn?: (item: any, index: number) => any,
+export function createGroupMotion<T, K = any>(
+  signal: Signal<T[]>,
+  keyFn?: (item: T, index: number) => K,
   context?: { use: typeof use },
-): [visibleItems: Signal<any>, GroupMotion: ReturnType<typeof direct>] {
+): [visibleItems: Signal<T[]>, GroupMotion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
-  const keyToElMap = new Map<any, Element>();
+  const keyToElMap = new Map<K, Element>();
   const generation: Generation = { tick: 0 };
 
   const useFn: typeof use = context?.use ?? use;

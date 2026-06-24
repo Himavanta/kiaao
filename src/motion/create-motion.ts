@@ -18,11 +18,11 @@ import {
 // ── Signal Change Handler ─────────────────────────────
 
 interface HandleSignalChangeOptions {
-  newValue: any;
+  newValue: boolean;
   generation: Generation;
   elements: Set<Element>;
   propsMap: Map<Element, ElementMotionConfig>;
-  visible: (v: any) => void;
+  visible: (v: boolean) => void;
 }
 
 /**
@@ -72,9 +72,9 @@ async function handleSignalChange(options: HandleSignalChangeOptions): Promise<v
  * @returns [visible, Motion]
  */
 export function createMotion(
-  signal: Signal<any>,
+  signal: Signal<boolean>,
   context?: { use: typeof use },
-): [visible: Signal<any>, Motion: ReturnType<typeof direct>] {
+): [visible: Signal<boolean>, Motion: ReturnType<typeof direct>] {
   const elements = new Set<Element>();
   const propsMap = new Map<Element, ElementMotionConfig>();
   const generation: Generation = { tick: 0 };

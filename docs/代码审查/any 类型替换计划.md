@@ -1,120 +1,111 @@
-# `any` 类型替换计划
+# `any` 类型替换任务
 
+> 创建日期：2026-06-23 | 最后更新：2026-06-24
 > 目标：将 `src/` 中所有 `: any` 替换为精确类型
 > 原则：不惧怕类型定义数量，类型系统清晰健壮优先
 
 ---
 
-## 分析工具
-
-- LSP `lsp_hover` 确认预期类型
-- `lsp_diagnostics` 验证替换后无错误
-- `vp check --fix` 最终验证
-
----
-
-## Phase 1: `owner: any` → `Owner`
-
-**核心类型**：`Owner` 定义在 `src/core/types.ts:100`，不依赖 DOM
-
-| 文件                          | 行                                                                 | 当前 `: any`                           | 替换为            | 影响范围 |
-| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------- | ----------------- | -------- |
-| `component.ts:44`             | `createContextUse(owner: any)`                                     | `Owner`                                | 内部使用 + 调用方 |
-| `component.ts:58`             | `createContext(owner: any): Context`                               | `Owner`                                | 公开 API          |
-| `component.ts:88`             | `mergeResults(items: any[], owner: any): Node[]`                   | `(HResult \| Node)[], Owner`           | 内部调用          |
-| `component.ts:116`            | `handleAsyncComponent(promise: Promise<any>, owner: any): HResult` | `Promise<HResult \| HResult[]>, Owner` | 仅内部            |
-| `component.ts:150`            | `const owner: any = createOwner()`                                 | `Owner`                                | 局部变量          |
-| `direct.ts:43`                | `createDirectiveContext(owner: any): DirectiveContext`             | `Owner`                                | 公开 API          |
-| `directives.ts:21`            | `appendResult(el, result, owner: any)`                             | `Owner`                                | 内部              |
-| `directives.ts:77,90,102,120` | 各种 mode 函数的 `owner: any`                                      | `Owner`                                | 内部              |
-| `directives.ts:170`           | `let branchOwner: any`                                             | `Owner \| null`                        | 局部变量          |
-| `directives.ts:216`           | `itemOwner: any`                                                   | `Owner`                                | 局部变量          |
-
-**替换后收益**：`Owner` 类型在整个核心层被正确传递，编译时捕获 parent/children/cleanups 等属性误用。
-
----
-
-## Phase 2: 适配器和 Element 类型
-
-**核心类型**：`RenderAdapter.createElement` 返回 `unknown`（设计如此，不改）
-
-| 文件                | 行                                           | 当前 `: any` | 替换为                   | 说明 |
-| ------------------- | -------------------------------------------- | ------------ | ------------------------ | ---- |
-| `h.ts:68`           | `const el: any = adapter.createElement(tag)` | `Element`    | DOM 模式下已知是 Element |
-| `dom/adapter.ts:95` | `setProp(el: any, ...)`                      | `Element`    | 浏览器层已知是 Element   |
-| `dom/props.ts:21`   | `setProp(el: any, ...)`                      | `Element`    | 同上                     |
-| `dom/props.ts:60`   | `setProps(el: any, ...)`                     | `Element`    | 同上                     |
-
-> 注意：`core/` 不能依赖 DOM 类型，`el: any` 在 core 层保留。
-
----
-
-## Phase 3: 信号内部状态类型
-
-**当前问题**：`Signal<T>` 的内部状态（`SignalState<T>`）通过 `(x as any)[REACTIVE]` 访问
-
-| 文件            | 行                                           | 当前 `: any`     | 替换为        |
-| --------------- | -------------------------------------------- | ---------------- | ------------- |
-| `signal.ts:80`  | `createSignal<T>(fn: Signal<T>, state: any)` | `SignalState<T>` |
-| `signal.ts:111` | `func: (v?: any) => T`                       | `(v?: T) => T`   | 参数是 T 类型 |
-
----
-
-## Phase 4: Props/Children 类型
-
-**定义新类型**：
-
-```ts
-// src/core/types.ts 或 src/core/component.ts
-type Props = Record<string, any>; // 保持开放，放宽 key
-```
-
-| 文件           | 行                                          | 当前 `: any`                  | 替换为 |
-| -------------- | ------------------------------------------- | ----------------------------- | ------ |
-| `h.ts:27`      | `Fragment(props: { children?: any }): any`  | `{ children?: any }` → 保持   |
-| `h.ts:33`      | `handleDomMode(tag, props: any, ...)`       | `Record<string, any> \| null` |
-| `h.ts:80`      | `handleDirectiveMode(tag, props: any, ...)` | `Record<string, any>`         |
-| `h.ts:117-119` | `h(tag, props?: any, ...)`                  | `Record<string, any> \| null` |
-
----
-
-## Phase 5: Motion 动画类型
-
-| 文件                           | 行                                                             | 当前 `: any`                  | 替换为 |
-| ------------------------------ | -------------------------------------------------------------- | ----------------------------- | ------ |
-| `create-group-motion.ts:28-33` | `oldArray: any[], newArray: any[], keyFn: ..., removed: any[]` | `T[]` 泛型                    |
-| `create-group-motion.ts:82`    | `keyFn: ((item: any, ...) => any)`                             | `(item: T, ...) => KeyType`   |
-| `create-motion.ts:21`          | `newValue: any`                                                | `boolean`（动画信号是布尔值） |
-| `create-motion.ts:25`          | `visible: (v: any) => void`                                    | `(v: boolean) => void`        |
-
----
-
-## Phase 6: 路由和 Astro 集成
-
-| 文件                 | 行                                      | 当前 `: any`                               | 替换为 |
-| -------------------- | --------------------------------------- | ------------------------------------------ | ------ |
-| `router/index.ts:10` | `RouteComponent = (props?: any) => any` | `(props?: Record<string, any>) => HResult` |
-| `router/index.ts:33` | `[key: string]: any`                    | `[key: string]: unknown`                   |
-
----
-
-## 实施状态
+## 当前状态
 
 ```
-Phase 1 (Owner) ✅ → Phase 2 (Element) ✅ → Phase 3 (Signal) ✅
-  → Phase 4 (Props) ✅ → Phase 5 (Motion) ⬜ → Phase 6 (Router) ⬜
+Phase 1 (Owner)     ✅ → Phase 2 (Element)     ✅ → Phase 3 (Signal)    ✅
+Phase 4 (Props)     ✅ → Phase 5 (Motion)      ✅ → Phase 6 (Router)   🟡
+                                                       剩余零散  ⬜
 ```
 
-每个 Phase 完成后执行：
-
-1. `vp check --fix src/` 确认零错误
-2. `vp test` 确认 171 测试全绿
-3. 提交到跟踪文档
+**进度：** 98 处 → 64 处 (`src/` 零报错，171 测试全绿)
 
 ---
 
-## 风险
+## 已完成
 
-- **`core/` 不能依赖 DOM 类型**：`Owner` 在 `types.ts` 中定义，不含 DOM 依赖，无风险
-- **`Signal<T>` 内部状态**：`SignalState<T>` 类型已存在，直接使用
-- **`RenderAdapter` 返回 `unknown`**：DOM 层用 `as Element` 转型，core 层保持 `unknown`
+### Phase 1: `owner: any` → `Owner` ✅
+
+| 位置            | 内容                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `component.ts`  | `createContext`, `createContextUse`, `mergeResults`, `handleAsyncComponent`, `handleComponent` 的 `owner: any` → `Owner` |
+| `direct.ts`     | `createDirectiveContext(owner: any)` → `Owner`                                                                           |
+| `directives.ts` | `appendResult`, mode 函数, `branchOwner`, `itemOwner` → `Owner`                                                          |
+
+### Phase 2: Element 类型 ✅
+
+| 位置             | 内容                                                |
+| ---------------- | --------------------------------------------------- |
+| `dom/props.ts`   | `setProp(el: any)`, `setProps(el: any)` → `Element` |
+| `dom/adapter.ts` | 保持 `el: any`（需要 index 访问 `el[key] = value`） |
+
+### Phase 3: 信号状态类型 ✅
+
+| 位置        | 内容                                                 |
+| ----------- | ---------------------------------------------------- |
+| `signal.ts` | `createSignal(state: any)` → `SignalState<T>`        |
+| `types.ts`  | `DerivationState.computeFn(v?: any)` → `(v?: T)`     |
+| 全库        | `(x as any)[REACTIVE]` → `getSignalState(x)`（7 处） |
+
+### Phase 4: Props 类型 ✅
+
+| 位置            | 内容                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `types.ts`      | 新增 `Props`, `NullableProps`, `ComponentResult`, `MergeableResult`, `CleanupFn`     |
+| `h.ts`          | `h()` 重载 `props?: NullableProps`, `handleDirectiveMode(props: NullableProps = {})` |
+| `component.ts`  | `handleComponent(props: NullableProps = {})`, `mergeResults(items: MergeableResult)` |
+| `props.ts`      | `setProps(props: NullableProps = {})`                                                |
+| `directives.ts` | `createWhenElement/EachElement` options 改为 `Props`                                 |
+| `direct.ts`     | `DirectiveFunction` props 改为 `Props & { children?: any }`                          |
+| motion          | 指令回调 `props: Record<string, any>` → `Props`                                      |
+| jsx-runtime     | 全部 `Record<string, any>` → `Props` / `NullableProps`                               |
+| 全库            | `() => void` → `CleanupFn`（6 个核心文件）                                           |
+
+### Phase 5: Motion 泛型化 ✅
+
+| 位置                     | 内容                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `create-motion.ts`       | `Signal<any>` → `Signal<boolean>`, `newValue: any` → `boolean`                                                                    |
+| `create-group-motion.ts` | `any[]` → `<T, K>` 泛型全链路（`findRemovedKeys`, `collectRemovedKeyAnimations`, `handleGroupSignalChange`, `createGroupMotion`） |
+
+---
+
+## 剩余 64 处 `: any` 分类
+
+### 保留的（48 处，不改）
+
+| 类别                                           | 数量 | 理由                                                             |
+| ---------------------------------------------- | ---- | ---------------------------------------------------------------- |
+| `type-guards.ts` 参数                          | 11   | type-guard 函数必须接受 `any`                                    |
+| `children: any[]`                              | 12   | 可包含 `HResult\|Node\|Signal\|string\|嵌套数组`，`any[]` 最诚实 |
+| `handleDomMode props: any`                     | 1    | 要解构 `when/each/key/else` 等指令属性                           |
+| `Fragment(): any`                              | 1    | 返回值可以是任何 JSX 类型                                        |
+| Astro 集成                                     | 7    | Astro 泛型参数，需定义 Astro 接口（独立任务）                    |
+| `signal.ts` 内部                               | 5    | 信号值泛型、`(v?: any) => T`、`deps.filter((d: any))`            |
+| `jsx-runtime` `type: any` / `key?: any`        | 2    | JSX 编译器的类型不固定                                           |
+| `adapter.setProp(el: any)`                     | 1    | 需要 `el[key] = value` index 访问                                |
+| `router children?: any` / `[key: string]: any` | 2    | 路由参数不固定                                                   |
+| `server/index.ts` prevAdapter                  | 1    | 跨平台 adapter 保存                                              |
+| `props: { children?: any }`（各种）            | 5    | children 内容不固定                                              |
+
+### 可改进的（16 处）
+
+| 优先级 | 位置                               | 当前                 | 建议                                                | 工作量 |
+| ------ | ---------------------------------- | -------------------- | --------------------------------------------------- | ------ |
+| **P0** | `directives.ts` Maps               | `Map<any, any>`      | `Map<unknown, Owner>` / `Map<unknown, Signal<any>>` | 小     |
+| **P0** | `appendResult(result: any)`        | `any`                | `MergeableResult`                                   | 小     |
+| **P0** | `motion` `removed: any[]`          | `any[]`              | `K[]`                                               | 极小   |
+| **P1** | `directives.ts:172` `prevKey: any` | `any`                | `unknown`                                           | 极小   |
+| **P1** | `detectWhenMode(eachFn: any)`      | `any`                | `unknown`                                           | 极小   |
+| **P2** | `router/index.ts:33`               | `[key: string]: any` | `[key: string]: unknown`                            | 极小   |
+
+---
+
+## 工作方法
+
+1. 每次修改一个函数签名及其所有调用方
+2. `vp check --fix src/` 确认零错误
+3. `vp test` 确认 171 测试全绿
+4. 更新本文档进度
+
+## 注意事项
+
+- `core/` 不能依赖 `dom/`，`Owner` 等 core 类型不含 DOM 依赖
+- `RenderAdapter` 返回值是 `unknown`——设计如此，不改
+- `type-guards.ts` 的参数必须是 `any`——type-guard 函数本质需要接受任意输入
