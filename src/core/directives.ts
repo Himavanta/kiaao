@@ -10,6 +10,8 @@ import {
   type Owner,
   type CleanupFn,
   type Props,
+  type Signal,
+  type HResult,
 } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { setProps } from "../dom/props.ts";
@@ -25,7 +27,7 @@ import {
 
 // ── Helper: append result to element ────────────────
 
-function appendResult(el: Element, result: any, owner: Owner): void {
+function appendResult(el: Element, result: HResult | Node | Node[], owner: Owner): void {
   if (isHResult(result)) {
     if (result.owner) {
       owner.children.push(result.owner);
@@ -60,7 +62,7 @@ function isMappingTable(v: any): boolean {
 
 // ── When: Detect Mode ────────────────────────────────
 
-function detectWhenMode(children: any[], eachFn: any) {
+function detectWhenMode(children: any[], eachFn: unknown) {
   const isMapping = isSingle(children) && isMappingTable(children[0]);
   const mappingTable = isMapping ? children[0] : null;
   const isLazy = !isMapping && isUndefined(eachFn) && isSingle(children) && isFunction(children[0]);
@@ -169,7 +171,7 @@ export function createWhenElement(options: {
   setProps(el, props, cleanups);
 
   const { isMappingMode, isLazy, hasEach, mappingTable } = detectWhenMode(children, eachFn);
-  let prevKey: any;
+  let prevKey: unknown;
   let branchOwner: Owner | null = null;
 
   const renderBranch = () => {
@@ -274,7 +276,11 @@ function repositionItemGroup(options: {
 }
 
 /** 获取或创建条目信号 */
-function getOrCreateSignal(itemSignalMap: Map<any, any>, identity: any, rawValue: unknown): any {
+function getOrCreateSignal(
+  itemSignalMap: Map<unknown, Signal<any>>,
+  identity: unknown,
+  rawValue: unknown,
+): Signal<any> {
   if (itemSignalMap.has(identity)) {
     itemSignalMap.get(identity)!(rawValue);
   } else {
@@ -284,7 +290,7 @@ function getOrCreateSignal(itemSignalMap: Map<any, any>, identity: any, rawValue
 }
 
 /** 获取或创建条目 Owner */
-function getOrCreateOwner(itemOwners: Map<any, any>, identity: any): any {
+function getOrCreateOwner(itemOwners: Map<unknown, Owner>, identity: unknown): Owner {
   let owner = itemOwners.get(identity);
   if (!owner) {
     owner = createOwner();
@@ -295,11 +301,11 @@ function getOrCreateOwner(itemOwners: Map<any, any>, identity: any): any {
 
 /** 清理已移除条目的 Owner 和信号 */
 function disposeRemovedItems(options: {
-  currentKeys: Set<any>;
-  newKeys: Set<any>;
-  itemOwners: Map<any, any>;
-  itemSignalMap: Map<any, any>;
-  itemNodeMap: Map<any, Node[]>;
+  currentKeys: Set<unknown>;
+  newKeys: Set<unknown>;
+  itemOwners: Map<unknown, Owner>;
+  itemSignalMap: Map<unknown, Signal<any>>;
+  itemNodeMap: Map<unknown, Node[]>;
 }): void {
   const { currentKeys, newKeys, itemOwners, itemSignalMap, itemNodeMap } = options;
   for (const key of currentKeys) {
@@ -333,9 +339,9 @@ function renderEachOnElement(options: {
   const anchor = adapter.createComment("each") as Comment;
   container.append(anchor);
   const nodes: Node[] = [];
-  const itemOwners: Map<any, any> = new Map();
-  const itemSignalMap: Map<any, any> = new Map();
-  const itemNodeMap: Map<any, Node[]> = new Map();
+  const itemOwners: Map<unknown, Owner> = new Map();
+  const itemSignalMap: Map<unknown, Signal<any>> = new Map();
+  const itemNodeMap: Map<unknown, Node[]> = new Map();
 
   const sync = () => {
     const source = toValue(eachFn);
@@ -399,9 +405,9 @@ function renderEachOnElement(options: {
 }
 
 function cleanupEachMaps(
-  itemOwners: Map<any, any>,
-  itemSignalMap: Map<any, any>,
-  itemNodeMap: Map<any, Node[]>,
+  itemOwners: Map<unknown, Owner>,
+  itemSignalMap: Map<unknown, Signal<any>>,
+  itemNodeMap: Map<unknown, Node[]>,
 ): void {
   for (const [, owner] of itemOwners) disposeOwner(owner);
   itemOwners.clear();

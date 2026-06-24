@@ -30,7 +30,7 @@ function findRemovedKeys<T, K>(
   keyFn: (item: T, index: number) => K,
 ): K[] {
   const newKeys = new Set(newArray.map((item, i) => keyFn(item, i)));
-  const removed: any[] = [];
+  const removed: K[] = [];
 
   for (const [i, item] of oldArray.entries()) {
     const key = keyFn(item, i);
