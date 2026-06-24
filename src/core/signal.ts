@@ -8,6 +8,7 @@ import {
   type DefinitionState,
   type DerivationState,
   type SignalState,
+  getSignalState,
 } from "./types.ts";
 import { isFunction, isNotEmpty, isNotNil, isSingle, isEmpty } from "../utils/type-guards.ts";
 
@@ -42,7 +43,7 @@ export function registerSignalStop(args: any[], register: (stop: () => void) => 
     return result;
   }
 
-  const stop = (result as any)[REACTIVE]?.stop;
+  const stop = getSignalState(result)?.stop;
   if (isFunction(stop)) {
     register(stop);
   }

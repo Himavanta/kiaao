@@ -2,7 +2,7 @@
 // Platform-agnostic: all DOM operations go through RenderAdapter.
 // browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
-import { getAdapter, REACTIVE } from "../core/types.ts";
+import { getAdapter, getSignalState } from "../core/types.ts";
 import { isUse, use } from "../core/signal.ts";
 import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
@@ -74,7 +74,7 @@ export function setProps(
       const derived = use(value, () => {
         setProp(el, key, value());
       });
-      const stop = (derived as any)[REACTIVE]?.stop;
+      const stop = getSignalState(derived)?.stop;
       if (stop) {
         if (cleanups) cleanups.push(stop);
       }

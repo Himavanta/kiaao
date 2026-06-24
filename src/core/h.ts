@@ -20,6 +20,7 @@ import {
 } from "../utils/type-guards.ts";
 import type { ComponentFunction } from "./component.ts";
 import type { DirectiveFunction } from "./direct.ts";
+import { createWhenElement, createEachElement } from "./directives.ts";
 
 // ── Fragment ─────────────────────────────────────────
 
@@ -36,6 +37,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
   // 控制流指令
   if (props?.when !== undefined) {
     const { when, each, key, else: elseFn, ...rest } = props;
+    const orphanCleanups: (() => void)[] = [];
     const el = createWhenElement({
       tag,
       props: rest,
@@ -44,8 +46,9 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
       eachFn: each,
       keyFn: key,
       elseFn,
+      cleanups: orphanCleanups,
     });
-    return createHResult(null, [el]);
+    return createHResult(null, [el], orphanCleanups);
   }
 
   if (props?.each !== undefined) {
@@ -131,5 +134,3 @@ export function h(tag: any, props?: any, ...children: any[]): HResult {
 
   return handleDomMode(tag, props, children);
 }
-
-import { createWhenElement, createEachElement } from "./directives.ts";

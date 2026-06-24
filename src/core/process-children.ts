@@ -3,7 +3,7 @@
 // that flow upward through HResult.  During transition they are also
 // registered to currentOwner (if present) for backward compatibility.
 
-import { getAdapter, REACTIVE, type ProcessChildrenResult, isHResult } from "./types.ts";
+import { getAdapter, type ProcessChildrenResult, isHResult, getSignalState } from "./types.ts";
 import { isUse, use } from "./signal.ts";
 import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
@@ -22,7 +22,7 @@ export function processChildren(children: any[]): ProcessChildrenResult {
   const cleanups: (() => void)[] = [];
   const adapter = getAdapter();
 
-  for (const child of children.flat(Infinity)) {
+  for (const child of children) {
     if (isNil(child) || child === true || child === false) continue;
 
     if (isArray(child)) {
@@ -54,7 +54,7 @@ export function processChildren(children: any[]): ProcessChildrenResult {
       const derived = use(child, () => {
         textNode.textContent = String(child());
       });
-      const stop = (derived as any)[REACTIVE]?.stop;
+      const stop = getSignalState(derived)?.stop;
       if (stop) {
         cleanups.push(stop);
       }

@@ -86,6 +86,14 @@ export interface DerivationState<T> {
 /** 信号内部状态的联合类型 */
 export type SignalState<T> = DefinitionState<T> | DerivationState<T>;
 
+/**
+ * 安全获取信号的内部状态。
+ * 封装了 `(signal as any)[REACTIVE]` 模式，提供类型安全访问。
+ */
+export function getSignalState<T>(signal: Signal<T>): SignalState<T> | undefined {
+  return (signal as any)[REACTIVE];
+}
+
 // ── Owner Types ────────────────────────────────────────
 
 /** 生命周期作用域节点 */

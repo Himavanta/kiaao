@@ -12,7 +12,7 @@ export function Portal(
 ): Node {
   const adapter = getAdapter();
   const target = isString(props.to)
-    ? (adapter.querySelector(props.to) as HTMLElement | null)
+    ? (document.querySelector(props.to) as HTMLElement | null)
     : props.to;
   if (!target) return adapter.createComment("portal-missing-target") as Node;
 

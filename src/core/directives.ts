@@ -3,7 +3,7 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { REACTIVE } from "./types.ts";
+import { getSignalState } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { getAdapter } from "./types.ts";
 import { setProps } from "../dom/props.ts";
@@ -109,6 +109,7 @@ function renderEachMode(options: {
     eachFn,
     childFn,
     keyFn,
+    cleanups: owner ? owner.cleanups : undefined,
   });
   for (const n of nodes) if (isNode(n)) owner.elements.add(n);
 }
@@ -134,11 +135,15 @@ function renderStaticMode(options: {
 }
 
 /** 订阅 whenFn 变化，非信号时立即执行一次初始渲染 */
-function subscribeWhenFn(whenFn: unknown, renderBranch: () => void, containerOwner: any): void {
+function subscribeWhenFn(
+  whenFn: unknown,
+  renderBranch: () => void,
+  cleanups: (() => void)[],
+): void {
   if (isUse(whenFn)) {
     const derived = use(whenFn, () => renderBranch());
-    const stop = (derived as any)[REACTIVE]?.stop;
-    if (stop) containerOwner.cleanups.push(stop);
+    const stop = getSignalState(derived)?.stop;
+    if (stop) cleanups.push(stop);
   } else {
     renderBranch();
   }
@@ -154,14 +159,13 @@ export function createWhenElement(options: {
   eachFn?: unknown;
   keyFn?: unknown;
   elseFn?: () => any;
+  cleanups?: (() => void)[];
 }): Element {
-  const { tag, props, children, whenFn, eachFn, keyFn, elseFn } = options;
+  const { tag, props, children, whenFn, eachFn, keyFn, elseFn, cleanups } = options;
   const adapter = getAdapter();
   const el = adapter.createElement(tag) as Element;
 
-  const containerOwner = createOwner();
-  containerOwner.elements.add(el);
-  setProps(el, props, containerOwner.cleanups);
+  setProps(el, props, cleanups);
 
   const { isMappingMode, isLazy, hasEach, mappingTable } = detectWhenMode(children, eachFn);
   let prevKey: any;
@@ -181,8 +185,6 @@ export function createWhenElement(options: {
     clearElement(el);
 
     branchOwner = createOwner();
-    branchOwner.parent = containerOwner;
-    containerOwner.children.push(branchOwner);
 
     if (isMappingMode && mappingTable) {
       renderMappingMode({ el, mappingTable, showRaw, elseFn, owner: branchOwner });
@@ -195,7 +197,7 @@ export function createWhenElement(options: {
     }
   };
 
-  subscribeWhenFn(whenFn, renderBranch, containerOwner);
+  subscribeWhenFn(whenFn, renderBranch, cleanups || []);
   return el;
 } // ── Each: helpers ──────────────────────────────────
 
@@ -272,12 +274,10 @@ function getOrCreateSignal(itemSignalMap: Map<any, any>, identity: any, rawValue
 }
 
 /** 获取或创建条目 Owner */
-function getOrCreateOwner(itemOwners: Map<any, any>, identity: any, containerOwner: any): any {
+function getOrCreateOwner(itemOwners: Map<any, any>, identity: any): any {
   let owner = itemOwners.get(identity);
   if (!owner) {
     owner = createOwner();
-    owner.parent = containerOwner;
-    containerOwner.children.push(owner);
     itemOwners.set(identity, owner);
   }
   return owner;
@@ -301,7 +301,7 @@ function disposeRemovedItems(options: {
     }
     const sig = itemSignalMap.get(key);
     if (sig) {
-      const stop = (sig as any)[REACTIVE]?.stop;
+      const stop = getSignalState(sig)?.stop;
       if (isFunction(stop)) stop();
       itemSignalMap.delete(key);
     }
@@ -316,8 +316,9 @@ function renderEachOnElement(options: {
   eachFn: any;
   childFn: any;
   keyFn?: any;
+  cleanups?: (() => void)[];
 }) {
-  const { container, eachFn, childFn, keyFn } = options;
+  const { container, eachFn, childFn, keyFn, cleanups } = options;
   const adapter = getAdapter();
   const anchor = adapter.createComment("each") as Comment;
   container.append(anchor);
@@ -325,7 +326,6 @@ function renderEachOnElement(options: {
   const itemOwners: Map<any, any> = new Map();
   const itemSignalMap: Map<any, any> = new Map();
   const itemNodeMap: Map<any, Node[]> = new Map();
-  const containerOwner = createOwner();
 
   const sync = () => {
     const source = toValue(eachFn);
@@ -338,7 +338,7 @@ function renderEachOnElement(options: {
       const identity = keyFn ? keyFn(rawValue, i) : i;
       newKeys.add(identity);
       const itemSignal = getOrCreateSignal(itemSignalMap, identity, rawValue);
-      const itemOwner = getOrCreateOwner(itemOwners, identity, containerOwner);
+      const itemOwner = getOrCreateOwner(itemOwners, identity);
 
       if (itemNodeMap.has(identity)) {
         prevNode = repositionItemGroup({
@@ -371,40 +371,21 @@ function renderEachOnElement(options: {
 
   if (isUse(eachFn)) {
     const derived = use(eachFn, () => sync());
-    const eachStop = (derived as any)[REACTIVE]?.stop;
-    registerEachCleanup({
-      containerOwner,
-      itemOwners,
-      itemSignalMap,
-      itemNodeMap,
-      eachStop,
-    });
+    const eachStop = getSignalState(derived)?.stop;
+    if (cleanups)
+      cleanups.push(() => {
+        if (eachStop) eachStop();
+        cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap);
+      });
   } else {
     sync();
-    registerEachCleanup({
-      containerOwner,
-      itemOwners,
-      itemSignalMap,
-      itemNodeMap,
-    });
+    if (cleanups)
+      cleanups.push(() => {
+        cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap);
+      });
   }
 
-  return { nodes, stop: () => cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap) };
-}
-
-function registerEachCleanup(options: {
-  containerOwner: any;
-  itemOwners: Map<any, any>;
-  itemSignalMap: Map<any, any>;
-  itemNodeMap: Map<any, Node[]>;
-  eachStop?: () => void;
-}): void {
-  const { containerOwner, itemOwners, itemSignalMap, itemNodeMap, eachStop } = options;
-  if (!containerOwner) return;
-  containerOwner.cleanups.push(() => {
-    if (eachStop) eachStop();
-    cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap);
-  });
+  return { nodes };
 }
 
 function cleanupEachMaps(
@@ -433,6 +414,6 @@ export function createEachElement(options: {
   const el = adapter.createElement(tag) as Element;
   setProps(el, props, cleanups);
   const childFn = children[0];
-  renderEachOnElement({ container: el, eachFn, childFn, keyFn });
+  renderEachOnElement({ container: el, eachFn, childFn, keyFn, cleanups });
   return el;
 }

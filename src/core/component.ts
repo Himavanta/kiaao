@@ -3,7 +3,7 @@
 
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop } from "./signal.ts";
-import { REACTIVE, type HResult, createHResult, isHResult } from "./types.ts";
+import { type Signal, REACTIVE, type HResult, createHResult, isHResult } from "./types.ts";
 import { getAdapter } from "./types.ts";
 import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
@@ -24,15 +24,14 @@ export type ComponentFunction<P = any> = (
 
 // ── Safe Signal ──────────────────────────────────────
 
-function createSafeSignal() {
-  const noop = () => {};
-  (noop as any)[REACTIVE] = {
+function createSafeSignal(): Signal<any> {
+  const signal = (() => undefined) as Signal<any>;
+  (signal as any)[REACTIVE] = {
     value: undefined,
     subs: new Set(),
-    set: noop,
     stop: () => {},
   };
-  return [() => undefined, noop];
+  return signal;
 }
 
 // ── createContext ─────────────────────────────────────

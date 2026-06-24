@@ -23,11 +23,10 @@ export function createApp(component: ComponentFunction, props?: Record<string, a
   const appOwner = isHResult(hr) ? hr.owner : null;
   const nodes: Node[] = isHResult(hr) ? [...hr.nodes] : [];
 
-  // 建立根组件的父子关系
+  // 建立根组件的父子关系——通过 Owner 树递归 dispose，无需共享 elements 引用
   if (appOwner) {
     rootOwner.children.push(appOwner);
     appOwner.parent = rootOwner;
-    rootOwner.elements = appOwner.elements;
   }
 
   return {
