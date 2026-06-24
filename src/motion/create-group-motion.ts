@@ -4,7 +4,7 @@
 
 import { animate } from "motion/mini";
 import { use } from "../core/signal.ts";
-import { type Signal } from "../core/types.ts";
+import { type Signal, type Props } from "../core/types.ts";
 import { direct, type DirectiveContext } from "../core/direct.ts";
 import { isEmpty, isDefined } from "../utils/type-guards.ts";
 import {
@@ -158,7 +158,7 @@ export function createGroupMotion(
     });
   });
 
-  const GroupMotion = direct((el: Element, props: Record<string, any>, ctx: DirectiveContext) => {
+  const GroupMotion = direct((el: Element, props: Props, ctx: DirectiveContext) => {
     const config = parseMotionProps(props);
 
     // 在元素挂载前设 from 初始样式，onMount 时 animate(el, to) 过渡

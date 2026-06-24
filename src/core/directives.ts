@@ -3,7 +3,14 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { getSignalState, getAdapter, isHResult, type Owner, type CleanupFn } from "./types.ts";
+import {
+  getSignalState,
+  getAdapter,
+  isHResult,
+  type Owner,
+  type CleanupFn,
+  type Props,
+} from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { setProps } from "../dom/props.ts";
 import { processChildren } from "./process-children.ts";
@@ -147,7 +154,7 @@ function subscribeWhenFn(whenFn: unknown, renderBranch: () => void, cleanups: Cl
 
 export function createWhenElement(options: {
   tag: string;
-  props: Record<string, any>;
+  props: Props;
   children: any[];
   whenFn: unknown;
   eachFn?: unknown;
@@ -406,7 +413,7 @@ function cleanupEachMaps(
 
 export function createEachElement(options: {
   tag: string;
-  props: Record<string, any>;
+  props: Props;
   children: any[];
   eachFn: any;
   keyFn?: any;

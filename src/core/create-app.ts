@@ -2,9 +2,7 @@
 // Replaces the old global mount/unmount functions.
 
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
-import { h } from "./h.ts";
-import { getAdapter } from "./types.ts";
-import type { ComponentFunction } from "./component.ts";
+import { getAdapter, type HResult } from "./types.ts";
 
 export interface App {
   mount(container: Element): void;
@@ -13,13 +11,13 @@ export interface App {
 
 /**
  * 创建一个kiaao应用实例。
- * 内部创建根 Owner，管理整个组件树的生命周期。
+ * 接受 `h()` 的返回值（HResult），管理整个组件树的生命周期。
+ *
+ * 用法：
+ *   createApp(h(MyComponent, { name: "kiaao" })).mount(document.body);
  */
-export function createApp(component: ComponentFunction, props?: Record<string, any>): App {
+export function createApp(hr: HResult): App {
   const rootOwner = createOwner();
-
-  // 渲染组件 → 获取 HResult
-  const hr = h(component, props);
   const appOwner = hr.owner;
 
   if (appOwner) {

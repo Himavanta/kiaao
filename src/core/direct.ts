@@ -1,6 +1,6 @@
 // kiaao — Directive system: direct(), types, element-level context (Owner-based)
 
-import { DIRECT_KEY, type Owner } from "./types.ts";
+import { DIRECT_KEY, type Owner, type Props } from "./types.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "../utils/type-guards.ts";
 
@@ -14,13 +14,13 @@ export interface DirectiveContext {
 
 export type DirectiveFunction = (
   el: Element,
-  props: Record<string, any> & { children?: any },
+  props: Props & { children?: any },
   context: DirectiveContext,
 ) => void;
 
 // ── JSX component signature ────────────────────────────
 
-type JSXComponentSignature = (props: Record<string, any>) => Node;
+type JSXComponentSignature = (props: Props) => Node;
 
 // ── direct() ───────────────────────────────────────────
 

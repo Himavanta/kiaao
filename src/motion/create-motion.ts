@@ -3,7 +3,7 @@
 // the animation signal lags behind to allow exit animations to complete.
 
 import { use } from "../core/signal.ts";
-import { type Signal } from "../core/types.ts";
+import { type Signal, type Props } from "../core/types.ts";
 import { direct, type DirectiveContext } from "../core/direct.ts";
 import { isEmpty, isNotEmpty } from "../utils/type-guards.ts";
 import {
@@ -93,7 +93,7 @@ export function createMotion(
     });
   });
 
-  const Motion = direct((el: Element, props: Record<string, any>, ctx: DirectiveContext) => {
+  const Motion = direct((el: Element, props: Props, ctx: DirectiveContext) => {
     const config = parseMotionProps(props);
 
     // 在元素挂载前设 from 初始样式，onMount 时 animate(el, to) 过渡
