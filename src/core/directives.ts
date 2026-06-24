@@ -198,6 +198,15 @@ export function createWhenElement(options: {
   };
 
   subscribeWhenFn(whenFn, renderBranch, cleanups || []);
+
+  // 在父 Owner dispose 时，同时清理当前分支的 Owner
+  if (cleanups) {
+    const ownCleanup = () => {
+      if (branchOwner) disposeOwner(branchOwner);
+    };
+    cleanups.push(ownCleanup);
+  }
+
   return el;
 } // ── Each: helpers ──────────────────────────────────
 

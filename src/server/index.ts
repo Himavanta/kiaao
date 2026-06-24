@@ -4,7 +4,7 @@
 //   import { renderToString } from "kiaao/server";
 //   const html = renderToString(MyComponent, { name: "kiaao" });
 
-import { setAdapter } from "../core/types.ts";
+import { setAdapter, getAdapter } from "../core/types.ts";
 import { setRenderMode, getRenderMode } from "../core/signal.ts";
 import { h } from "../core/h.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
@@ -17,6 +17,12 @@ export function renderToString(
   options?: { slots?: Record<string, string> },
 ): string {
   const prevMode = getRenderMode();
+  let prevAdapter: any;
+  try {
+    prevAdapter = getAdapter();
+  } catch {
+    /* 无 adapter 时不保存 */
+  }
 
   setRenderMode("ssr");
   setAdapter(ssrAdapter);
@@ -38,5 +44,6 @@ export function renderToString(
     return html;
   } finally {
     setRenderMode(prevMode);
+    if (prevAdapter !== undefined) setAdapter(prevAdapter);
   }
 }

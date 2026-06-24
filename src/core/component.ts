@@ -85,7 +85,11 @@ function mergeResults(items: any[], owner: any): Node[] {
   const list = isArray(items) ? items : [items];
 
   for (const item of list) {
-    if (isHResult(item)) {
+    if (isArray(item)) {
+      // 递归处理嵌套数组（Fragment 嵌套 Fragment 等场景）
+      const subNodes = mergeResults(item, owner);
+      allNodes.push(...subNodes);
+    } else if (isHResult(item)) {
       if (item.owner) {
         owner.children.push(item.owner);
         item.owner.parent = owner;
