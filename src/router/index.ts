@@ -1,13 +1,13 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
 import { use, toValue } from "../core/signal.ts";
-import { type Signal, type HResult } from "../core/types.ts";
+import { type Signal, type HResult, type NullableProps } from "../core/types.ts";
 import { h } from "../core/h.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────
 
-export type RouteComponent = (props?: any) => any;
+export type RouteComponent = (props?: NullableProps) => HResult;
 
 export interface Route {
   /** 单个路径段，不允许包含 /。空字符串表示默认子路由。 */
@@ -89,7 +89,9 @@ function createRouterView(
     const segment = use(currentPath, () => extractSegment(currentPath(), myBase));
 
     // 将路由表转为映射表（初始化时执行一次）
-    const routeMap = Object.fromEntries(myRoutes.map((r) => [r.path, () => h(r.component, null)]));
+    const routeMap = Object.fromEntries(
+      myRoutes.map((r) => [r.path, () => h(r.component, undefined)]),
+    );
 
     return h(
       "div",
@@ -164,7 +166,7 @@ export function createRouter(options: RouterOptions = {}): Router {
     updateParams();
   }
 
-  const defaultFallback = options.fallback ?? (() => h("div", null, "404 Not Found"));
+  const defaultFallback = options.fallback ?? (() => h("div", undefined, "404 Not Found"));
 
   // 初始化参数
   updateParams();

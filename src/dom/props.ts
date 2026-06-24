@@ -2,7 +2,7 @@
 // Platform-agnostic: all DOM operations go through RenderAdapter.
 // browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
-import { getAdapter, getSignalState } from "../core/types.ts";
+import { getAdapter, getSignalState, type NullableProps } from "../core/types.ts";
 import { isUse, use } from "../core/signal.ts";
 import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 
@@ -18,7 +18,7 @@ export const stripPrefix = (rawKey: string): { prefix: "attr" | "prop" | null; k
 
 // ── setProp ────────────────────────────────────────────
 
-export function setProp(el: any, rawKey: string, value: any): void {
+export function setProp(el: Element, rawKey: string, value: any): void {
   if (isNil(value)) return;
 
   const adapter = getAdapter();
@@ -56,11 +56,7 @@ export function setProp(el: any, rawKey: string, value: any): void {
 
 // ── setProps ───────────────────────────────────────────
 
-export function setProps(
-  el: any,
-  props: Record<string, any> | null | undefined,
-  cleanups?: (() => void)[],
-): void {
+export function setProps(el: Element, props: NullableProps = {}, cleanups?: (() => void)[]): void {
   if (!isRecord(props)) return;
 
   for (const key of Object.keys(props)) {

@@ -77,7 +77,7 @@ export const use: UseFunction = ((...args: any[]): any => {
 
 // ── Signal Creator ─────────────────────────────────────
 
-function createSignal<T>(fn: Signal<T>, state: any): Signal<T> {
+function createSignal<T>(fn: Signal<T>, state: SignalState<T>): Signal<T> {
   (fn as any)[REACTIVE] = state;
   return fn;
 }
@@ -107,10 +107,7 @@ function definitionMode<T>(initialValue: T): Signal<T> {
 
 // ── Derivation State Builder ──────────────────────────
 
-function buildDerivationState<T>(
-  func: (v?: any) => T,
-  validDeps: Signal<any>[],
-): DerivationState<T> {
+function buildDerivationState<T>(func: (v?: T) => T, validDeps: Signal<any>[]): DerivationState<T> {
   const state: DerivationState<T> = {
     deps: new Set(validDeps),
     cachedValue: undefined as any,
@@ -177,11 +174,11 @@ function derivationMode<T>(...args: any[]): Signal<T> {
   const validDeps: Signal<any>[] = deps.filter((d: any) => isUse(d));
 
   if (currentRenderMode === "ssr") {
-    const value = (func as (v?: any) => T)(undefined);
+    const value = (func as (v?: T) => T)(undefined);
     return definitionMode(value);
   }
 
-  const state = buildDerivationState<T>(func as (v?: any) => T, validDeps);
+  const state = buildDerivationState<T>(func as (v?: T) => T, validDeps);
   computeInitialDerivedValue(state);
 
   const signal = function (...args: any[]): any {
@@ -203,7 +200,7 @@ function triggerDerivations<T>(state: DefinitionState<T>): void {
   }
 }
 
-function recomputeDerivation<T>(state: DerivationState<T>, setterValue?: any): void {
+function recomputeDerivation<T>(state: DerivationState<T>, setterValue?: T): void {
   let newResult: T;
   try {
     newResult = state.computeFn(setterValue);

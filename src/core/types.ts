@@ -61,6 +61,12 @@ export interface Signal<T> {
   (value: T | ((prev: T) => T)): void;
 }
 
+/** 组件/元素的属性对象类型——不可空 */
+export type Props = Record<string, any>;
+
+/** 组件/元素的属性对象类型——可空，配合 `= {}` 默认参数使用 */
+export type NullableProps = Props | null | undefined;
+
 /** h() 返回类型：单个节点或节点数组 */
 export type Children = Node | Node[];
 
@@ -78,7 +84,7 @@ export interface DerivationState<T> {
   deps: Set<Signal<any>>;
   cachedValue: T;
   subs: Set<DerivationState<any>>;
-  computeFn: (v?: any) => T;
+  computeFn: (v?: T) => T;
   stops: Set<() => void>;
   stop: () => void;
 }

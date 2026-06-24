@@ -1,6 +1,6 @@
 // kiaao — Directive system: direct(), types, element-level context (Owner-based)
 
-import { DIRECT_KEY } from "./types.ts";
+import { DIRECT_KEY, type Owner } from "./types.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "../utils/type-guards.ts";
 
@@ -40,7 +40,7 @@ export const isDirective = (fn: any): boolean => isFunction(fn) && fn[DIRECT_KEY
  * onMount/onUnmount/use 注册到当前 Owner 的对应队列中。
  * 不再使用 DOM 节点的 Symbol 属性（DIRECTIVE_MOUNT / DIRECTIVE_UNMOUNT）。
  */
-export function createDirectiveContext(owner: any): DirectiveContext {
+export function createDirectiveContext(owner: Owner): DirectiveContext {
   return {
     onMount(fn: () => void): void {
       if (owner) owner.mountCallbacks.push(fn);

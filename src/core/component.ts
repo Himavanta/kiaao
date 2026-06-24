@@ -5,11 +5,13 @@ import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import {
   type Signal,
+  type Owner,
   REACTIVE,
   type HResult,
   createHResult,
   isHResult,
   getAdapter,
+  type NullableProps,
 } from "./types.ts";
 import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
@@ -41,7 +43,7 @@ function createSafeSignal(): Signal<any> {
 
 // ── createContext ─────────────────────────────────────
 
-function createContextUse(owner: any): UseFunction {
+function createContextUse(owner: Owner): UseFunction {
   return ((...args: any[]): any => {
     if (owner.disposed) {
       if (process.env.NODE_ENV !== "production") {
@@ -55,7 +57,7 @@ function createContextUse(owner: any): UseFunction {
   }) as UseFunction;
 }
 
-export function createContext(owner: any): Context {
+export function createContext(owner: Owner): Context {
   return {
     onMount: (fn) => {
       if (owner.disposed) {
@@ -85,7 +87,7 @@ export function createContext(owner: any): Context {
  * 将子 HResult 的 owner、nodes、cleanups 合并到当前 owner。
  * 处理单值和数组（Fragment 返回多个根元素）。
  */
-function mergeResults(items: any[], owner: any): Node[] {
+function mergeResults(items: any[], owner: Owner): Node[] {
   const allNodes: Node[] = [];
   const list = isArray(items) ? items : [items];
 
@@ -113,7 +115,7 @@ function mergeResults(items: any[], owner: any): Node[] {
 
 // ── handleAsyncComponent ──────────────────────────────
 
-function handleAsyncComponent(promise: Promise<any>, owner: any): HResult {
+function handleAsyncComponent(promise: Promise<any>, owner: Owner): HResult {
   const adapter = getAdapter();
   const placeholder = adapter.createComment("async") as Comment;
   owner.elements.add(placeholder);
@@ -144,13 +146,13 @@ function handleAsyncComponent(promise: Promise<any>, owner: any): HResult {
 
 export function handleComponent(
   tag: ComponentFunction,
-  props: Record<string, any> | null | undefined,
-  children: any[],
+  props: NullableProps = {},
+  children: any[] = [],
 ): HResult {
-  const owner: any = createOwner();
+  const owner: Owner = createOwner();
   const context = createContext(owner);
 
-  let compProps: Record<string, any> = props ?? {};
+  let compProps = props ?? {};
   if (isNotEmpty(children)) {
     compProps = { ...compProps, children: normalizeChildren(children) };
   }

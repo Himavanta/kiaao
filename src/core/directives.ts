@@ -3,7 +3,7 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { getSignalState, getAdapter, isHResult } from "./types.ts";
+import { getSignalState, getAdapter, isHResult, type Owner } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
 import { setProps } from "../dom/props.ts";
 import { processChildren } from "./process-children.ts";
@@ -18,7 +18,7 @@ import {
 
 // ── Helper: append result to element ────────────────
 
-function appendResult(el: Element, result: any, owner: any): void {
+function appendResult(el: Element, result: any, owner: Owner): void {
   if (isHResult(result)) {
     if (result.owner) {
       owner.children.push(result.owner);
@@ -74,7 +74,7 @@ function renderMappingMode(options: {
   mappingTable: Record<string, () => any>;
   showRaw: any;
   elseFn: (() => any) | undefined;
-  owner: any;
+  owner: Owner;
 }): void {
   const { el, mappingTable, showRaw, elseFn, owner } = options;
   const branchFn = mappingTable[showRaw];
@@ -87,7 +87,7 @@ function renderLazyMode(options: {
   childFn: () => any;
   show: boolean;
   elseFn: (() => any) | undefined;
-  owner: any;
+  owner: Owner;
 }): void {
   const { el, childFn, show, elseFn, owner } = options;
   if (show) appendResult(el, childFn(), owner);
@@ -99,7 +99,7 @@ function renderEachMode(options: {
   eachFn: unknown;
   childFn: any;
   keyFn: unknown;
-  owner: any;
+  owner: Owner;
 }): void {
   const { el, eachFn, childFn, keyFn, owner } = options;
   const { nodes } = renderEachOnElement({
@@ -117,7 +117,7 @@ function renderStaticMode(options: {
   children: any[];
   show: boolean;
   elseFn: (() => any) | undefined;
-  owner: any;
+  owner: Owner;
 }): void {
   const { el, children, show, elseFn, owner } = options;
   if (!show) {
@@ -151,7 +151,7 @@ function subscribeWhenFn(
 
 export function createWhenElement(options: {
   tag: string;
-  props: any;
+  props: Record<string, any>;
   children: any[];
   whenFn: unknown;
   eachFn?: unknown;
@@ -167,7 +167,7 @@ export function createWhenElement(options: {
 
   const { isMappingMode, isLazy, hasEach, mappingTable } = detectWhenMode(children, eachFn);
   let prevKey: any;
-  let branchOwner: any;
+  let branchOwner: Owner | null = null;
 
   const renderBranch = () => {
     const showRaw = toValue(whenFn);
@@ -213,7 +213,7 @@ function createItemDOMNodes(options: {
   itemSignal: any;
   index: number;
   childFn: any;
-  itemOwner: any;
+  itemOwner: Owner;
   anchor: any;
   nodes: Node[];
 }): Node[] {
@@ -410,7 +410,7 @@ function cleanupEachMaps(
 
 export function createEachElement(options: {
   tag: string;
-  props: any;
+  props: Record<string, any>;
   children: any[];
   eachFn: any;
   keyFn?: any;

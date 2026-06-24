@@ -1,7 +1,7 @@
 // kiaao — h() function: creates real DOM or dispatches to SSR mode
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
-import { getAdapter, type HResult, createHResult, isHResult } from "./types.ts";
+import { getAdapter, type HResult, createHResult, isHResult, type NullableProps } from "./types.ts";
 import { createOwner } from "./owner.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { processChildren } from "./process-children.ts";
@@ -18,6 +18,7 @@ import {
   isObject,
   isString,
   isDefined,
+  isNil,
 } from "../utils/type-guards.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 
@@ -77,7 +78,11 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
 
 // ── Directive Mode ────────────────────────────────────
 
-function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]): HResult {
+function handleDirectiveMode(
+  tag: DirectiveFunction,
+  props: NullableProps = {},
+  children: any[] = [],
+): HResult {
   const dirProps = { ...props };
   if (isNotEmpty(children)) {
     dirProps.children = normalizeChildren(children);
@@ -114,9 +119,14 @@ function handleDirectiveMode(tag: DirectiveFunction, props: any, children: any[]
 
 // ── h() ────────────────────────────────────────────────
 
-export function h(tag: DirectiveFunction, props?: any, ...children: any[]): HResult;
-export function h(tag: string | ComponentFunction, props?: any, ...children: any[]): HResult;
-export function h(tag: any, props?: any, ...children: any[]): HResult {
+export function h(tag: DirectiveFunction, props?: NullableProps, ...children: any[]): HResult;
+export function h(
+  tag: string | ComponentFunction,
+  props?: NullableProps,
+  ...children: any[]
+): HResult;
+export function h(tag: any, props?: NullableProps, ...children: any[]): HResult {
+  if (isNil(props)) props = undefined;
   if (!isString(tag) && !isFunction(tag)) {
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`);
