@@ -240,12 +240,13 @@ function createItemDOMNodes(options: {
 }
 
 /** 检查 identity 匹配的节点组是否需要重排，需要则移动到 anchor 前 */
-function repositionItemGroup(
-  container: Element,
-  anchor: any,
-  existingNodes: Node[],
-  prevNode: Node | null,
-): Node | null {
+function repositionItemGroup(options: {
+  container: Element;
+  anchor: any;
+  existingNodes: Node[];
+  prevNode: Node | null;
+}): Node | null {
+  const { container, anchor, existingNodes, prevNode } = options;
   if (!existingNodes.length) return prevNode;
   const firstNode = existingNodes[0];
   const needsMove =
@@ -283,13 +284,14 @@ function getOrCreateOwner(itemOwners: Map<any, any>, identity: any, containerOwn
 }
 
 /** 清理已移除条目的 Owner 和信号 */
-function disposeRemovedItems(
-  currentKeys: Set<any>,
-  newKeys: Set<any>,
-  itemOwners: Map<any, any>,
-  itemSignalMap: Map<any, any>,
-  itemNodeMap: Map<any, Node[]>,
-): void {
+function disposeRemovedItems(options: {
+  currentKeys: Set<any>;
+  newKeys: Set<any>;
+  itemOwners: Map<any, any>;
+  itemSignalMap: Map<any, any>;
+  itemNodeMap: Map<any, Node[]>;
+}): void {
+  const { currentKeys, newKeys, itemOwners, itemSignalMap, itemNodeMap } = options;
   for (const key of currentKeys) {
     if (newKeys.has(key)) continue;
     const owner = itemOwners.get(key);
@@ -339,7 +341,12 @@ function renderEachOnElement(options: {
       const itemOwner = getOrCreateOwner(itemOwners, identity, containerOwner);
 
       if (itemNodeMap.has(identity)) {
-        prevNode = repositionItemGroup(container, anchor, itemNodeMap.get(identity)!, prevNode);
+        prevNode = repositionItemGroup({
+          container,
+          anchor,
+          existingNodes: itemNodeMap.get(identity)!,
+          prevNode,
+        });
       } else {
         const newItemNodes = createItemDOMNodes({
           itemSignal,
@@ -353,28 +360,46 @@ function renderEachOnElement(options: {
         prevNode = newItemNodes[newItemNodes.length - 1] || prevNode;
       }
     }
-    disposeRemovedItems(currentKeys, newKeys, itemOwners, itemSignalMap, itemNodeMap);
+    disposeRemovedItems({
+      currentKeys,
+      newKeys,
+      itemOwners,
+      itemSignalMap,
+      itemNodeMap,
+    });
   };
 
   if (isUse(eachFn)) {
     const derived = use(eachFn, () => sync());
     const eachStop = (derived as any)[REACTIVE]?.stop;
-    registerEachCleanup(containerOwner, itemOwners, itemSignalMap, itemNodeMap, eachStop);
+    registerEachCleanup({
+      containerOwner,
+      itemOwners,
+      itemSignalMap,
+      itemNodeMap,
+      eachStop,
+    });
   } else {
     sync();
-    registerEachCleanup(containerOwner, itemOwners, itemSignalMap, itemNodeMap);
+    registerEachCleanup({
+      containerOwner,
+      itemOwners,
+      itemSignalMap,
+      itemNodeMap,
+    });
   }
 
   return { nodes, stop: () => cleanupEachMaps(itemOwners, itemSignalMap, itemNodeMap) };
 }
 
-function registerEachCleanup(
-  containerOwner: any,
-  itemOwners: Map<any, any>,
-  itemSignalMap: Map<any, any>,
-  itemNodeMap: Map<any, Node[]>,
-  eachStop?: () => void,
-): void {
+function registerEachCleanup(options: {
+  containerOwner: any;
+  itemOwners: Map<any, any>;
+  itemSignalMap: Map<any, any>;
+  itemNodeMap: Map<any, Node[]>;
+  eachStop?: () => void;
+}): void {
+  const { containerOwner, itemOwners, itemSignalMap, itemNodeMap, eachStop } = options;
   if (!containerOwner) return;
   containerOwner.cleanups.push(() => {
     if (eachStop) eachStop();
@@ -395,14 +420,15 @@ function cleanupEachMaps(
 
 // ── createEachElement ─────────────────────────────────
 
-export function createEachElement(
-  tag: string,
-  props: any,
-  children: any[],
-  eachFn: any,
-  keyFn?: any,
-  cleanups?: (() => void)[],
-): Element {
+export function createEachElement(options: {
+  tag: string;
+  props: any;
+  children: any[];
+  eachFn: any;
+  keyFn?: any;
+  cleanups?: (() => void)[];
+}): Element {
+  const { tag, props, children, eachFn, keyFn, cleanups } = options;
   const adapter = getAdapter();
   const el = adapter.createElement(tag) as Element;
   setProps(el, props, cleanups);

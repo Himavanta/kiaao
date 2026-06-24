@@ -51,7 +51,14 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
   if (props?.each !== undefined) {
     const { each, key, ...rest } = props;
     const orphanCleanups: (() => void)[] = [];
-    const el = createEachElement(tag, rest, children, each, key, orphanCleanups);
+    const el = createEachElement({
+      tag,
+      props: rest,
+      children,
+      eachFn: each,
+      keyFn: key,
+      cleanups: orphanCleanups,
+    });
     return createHResult(null, [el], orphanCleanups);
   }
 
