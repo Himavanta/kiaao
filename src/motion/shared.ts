@@ -2,6 +2,7 @@
 // Shared across createMotion (when mode) and createGroupMotion (each mode).
 
 import { animate } from "motion/mini";
+
 import { isNil } from "../utils/type-guards.ts";
 
 // ── Motion State ──────────────────────────────────────

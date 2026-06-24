@@ -107,6 +107,19 @@ export const browserAdapter: RenderAdapter = {
       el[key.slice(5)] = value;
       return;
     }
+
+    // style 对象 → 增量合并 CSSStyleDeclaration
+    if (key === "style" && isObject(value)) {
+      const elStyle = (el as any).style;
+      if (elStyle && isObject(elStyle)) {
+        Object.assign(elStyle, value);
+        return;
+      }
+      // SSR 路径（不应走到这里，兜底）
+      el.setAttribute("style", String(value));
+      return;
+    }
+
     // SVG：所有属性走 setAttribute
     if (el instanceof SVGElement) {
       if (value === true) {

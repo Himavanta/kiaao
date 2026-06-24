@@ -4,6 +4,8 @@
 // registered to currentOwner (if present) for backward compatibility.
 
 import { getAdapter } from "../adapter/index.ts";
+import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
+import { isUse, use } from "./signal.ts";
 import {
   type ProcessChildrenResult,
   isHResult,
@@ -11,8 +13,6 @@ import {
   type CleanupFn,
   type HostNode,
 } from "./types.ts";
-import { isUse, use } from "./signal.ts";
-import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 
 /**
  * 处理子节点数组，返回扁平化的 Node 数组和孤儿的清理函数。

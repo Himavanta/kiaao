@@ -1,9 +1,9 @@
 // kiaao — Portal component
 // Renders content into a specified DOM container outside the component tree.
 
-import { SSR_COMPONENT } from "../core/types.ts";
 import { getAdapter } from "../adapter/index.ts";
 import type { Context } from "../core/component.ts";
+import { SSR_COMPONENT } from "../core/types.ts";
 import { isArray, isNode, isString } from "../utils/type-guards.ts";
 
 export function Portal(

@@ -1,9 +1,11 @@
 // kiaao — Component model with Owner lifecycle (HResult)
 // handleComponent, createContext, handleAsyncComponent
 
+import { getAdapter } from "../adapter/index.ts";
+import { normalizeChildren } from "../utils/helpers.ts";
+import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
-import { getAdapter } from "../adapter/index.ts";
 import {
   type Signal,
   type Owner,
@@ -16,8 +18,6 @@ import {
   type ComponentResult,
   type MergeableResult,
 } from "./types.ts";
-import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
-import { normalizeChildren } from "../utils/helpers.ts";
 
 // ── Context ───────────────────────────────────────────
 

@@ -2,9 +2,9 @@
 // Business/animation signal separation. Users operate business signal directly,
 // the animation signal lags behind to allow exit animations to complete.
 
+import { direct, type DirectiveContext } from "../core/direct.ts";
 import { use } from "../core/signal.ts";
 import { type Signal, type Props } from "../core/types.ts";
-import { direct, type DirectiveContext } from "../core/direct.ts";
 import { isEmpty, isNotEmpty } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,

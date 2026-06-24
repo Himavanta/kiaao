@@ -3,11 +3,11 @@
 // Adapts the React JSX calling convention (children inside props)
 // to kiaao's h(tag, props, ...children).
 
-import { h, Fragment } from "../core/h.ts";
 import type { Context } from "../core/component.ts";
+import type { DirectiveContext } from "../core/direct.ts";
+import { h, Fragment } from "../core/h.ts";
 import type { HResult, Props, NullableProps } from "../core/types.ts";
 import { isArray, isNil, isUndefined } from "../utils/type-guards.ts";
-import type { DirectiveContext } from "../core/direct.ts";
 
 // ── JSX Factories ──────────────────────────────────────
 

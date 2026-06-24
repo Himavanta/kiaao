@@ -1,8 +1,8 @@
 // kiaao — createApp: application root with Owner lifecycle management
 // Replaces the old global mount/unmount functions.
 
-import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { getAdapter } from "../adapter/index.ts";
+import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { type HResult } from "./types.ts";
 
 export interface App {

@@ -2,8 +2,8 @@
 // Platform-agnostic. No DOM dependencies.
 
 import { removeNode } from "../adapter/index.ts";
-import type { Owner } from "./types.ts";
 import { isFunction } from "../utils/type-guards.ts";
+import type { Owner } from "./types.ts";
 
 // ── createOwner ───────────────────────────────────────
 

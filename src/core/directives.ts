@@ -2,8 +2,19 @@
 // Replaces src/dom/when.ts and src/dom/each.ts.
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
-import { use, toValue, isUse } from "./signal.ts";
 import { getAdapter } from "../adapter/index.ts";
+import {
+  isFunction,
+  isNode,
+  isSingle,
+  isUndefined,
+  isArray,
+  isPlainObject,
+} from "../utils/type-guards.ts";
+import { createOwner, disposeOwner } from "./owner.ts";
+import { processChildren } from "./process-children.ts";
+import { setProps } from "./props.ts";
+import { use, toValue, isUse } from "./signal.ts";
 import {
   getSignalState,
   isHResult,
@@ -14,17 +25,6 @@ import {
   type HResult,
   type HostNode,
 } from "./types.ts";
-import { createOwner, disposeOwner } from "./owner.ts";
-import { setProps } from "../dom/props.ts";
-import { processChildren } from "./process-children.ts";
-import {
-  isFunction,
-  isNode,
-  isSingle,
-  isUndefined,
-  isArray,
-  isPlainObject,
-} from "../utils/type-guards.ts";
 
 // ── Helper: flatten result to nodes ────────────────
 

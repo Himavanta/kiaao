@@ -18,5 +18,7 @@ export default defineConfig({
       typeCheck: true,
     },
   },
-  fmt: {},
+  fmt: {
+    sortImports: {},
+  },
 });

@@ -1,8 +1,8 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
+import { h } from "../core/h.ts";
 import { use, toValue } from "../core/signal.ts";
 import { type Signal, type HResult, type NullableProps } from "../core/types.ts";
-import { h } from "../core/h.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────

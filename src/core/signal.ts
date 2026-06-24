@@ -2,14 +2,7 @@
 // Platform-agnostic. No DOM dependencies.
 // Signal<T> replaces [Getter<T>, Setter<T>] — signal() reads, signal(v) writes.
 
-import {
-  REACTIVE,
-  type Signal,
-  type DefinitionState,
-  type DerivationState,
-  type SignalState,
-  getSignalState,
-} from "./types.ts";
+import { getAdapter } from "../adapter/index.ts";
 import {
   isFunction,
   isNotEmpty,
@@ -18,7 +11,14 @@ import {
   isEmpty,
   isDefined,
 } from "../utils/type-guards.ts";
-import { getRenderMode } from "../adapter/index.ts";
+import {
+  REACTIVE,
+  type Signal,
+  type DefinitionState,
+  type DerivationState,
+  type SignalState,
+  getSignalState,
+} from "./types.ts";
 
 // ── Signal Identity ────────────────────────────────────
 
@@ -163,9 +163,9 @@ function derivationMode<T>(...args: any[]): Signal<T> {
 
   const validDeps: Signal<any>[] = deps.filter((d: any) => isUse(d));
 
-  if (getRenderMode() === "ssr") {
-    const value = (func as (v?: T) => T)(undefined);
-    return definitionMode(value);
+  const adapter = getAdapter();
+  if (adapter.createStaticDerived) {
+    return adapter.createStaticDerived(func, validDeps);
   }
 
   const state = buildDerivationState<T>(func as (v?: T) => T, validDeps);
