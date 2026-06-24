@@ -19,7 +19,7 @@ export default (rootElement: HTMLElement) => {
     const mergedProps = { ...props, children: slots.default ?? props.children, slots };
 
     // Use createApp for component mount/unmount lifecycle
-    const app = createApp((p: any) => h(Component, p), mergedProps);
+    const app = createApp(h(Component, mergedProps));
     app.mount(rootElement);
 
     rootElement.addEventListener(
