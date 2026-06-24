@@ -84,11 +84,11 @@ export const browserAdapter: RenderAdapter = {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
 
-  removeEventListener(el: EventTarget, type: string, handler: Function): void {
+  removeEventListener(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
     el.removeEventListener(type, handler as EventListener);
   },
 
-  addEventListener(el: EventTarget, type: string, handler: Function): void {
+  addEventListener(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
     el.addEventListener(type, handler as EventListener);
   },
 

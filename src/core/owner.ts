@@ -51,6 +51,12 @@ export function disposeOwner(owner: Owner): void {
   if (owner.disposed) return;
   owner.disposed = true;
 
+  // 从父 Owner 的 children 中移除自身
+  if (owner.parent) {
+    const idx = owner.parent.children.indexOf(owner);
+    if (idx !== -1) owner.parent.children.splice(idx, 1);
+  }
+
   // 1. Execute unmount callbacks
   for (const cb of owner.unmountCallbacks) {
     safeCall(cb, "onUnmount");

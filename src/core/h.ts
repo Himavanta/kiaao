@@ -38,12 +38,13 @@ export function Fragment(props: { children?: any }): any {
 
 // ── DOM Mode ──────────────────────────────────────────
 
-function handleDomMode(tag: string, props: any, children: any[]): HResult {
+function handleDomMode(tag: string, props: NullableProps = {}, children: any[]): HResult {
   const adapter = getAdapter();
 
-  // 控制流指令
-  if (isDefined(props?.when)) {
-    const { when, each, key, else: elseFn, ...rest } = props;
+  // 控制流指令（需要用 any 解构可能不存在的指令属性）
+  const p = props as any;
+  if (isDefined(p?.when)) {
+    const { when, each, key, else: elseFn, ...rest } = p;
     const orphanCleanups: CleanupFn[] = [];
     const el = createWhenElement({
       tag,
@@ -58,8 +59,8 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
     return createHResult(null, [el], orphanCleanups);
   }
 
-  if (isDefined(props?.each)) {
-    const { each, key, ...rest } = props;
+  if (isDefined(p?.each)) {
+    const { each, key, ...rest } = p;
     const orphanCleanups: CleanupFn[] = [];
     const el = createEachElement({
       tag,

@@ -49,8 +49,8 @@ export function processChildren(children: any[]): ProcessChildrenResult {
       continue;
     }
 
+    // SSR 节点对象——通过 `type` 字段区分（仅 SSR 模式下出现，普通对象有 `type` 属性不会导致运行时错误）
     if (isObject(child) && "type" in (child as any)) {
-      // SSR 节点对象
       nodes.push(child as Node);
       continue;
     }

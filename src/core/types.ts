@@ -76,9 +76,6 @@ export type MergeableResult = HResult | HResult[] | Node;
 /** 清理函数 */
 export type CleanupFn = () => void;
 
-/** h() 返回类型：单个节点或节点数组 */
-export type Children = Node | Node[];
-
 // ── Signal Internal Types ──────────────────────────────
 
 /** 定义节点（use(init)）的内部状态 */
@@ -138,8 +135,8 @@ export interface RenderAdapter {
    * setAttribute 还是 property 赋值；Lynx 等平台直接设值即可。
    */
   setProp(el: unknown, key: string, value: unknown): void;
-  addEventListener(el: unknown, type: string, handler: Function): void;
-  removeEventListener(el: unknown, type: string, handler: Function): void;
+  addEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
+  removeEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
 }
 
 // ── Adapter Registration ───────────────────────────────

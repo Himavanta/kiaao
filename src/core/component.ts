@@ -125,6 +125,12 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
 
       const nodes = mergeResults(rawResult, owner);
 
+      // mergeResults 过程中可能被 dispose（如快速导航离开）
+      if (owner.disposed) {
+        // 已 merge 的子 Owner 会在父级 dispose 时一并清理
+        return;
+      }
+
       owner.elements.delete(placeholder);
       nodes.forEach((n) => owner.elements.add(n));
 

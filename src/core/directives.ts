@@ -25,6 +25,24 @@ import {
   isPlainObject,
 } from "../utils/type-guards.ts";
 
+// ── Helper: flatten result to nodes ────────────────
+
+/** 将渲染结果统一为 Node 数组，处理 HResult/Node/Node[] 三种形式 */
+function toNodes(result: HResult | Node | Node[]): Node[] {
+  if (isHResult(result)) return [...result.nodes];
+  if (isNode(result)) return [result];
+  if (isArray(result)) return result.filter(isNode);
+  return [];
+}
+
+/** 将节点列表追加到元素并注册到 Owner */
+function appendNodes(el: Element, nodes: Node[], owner: Owner): void {
+  for (const node of nodes) {
+    el.append(node);
+    owner.elements.add(node);
+  }
+}
+
 // ── Helper: append result to element ────────────────
 
 function appendResult(el: Element, result: HResult | Node | Node[], owner: Owner): void {
@@ -33,25 +51,10 @@ function appendResult(el: Element, result: HResult | Node | Node[], owner: Owner
       owner.children.push(result.owner);
       result.owner.parent = owner;
     }
-    for (const node of result.nodes) {
-      if (isNode(node)) {
-        el.append(node);
-        owner.elements.add(node);
-      }
-    }
+    appendNodes(el, result.nodes, owner);
     return;
   }
-  if (isNode(result)) {
-    el.append(result);
-    owner.elements.add(result);
-  } else if (isArray(result)) {
-    for (const node of result) {
-      if (isNode(node)) {
-        el.append(node);
-        owner.elements.add(node);
-      }
-    }
-  }
+  appendNodes(el, toNodes(result), owner);
 }
 
 // ── Mapping Table Detection ───────────────────────────
@@ -245,10 +248,8 @@ function createItemDOMNodes(options: {
       node.owner.parent = itemOwner;
     }
     for (const n of node.nodes) if (isNode(n)) addNode(n);
-  } else if (isNode(node)) {
-    addNode(node);
-  } else if (isArray(node)) {
-    for (const n of node) if (isNode(n)) addNode(n);
+  } else {
+    for (const n of toNodes(node)) addNode(n);
   }
   return newNodes;
 }
