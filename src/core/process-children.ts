@@ -15,6 +15,13 @@ import {
 } from "./types.ts";
 
 /**
+ * 将扁平化 children 数组归一化：单元素展开，多元素保持数组。
+ */
+export function normalizeChildren<T>(children: T[]): T | T[] {
+  return children.length === 1 ? children[0] : children;
+}
+
+/**
  * 处理子节点数组，返回扁平化的 Node 数组和孤儿的清理函数。
  *
  * - 数组被递归展开

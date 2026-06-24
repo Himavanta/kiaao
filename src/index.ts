@@ -2,7 +2,7 @@
 
 // Auto-register browser adapter on import
 import { setAdapter } from "./adapter/index.ts";
-import { browserAdapter } from "./dom/adapter.ts";
+import { browserAdapter } from "./dom/index.ts";
 try {
   if (globalThis.document) {
     setAdapter(browserAdapter);
@@ -12,9 +12,7 @@ try {
 export * from "./core/index.ts";
 
 // DOM-specific exports
-export { Portal } from "./dom/portal.ts";
-export { lazy } from "./dom/lazy.ts";
-export { isNode, isElement, isSVGElement } from "./dom/type-guards.ts";
+export { Portal, lazy, isNode, isElement, isSVGElement } from "./dom/index.ts";
 
 // JSX runtime
 export { jsx, jsxs, jsxDEV } from "./jsx-runtime/index.ts";

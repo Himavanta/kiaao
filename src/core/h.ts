@@ -2,11 +2,11 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter } from "../adapter/index.ts";
-import { normalizeChildren } from "../utils/helpers.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 import { createOwner } from "./owner.ts";
+import { normalizeChildren } from "./process-children.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
 import {

@@ -29,6 +29,8 @@
     "./astro": "./dist/astro/index.js",
     "./astro/client": "./dist/astro/client.js",
     "./astro/server": "./dist/astro/server.js",
+    "./core": "./dist/core/index.js",
+    "./dom": "./dist/dom/index.js",
     "./jsx-dev-runtime": "./dist/jsx-dev-runtime/index.js",
     "./jsx-runtime": "./dist/jsx-runtime/index.js",
     "./motion": "./dist/motion/index.js",

@@ -2,8 +2,8 @@
 // handleComponent, createContext, handleAsyncComponent
 
 import { getAdapter } from "../adapter/index.ts";
-import { normalizeChildren } from "../utils/helpers.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
+import { normalizeChildren } from "./process-children.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isPromise, isArray, isNotEmpty } from "./type-guards.ts";
 import {
