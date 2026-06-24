@@ -7,7 +7,7 @@ import { animate } from "motion/mini";
 import { direct, type DirectiveContext } from "../core/direct.ts";
 import { use } from "../core/signal.ts";
 import { isEmpty, isDefined } from "../core/type-guards.ts";
-import { type Signal, type Props } from "../core/types.ts";
+import { type Signal, type Props, type HostNode } from "../core/types.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -161,26 +161,27 @@ export function createGroupMotion<T, K = any>(
     });
   });
 
-  const GroupMotion = direct((el: Element, props: Props, ctx: DirectiveContext) => {
+  const GroupMotion = direct((el: HostNode, props: Props, ctx: DirectiveContext) => {
+    const element = el as Element;
     const config = parseMotionProps(props);
 
-    // 在元素挂载前设 from 初始样式，onMount 时 animate(el, to) 过渡
-    applyFromStyle(el, config.from);
+    // 在元素挂载前设 from 初始样式，onMount 时 animate(element, to) 过渡
+    applyFromStyle(element, config.from);
 
     ctx.onMount(() => {
-      propsMap.set(el, config);
-      elements.add(el);
+      propsMap.set(element, config);
+      elements.add(element);
 
       if (keyFn && isDefined(props.key)) {
-        keyToElMap.set(props.key, el);
+        keyToElMap.set(props.key, element);
       }
 
-      playEnterAnimation(el, config, elements);
+      playEnterAnimation(element, config, elements);
     });
 
     ctx.onUnmount(() => {
-      elements.delete(el);
-      propsMap.delete(el);
+      elements.delete(element);
+      propsMap.delete(element);
 
       if (keyFn && isDefined(props.key)) {
         keyToElMap.delete(props.key);

@@ -30,16 +30,16 @@ function toNodes(result: HResult | HostNode | HostNode[]): HostNode[] {
 }
 
 /** 将节点列表追加到元素并注册到 Owner */
-function appendNodes(el: Element, nodes: HostNode[], owner: Owner): void {
+function appendNodes(el: HostNode, nodes: HostNode[], owner: Owner): void {
   for (const node of nodes) {
-    el.append(node as Node);
+    getAdapter().append(el, node);
     owner.elements.add(node);
   }
 }
 
 // ── Helper: append result to element ────────────────
 
-function appendResult(el: Element, result: HResult | Node | Node[], owner: Owner): void {
+function appendResult(el: HostNode, result: HResult | Node | Node[], owner: Owner): void {
   if (isHResult(result)) {
     if (result.owner) {
       owner.children.push(result.owner);
@@ -67,16 +67,10 @@ function detectWhenMode(children: any[], eachFn: unknown) {
   return { isMappingMode: isMapping, isLazy, hasEach, mappingTable };
 }
 
-// ── When: clear element children ─────────────────────
-
-function clearElement(el: Element): void {
-  while (el.firstChild) el.removeChild(el.firstChild);
-}
-
 // ── When: render by mode ────────────────────────────
 
 function renderMappingMode(options: {
-  el: Element;
+  el: HostNode;
   mappingTable: Record<string, () => any>;
   showRaw: any;
   elseFn: (() => any) | undefined;
@@ -89,7 +83,7 @@ function renderMappingMode(options: {
 }
 
 function renderLazyMode(options: {
-  el: Element;
+  el: HostNode;
   childFn: () => any;
   show: boolean;
   elseFn: (() => any) | undefined;
@@ -101,7 +95,7 @@ function renderLazyMode(options: {
 }
 
 function renderEachMode(options: {
-  el: Element;
+  el: HostNode;
   eachFn: unknown;
   childFn: any;
   keyFn: unknown;
@@ -119,7 +113,7 @@ function renderEachMode(options: {
 }
 
 function renderStaticMode(options: {
-  el: Element;
+  el: HostNode;
   children: any[];
   show: boolean;
   elseFn: (() => any) | undefined;
@@ -132,7 +126,7 @@ function renderStaticMode(options: {
   }
   const { nodes, cleanups } = processChildren(children);
   for (const node of nodes) {
-    el.append(node as Node);
+    getAdapter().append(el, node);
     owner.elements.add(node);
   }
   owner.cleanups.push(...cleanups);
@@ -160,10 +154,10 @@ export function createWhenElement(options: {
   keyFn?: unknown;
   elseFn?: () => any;
   cleanups?: CleanupFn[];
-}): Element {
+}): HostNode {
   const { tag, props, children, whenFn, eachFn, keyFn, elseFn, cleanups } = options;
   const adapter = getAdapter();
-  const el = adapter.createElement(tag) as Element;
+  const el = adapter.createElement(tag) as HostNode;
 
   setProps(el, props, cleanups);
 
@@ -182,7 +176,6 @@ export function createWhenElement(options: {
       disposeOwner(branchOwner);
       branchOwner = null;
     }
-    clearElement(el);
 
     branchOwner = createOwner();
 
@@ -231,7 +224,7 @@ function createItemDOMNodes(options: {
   const newNodes: HostNode[] = [];
   const addNode = (n: HostNode) => {
     itemOwner.elements.add(n);
-    anchor.before(n as Node);
+    getAdapter().before(anchor, n);
     newNodes.push(n);
     nodes.push(n);
   };
@@ -250,22 +243,15 @@ function createItemDOMNodes(options: {
 
 /** 检查 identity 匹配的节点组是否需要重排，需要则移动到 anchor 前 */
 function repositionItemGroup(options: {
-  container: Element;
-  anchor: any;
+  anchor: HostNode;
   existingNodes: HostNode[];
   prevNode: HostNode | null;
 }): HostNode | null {
-  const { container, anchor, existingNodes, prevNode } = options;
+  const { anchor, existingNodes, prevNode } = options;
   if (!existingNodes.length) return prevNode;
-  const firstNode = existingNodes[0] as Node;
-  const needsMove =
-    prevNode === null
-      ? container.firstChild !== firstNode && container.firstChild !== anchor
-      : (firstNode as Node).previousSibling !== (prevNode as Node);
-  if (needsMove) {
-    for (const n of [...existingNodes].reverse()) {
-      anchor.before(n);
-    }
+  // 将节点组移动到 anchor 前，已在正确位置时 no-op
+  for (const n of [...existingNodes].reverse()) {
+    getAdapter().before(anchor, n);
   }
   return existingNodes[existingNodes.length - 1] || prevNode;
 }
@@ -323,7 +309,7 @@ function disposeRemovedItems(options: {
 // ── renderEachOnElement ──────────────────────────────
 
 function renderEachOnElement(options: {
-  container: Element;
+  container: HostNode;
   eachFn: any;
   childFn: any;
   keyFn?: any;
@@ -331,8 +317,8 @@ function renderEachOnElement(options: {
 }) {
   const { container, eachFn, childFn, keyFn, cleanups } = options;
   const adapter = getAdapter();
-  const anchor = adapter.createComment("each") as Comment;
-  container.append(anchor);
+  const anchor = adapter.createComment("each") as HostNode;
+  adapter.append(container, anchor);
   const nodes: HostNode[] = [];
   const itemOwners: Map<unknown, Owner> = new Map();
   const itemSignalMap: Map<unknown, Signal<any>> = new Map();
@@ -353,7 +339,6 @@ function renderEachOnElement(options: {
 
       if (itemNodeMap.has(identity)) {
         prevNode = repositionItemGroup({
-          container,
           anchor,
           existingNodes: itemNodeMap.get(identity)!,
           prevNode,
@@ -419,10 +404,10 @@ export function createEachElement(options: {
   eachFn: any;
   keyFn?: any;
   cleanups?: CleanupFn[];
-}): Element {
+}): HostNode {
   const { tag, props, children, eachFn, keyFn, cleanups } = options;
   const adapter = getAdapter();
-  const el = adapter.createElement(tag) as Element;
+  const el = adapter.createElement(tag) as HostNode;
   setProps(el, props, cleanups);
   const childFn = children[0];
   renderEachOnElement({ container: el, eachFn, childFn, keyFn, cleanups });

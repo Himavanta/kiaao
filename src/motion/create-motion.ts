@@ -5,7 +5,7 @@
 import { direct, type DirectiveContext } from "../core/direct.ts";
 import { use } from "../core/signal.ts";
 import { isEmpty, isNotEmpty } from "../core/type-guards.ts";
-import { type Signal, type Props } from "../core/types.ts";
+import { type Signal, type Props, type HostNode } from "../core/types.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -93,20 +93,21 @@ export function createMotion(
     });
   });
 
-  const Motion = direct((el: Element, props: Props, ctx: DirectiveContext) => {
+  const Motion = direct((el: HostNode, props: Props, ctx: DirectiveContext) => {
+    const element = el as Element;
     const config = parseMotionProps(props);
 
-    // 在元素挂载前设 from 初始样式，onMount 时 animate(el, to) 过渡
-    applyFromStyle(el, config.from);
+    // 在元素挂载前设 from 初始样式，onMount 时 animate(element, to) 过渡
+    applyFromStyle(element, config.from);
 
     ctx.onMount(() => {
-      propsMap.set(el, config);
-      playEnterAnimation(el, config, elements);
+      propsMap.set(element, config);
+      playEnterAnimation(element, config, elements);
     });
 
     ctx.onUnmount(() => {
-      elements.delete(el);
-      propsMap.delete(el);
+      elements.delete(element);
+      propsMap.delete(element);
     });
   });
 

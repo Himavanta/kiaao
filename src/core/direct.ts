@@ -2,7 +2,7 @@
 
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "./type-guards.ts";
-import { DIRECT_KEY, type Owner, type Props } from "./types.ts";
+import { DIRECT_KEY, type Owner, type Props, type HostNode } from "./types.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -13,14 +13,14 @@ export interface DirectiveContext {
 }
 
 export type DirectiveFunction = (
-  el: Element,
+  el: HostNode,
   props: Props & { children?: any },
   context: DirectiveContext,
 ) => void;
 
 // ── JSX component signature ────────────────────────────
 
-type JSXComponentSignature = (props: Props) => Node;
+type JSXComponentSignature = (props: Props) => HostNode;
 
 // ── direct() ───────────────────────────────────────────
 
