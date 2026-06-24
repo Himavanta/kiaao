@@ -3,10 +3,10 @@
 
 import { getAdapter, type HResult, createHResult, isHResult } from "./types.ts";
 import { createOwner } from "./owner.ts";
-import { handleComponent } from "./component.ts";
+import { handleComponent, type ComponentFunction } from "./component.ts";
 import { processChildren } from "./process-children.ts";
 import { setProps } from "../dom/props.ts";
-import { createDirectiveContext, isDirective } from "./direct.ts";
+import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
 import {
   isBoolean,
@@ -19,8 +19,6 @@ import {
   isString,
   isDefined,
 } from "../utils/type-guards.ts";
-import type { ComponentFunction } from "./component.ts";
-import type { DirectiveFunction } from "./direct.ts";
 import { createWhenElement, createEachElement } from "./directives.ts";
 
 // ── Fragment ─────────────────────────────────────────

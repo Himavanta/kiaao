@@ -2,12 +2,17 @@
 // handleComponent, createContext, handleAsyncComponent
 
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
-import { registerSignalStop } from "./signal.ts";
-import { type Signal, REACTIVE, type HResult, createHResult, isHResult } from "./types.ts";
-import { getAdapter } from "./types.ts";
+import { registerSignalStop, type UseFunction } from "./signal.ts";
+import {
+  type Signal,
+  REACTIVE,
+  type HResult,
+  createHResult,
+  isHResult,
+  getAdapter,
+} from "./types.ts";
 import { isNode, isPromise, isArray, isNotEmpty } from "../utils/type-guards.ts";
 import { normalizeChildren } from "../utils/helpers.ts";
-import type { UseFunction } from "./signal.ts";
 
 // ── Context ───────────────────────────────────────────
 

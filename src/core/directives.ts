@@ -3,9 +3,8 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
-import { getSignalState } from "./types.ts";
+import { getSignalState, getAdapter, isHResult } from "./types.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
-import { getAdapter } from "./types.ts";
 import { setProps } from "../dom/props.ts";
 import { processChildren } from "./process-children.ts";
 import {
@@ -16,7 +15,6 @@ import {
   isArray,
   isPlainObject,
 } from "../utils/type-guards.ts";
-import { isHResult } from "./types.ts";
 
 // ── Helper: append result to element ────────────────
 

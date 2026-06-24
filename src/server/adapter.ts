@@ -2,8 +2,7 @@
 // Creates lightweight serializable node trees for string rendering.
 
 import type { RenderAdapter } from "../core/types.ts";
-import { isNil } from "../utils/type-guards.ts";
-import { isNotNil } from "../utils/type-guards.ts";
+import { isNil, isNotNil } from "../utils/type-guards.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 

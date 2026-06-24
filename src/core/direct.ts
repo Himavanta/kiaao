@@ -1,8 +1,7 @@
 // kiaao — Directive system: direct(), types, element-level context (Owner-based)
 
 import { DIRECT_KEY } from "./types.ts";
-import { registerSignalStop } from "./signal.ts";
-import type { UseFunction } from "./signal.ts";
+import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "../utils/type-guards.ts";
 
 // ── Types ──────────────────────────────────────────────

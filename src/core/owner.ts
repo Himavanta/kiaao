@@ -1,8 +1,7 @@
 // kiaao — Owner tree: lifecycle ownership management
 // Platform-agnostic. No DOM dependencies.
 
-import type { Owner } from "./types.ts";
-import { removeNode } from "./types.ts";
+import { removeNode, type Owner } from "./types.ts";
 
 // ── createOwner ───────────────────────────────────────
 

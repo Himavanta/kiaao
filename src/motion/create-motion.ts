@@ -4,8 +4,7 @@
 
 import { use } from "../core/signal.ts";
 import { type Signal } from "../core/types.ts";
-import { direct } from "../core/direct.ts";
-import type { DirectiveContext } from "../core/direct.ts";
+import { direct, type DirectiveContext } from "../core/direct.ts";
 import { isEmpty, isNotEmpty } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,
