@@ -51,6 +51,8 @@ const FORCE_ATTRIBUTE = splitSet(
 
 export { FORCE_ATTRIBUTE };
 
+const EVENT_RE = /^on[A-Z]/;
+
 // ── Adapter ───────────────────────────────────────────
 
 export const browserAdapter: RenderAdapter = {
@@ -97,6 +99,12 @@ export const browserAdapter: RenderAdapter = {
   },
 
   setProp(el: any, key: string, value: unknown): void {
+    // 事件绑定——on + 大写字母开头（如 onClick、onClickOutside）
+    if (EVENT_RE.test(key)) {
+      el.addEventListener(key.slice(2).toLowerCase(), value as any);
+      return;
+    }
+
     // attr: 前缀 → 强制 setAttribute
     if (key.startsWith("attr:")) {
       el.setAttribute(key.slice(5), String(value));

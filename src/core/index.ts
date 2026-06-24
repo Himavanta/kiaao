@@ -21,7 +21,7 @@ export { direct, createDirectiveContext, isDirective } from "./direct.ts";
 export type { DirectiveFunction, DirectiveContext } from "./direct.ts";
 
 // Props handling
-export { setProps, EVENT_RE } from "./props.ts";
+export { setProps } from "./props.ts";
 
 // Children processing
 export { processChildren } from "./process-children.ts";

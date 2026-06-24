@@ -84,6 +84,8 @@ export function serializeSSRNode(node: SSRNode): string {
   return html;
 }
 
+const EVENT_RE = /^on[A-Z]/;
+
 // ── SSR Adapter ──────────────────────────────────────
 
 export const ssrAdapter: RenderAdapter = {
@@ -147,8 +149,8 @@ export const ssrAdapter: RenderAdapter = {
     // attr: 前缀 → 去掉前缀后存储
     const actualKey = key.startsWith("attr:") ? key.slice(5) : key;
 
-    // 事件属性不输出
-    if (actualKey.startsWith("on")) return;
+    // 事件属性不输出（匹配 JSX 事件约定 onClick、onMouseDown 等）
+    if (EVENT_RE.test(actualKey)) return;
 
     if (value === true) {
       // 布尔值 true → bare attribute（如 <input disabled>）

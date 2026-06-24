@@ -7,11 +7,13 @@ import { isUse, use } from "./signal.ts";
 import { isRecord } from "./type-guards.ts";
 import { getSignalState, type HostNode, type NullableProps, type CleanupFn } from "./types.ts";
 
-// 匹配 JSX 事件属性：on + 大写字母（如 onClick、onClickOutside）
-export const EVENT_RE = /^on[A-Z]/;
-
 // ── setProps ───────────────────────────────────────────
 
+/**
+ * 遍历 props 并设置到宿主节点。
+ * 所有属性（含事件）统一走 `adapter.setProp`，由各平台 adaper 内部分发。
+ * 事件不需要响应式绑定——`onClick={fn}` 是一次性绑定的函数。
+ */
 export function setProps(el: HostNode, props: NullableProps = {}, cleanups?: CleanupFn[]): void {
   if (!isRecord(props)) return;
 
@@ -22,11 +24,7 @@ export function setProps(el: HostNode, props: NullableProps = {}, cleanups?: Cle
 
     const value = props[key];
 
-    if (EVENT_RE.test(key)) {
-      // 事件绑定——adapter.addEventListener 在 SSR 下是空操作
-      const eventName = key.slice(2).toLowerCase();
-      adapter.addEventListener(el, eventName, value);
-    } else if (isUse(value)) {
+    if (isUse(value)) {
       // 信号值——创建响应式绑定，值变化时自动更新
       const derived = use(value, () => {
         adapter.setProp(el, key, value());
@@ -36,7 +34,7 @@ export function setProps(el: HostNode, props: NullableProps = {}, cleanups?: Cle
         cleanups.push(stop);
       }
     } else {
-      // 静态值——直接设值
+      // 静态值（含事件处理函数）——统一走 adapter.setProp
       adapter.setProp(el, key, value);
     }
   }
