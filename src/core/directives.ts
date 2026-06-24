@@ -14,6 +14,7 @@ import {
   isArray,
   isPlainObject,
   isEmpty,
+  isNil,
 } from "./type-guards.ts";
 import {
   getSignalState,
@@ -256,9 +257,16 @@ function repositionItemGroup(options: {
 }): HostNode {
   const { anchor, existingNodes, prevNode } = options;
   if (isEmpty(existingNodes)) return prevNode;
-  // 将节点组移动到 anchor 前，已在正确位置时 no-op
-  for (const n of [...existingNodes].reverse()) {
-    getAdapter().before(anchor, n);
+
+  const [firstNode] = existingNodes;
+  const expectedPrev = isNil(prevNode) ? null : prevNode;
+  const needsMove = getAdapter().getPreviousSibling(firstNode) !== expectedPrev;
+
+  if (needsMove) {
+    // 逆序以保证插入顺序正确
+    for (const n of [...existingNodes].reverse()) {
+      getAdapter().before(anchor, n);
+    }
   }
   return existingNodes[existingNodes.length - 1] || prevNode;
 }

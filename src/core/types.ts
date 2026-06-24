@@ -141,6 +141,11 @@ export interface RenderAdapter {
   /** 判断值是否为合法的宿主节点 */
   isNode(value: unknown): value is HostNode;
   /**
+   * 获取宿主节点的前一个兄弟节点。用于 each 指令的位置判断。
+   * DOM：返回 previousSibling；SSR：返回 null。
+   */
+  getPreviousSibling(node: HostNode): HostNode;
+  /**
    * 可选：创建静态派生信号。SSR adapter 用于跳过响应式依赖追踪，直接求值。
    * DOM adapter 不实现此方法，core 走默认完整派生路径。
    */

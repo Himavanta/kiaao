@@ -2,7 +2,7 @@
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
 import { isObject } from "../core/index.ts";
-import type { RenderAdapter } from "../core/index.ts";
+import type { RenderAdapter, HostNode } from "../core/index.ts";
 
 // ── SVG ───────────────────────────────────────────────
 
@@ -96,6 +96,10 @@ export const browserAdapter: RenderAdapter = {
 
   isNode(value: unknown): value is Node {
     return value instanceof Node;
+  },
+
+  getPreviousSibling(node: HostNode): HostNode {
+    return (node as Node).previousSibling ?? null;
   },
 
   setProp(el: any, key: string, value: unknown): void {

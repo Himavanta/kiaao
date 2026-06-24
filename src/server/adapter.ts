@@ -2,7 +2,7 @@
 // Creates lightweight serializable node trees for string rendering.
 
 import { definitionMode, isNil, isNotNil, isObject } from "../core/index.ts";
-import type { RenderAdapter } from "../core/index.ts";
+import type { RenderAdapter, HostNode } from "../core/index.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 
@@ -131,6 +131,10 @@ export const ssrAdapter: RenderAdapter = {
 
   isNode(value: unknown): value is SSRNode {
     return isObject(value) && "type" in value;
+  },
+
+  getPreviousSibling(): HostNode {
+    return null;
   },
 
   createStaticDerived(fn, _deps) {
