@@ -49,8 +49,6 @@ const FORCE_ATTRIBUTE = splitSet(
     "formtarget novalidate nonce",
 );
 
-export { FORCE_ATTRIBUTE };
-
 const EVENT_RE = /^on[A-Z]/;
 
 // ── Adapter ───────────────────────────────────────────

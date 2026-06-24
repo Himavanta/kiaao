@@ -1,7 +1,5 @@
 // kiaao — Child node processing for h()
 // Returns { nodes, cleanups } — cleanups are orphan signal binding stops
-// that flow upward through HResult.  During transition they are also
-// registered to currentOwner (if present) for backward compatibility.
 
 import { getAdapter } from "../adapter/index.ts";
 import { isUse, use } from "./signal.ts";

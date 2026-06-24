@@ -162,7 +162,7 @@ export const ssrAdapter: RenderAdapter = {
       return;
     }
 
-    // style / aria- / data- / FORCE_ATTRIBUTE 都作为字符串输出
+    // 所有属性都作为字符串输出到 SSR
     element.attrs[actualKey] = String(value);
   },
 };
