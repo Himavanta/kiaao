@@ -17,6 +17,7 @@ import {
   isNotNil,
   isObject,
   isString,
+  isDefined,
 } from "../utils/type-guards.ts";
 import type { ComponentFunction } from "./component.ts";
 import type { DirectiveFunction } from "./direct.ts";
@@ -35,7 +36,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
   const adapter = getAdapter();
 
   // 控制流指令
-  if (props?.when !== undefined) {
+  if (isDefined(props?.when)) {
     const { when, each, key, else: elseFn, ...rest } = props;
     const orphanCleanups: (() => void)[] = [];
     const el = createWhenElement({
@@ -51,7 +52,7 @@ function handleDomMode(tag: string, props: any, children: any[]): HResult {
     return createHResult(null, [el], orphanCleanups);
   }
 
-  if (props?.each !== undefined) {
+  if (isDefined(props?.each)) {
     const { each, key, ...rest } = props;
     const orphanCleanups: (() => void)[] = [];
     const el = createEachElement({

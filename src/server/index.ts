@@ -9,6 +9,7 @@ import { setRenderMode, getRenderMode } from "../core/signal.ts";
 import { h } from "../core/h.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
 import { isObject } from "../utils/type-guards.ts";
+import { isDefined } from "../utils/type-guards.ts";
 import type { ComponentFunction } from "../core/component.ts";
 
 export function renderToString(
@@ -44,6 +45,6 @@ export function renderToString(
     return html;
   } finally {
     setRenderMode(prevMode);
-    if (prevAdapter !== undefined) setAdapter(prevAdapter);
+    if (isDefined(prevAdapter)) setAdapter(prevAdapter);
   }
 }

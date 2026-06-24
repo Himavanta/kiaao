@@ -7,7 +7,7 @@ import { use } from "../core/signal.ts";
 import { type Signal } from "../core/types.ts";
 import { direct } from "../core/direct.ts";
 import type { DirectiveContext } from "../core/direct.ts";
-import { isEmpty } from "../utils/type-guards.ts";
+import { isEmpty, isDefined } from "../utils/type-guards.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -169,7 +169,7 @@ export function createGroupMotion(
       propsMap.set(el, config);
       elements.add(el);
 
-      if (keyFn && props.key !== undefined) {
+      if (keyFn && isDefined(props.key)) {
         keyToElMap.set(props.key, el);
       }
 
@@ -180,7 +180,7 @@ export function createGroupMotion(
       elements.delete(el);
       propsMap.delete(el);
 
-      if (keyFn && props.key !== undefined) {
+      if (keyFn && isDefined(props.key)) {
         keyToElMap.delete(props.key);
       }
     });

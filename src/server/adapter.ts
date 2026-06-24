@@ -2,6 +2,8 @@
 // Creates lightweight serializable node trees for string rendering.
 
 import type { RenderAdapter } from "../core/types.ts";
+import { isNil } from "../utils/type-guards.ts";
+import { isNotNil } from "../utils/type-guards.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 
@@ -68,7 +70,7 @@ export function serializeSSRNode(node: SSRNode): string {
   for (const [key, val] of Object.entries(node.attrs)) {
     if (val === true) {
       attrs += ` ${key}`;
-    } else if (val !== false && val != null) {
+    } else if (val !== false && isNotNil(val)) {
       attrs += ` ${key}="${escapeAttr(String(val))}"`;
     }
   }
@@ -130,8 +132,7 @@ export const ssrAdapter: RenderAdapter = {
     const element = el as SSRElement;
     if (element.type !== "element") return;
 
-    // null/undefined/false → 不输出
-    if (value == null || value === false) return;
+    if (isNil(value) || value === false) return;
 
     // prop: 前缀 → SSR 不输出
     if (key.startsWith("prop:")) return;

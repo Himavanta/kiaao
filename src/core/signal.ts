@@ -10,7 +10,14 @@ import {
   type SignalState,
   getSignalState,
 } from "./types.ts";
-import { isFunction, isNotEmpty, isNotNil, isSingle, isEmpty } from "../utils/type-guards.ts";
+import {
+  isFunction,
+  isNotEmpty,
+  isNotNil,
+  isSingle,
+  isEmpty,
+  isDefined,
+} from "../utils/type-guards.ts";
 
 // ── Render Mode ────────────────────────────────────────
 
@@ -26,8 +33,7 @@ export const getRenderMode = (): RenderMode => currentRenderMode;
 
 // ── Signal Identity ────────────────────────────────────
 
-export const isUse = (v: any): v is Signal<any> =>
-  isNotNil(v) && (v as any)[REACTIVE] !== undefined;
+export const isUse = (v: any): v is Signal<any> => isNotNil(v) && isDefined((v as any)[REACTIVE]);
 
 // ── Value Normalization ────────────────────────────────
 
