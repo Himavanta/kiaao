@@ -127,11 +127,8 @@ function handleDirectiveMode(
 // ── h() ────────────────────────────────────────────────
 
 export function h(tag: DirectiveFunction, props?: NullableProps, ...children: any[]): HResult;
-export function h(
-  tag: string | ComponentFunction,
-  props?: NullableProps,
-  ...children: any[]
-): HResult;
+export function h<P>(tag: ComponentFunction<P>, props?: P | null, ...children: any[]): HResult;
+export function h(tag: string, props?: NullableProps, ...children: any[]): HResult;
 export function h(tag: any, props?: NullableProps, ...children: any[]): HResult {
   if (isNil(props)) props = undefined;
   if (!isString(tag) && !isFunction(tag)) {
