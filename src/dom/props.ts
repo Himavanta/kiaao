@@ -2,7 +2,8 @@
 // Platform-agnostic: all DOM operations go through RenderAdapter.
 // browser-specific knowledge (FORCE_ATTRIBUTE, SVG, aria/data) lives in the browser adapter.
 
-import { getAdapter, getSignalState, type NullableProps, type CleanupFn } from "../core/types.ts";
+import { getAdapter } from "../adapter/index.ts";
+import { getSignalState, type NullableProps, type CleanupFn } from "../core/types.ts";
 import { isUse, use } from "../core/signal.ts";
 import { isNil, isObject, isRecord, isString } from "../utils/type-guards.ts";
 

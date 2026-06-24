@@ -138,26 +138,3 @@ export interface RenderAdapter {
   addEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
   removeEventListener(el: unknown, type: string, handler: (...args: any[]) => void): void;
 }
-
-// ── Adapter Registration ───────────────────────────────
-
-let _adapter: RenderAdapter | null = null;
-
-export function setAdapter(adapter: RenderAdapter): void {
-  _adapter = adapter;
-}
-
-export function getAdapter(): RenderAdapter {
-  if (!_adapter) {
-    throw new Error(
-      "[kiaao] No RenderAdapter registered. " +
-        "Import from 'kiaao' (auto-registers browser adapter) or call setAdapter() before use.",
-    );
-  }
-  return _adapter;
-}
-
-/** 内部使用的 element 移除函数，无 adapter 时静默跳过 */
-export function removeNode(node: unknown): void {
-  _adapter?.remove(node);
-}

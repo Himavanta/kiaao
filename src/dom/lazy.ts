@@ -4,7 +4,7 @@
 
 import type { ComponentFunction } from "../core/component.ts";
 import { h } from "../core/h.ts";
-import { getRenderMode } from "../core/signal.ts";
+import { getRenderMode } from "../adapter/index.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,

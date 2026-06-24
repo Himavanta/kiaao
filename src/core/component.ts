@@ -3,6 +3,7 @@
 
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, type UseFunction } from "./signal.ts";
+import { getAdapter } from "../adapter/index.ts";
 import {
   type Signal,
   type Owner,
@@ -10,7 +11,6 @@ import {
   type HResult,
   createHResult,
   isHResult,
-  getAdapter,
   type NullableProps,
   type ComponentResult,
   type MergeableResult,

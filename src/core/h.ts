@@ -1,8 +1,8 @@
 // kiaao — h() function: creates real DOM or dispatches to SSR mode
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
+import { getAdapter } from "../adapter/index.ts";
 import {
-  getAdapter,
   type HResult,
   createHResult,
   isHResult,

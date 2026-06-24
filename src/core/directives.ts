@@ -3,9 +3,9 @@
 // Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { use, toValue, isUse } from "./signal.ts";
+import { getAdapter } from "../adapter/index.ts";
 import {
   getSignalState,
-  getAdapter,
   isHResult,
   type Owner,
   type CleanupFn,

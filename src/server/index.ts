@@ -4,8 +4,7 @@
 //   import { renderToString } from "kiaao/server";
 //   const html = renderToString(MyComponent, { name: "kiaao" });
 
-import { setAdapter, getAdapter } from "../core/types.ts";
-import { setRenderMode, getRenderMode } from "../core/signal.ts";
+import { setAdapter, getAdapter, setRenderMode, getRenderMode } from "../adapter/index.ts";
 import { h } from "../core/h.ts";
 import { ssrAdapter, serializeSSRNode } from "./adapter.ts";
 import { isObject, isDefined } from "../utils/type-guards.ts";

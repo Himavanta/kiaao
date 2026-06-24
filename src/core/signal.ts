@@ -18,18 +18,7 @@ import {
   isEmpty,
   isDefined,
 } from "../utils/type-guards.ts";
-
-// ── Render Mode ────────────────────────────────────────
-
-export type RenderMode = "dom" | "ssr" | "hydrate";
-
-let currentRenderMode: RenderMode = "dom";
-
-export const setRenderMode = (mode: RenderMode): void => {
-  currentRenderMode = mode;
-};
-
-export const getRenderMode = (): RenderMode => currentRenderMode;
+import { getRenderMode } from "../adapter/index.ts";
 
 // ── Signal Identity ────────────────────────────────────
 
@@ -173,7 +162,7 @@ function derivationMode<T>(...args: any[]): Signal<T> {
 
   const validDeps: Signal<any>[] = deps.filter((d: any) => isUse(d));
 
-  if (currentRenderMode === "ssr") {
+  if (getRenderMode() === "ssr") {
     const value = (func as (v?: T) => T)(undefined);
     return definitionMode(value);
   }

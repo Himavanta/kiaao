@@ -3,7 +3,8 @@
 
 import { expect, test, describe } from "vite-plus/test";
 import { createOwner, disposeOwner, triggerMount } from "../../src/core/owner.ts";
-import { removeNode, setAdapter, type RenderAdapter } from "../../src/core/types.ts";
+import { removeNode, setAdapter } from "../../src/adapter/index.ts";
+import { type RenderAdapter } from "../../src/core/types.ts";
 
 // ── Helpers ────────────────────────────────────────────
 

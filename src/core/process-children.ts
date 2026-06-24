@@ -3,13 +3,8 @@
 // that flow upward through HResult.  During transition they are also
 // registered to currentOwner (if present) for backward compatibility.
 
-import {
-  getAdapter,
-  type ProcessChildrenResult,
-  isHResult,
-  getSignalState,
-  type CleanupFn,
-} from "./types.ts";
+import { getAdapter } from "../adapter/index.ts";
+import { type ProcessChildrenResult, isHResult, getSignalState, type CleanupFn } from "./types.ts";
 import { isUse, use } from "./signal.ts";
 import { isNil, isNode, isObject, isArray } from "../utils/type-guards.ts";
 

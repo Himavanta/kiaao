@@ -1,7 +1,7 @@
 // kiaao — Public API (Owner architecture)
 
 // Auto-register browser adapter on import
-import { setAdapter } from "./core/types.ts";
+import { setAdapter } from "./adapter/index.ts";
 import { browserAdapter } from "./dom/adapter.ts";
 try {
   if (globalThis.document) {
@@ -11,7 +11,7 @@ try {
 
 // Reactive core (platform-agnostic)
 export { use, isUse, toValue } from "./core/signal.ts";
-export type { RenderMode } from "./core/signal.ts";
+export type { RenderMode } from "./adapter/index.ts";
 
 // DOM rendering (new h() with Owner tree)
 export { h, Fragment } from "./core/h.ts";

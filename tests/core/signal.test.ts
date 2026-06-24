@@ -1,7 +1,8 @@
 // kiaao — Signal system tests (Signal<T> API)
 
 import { expect, test, describe } from "vite-plus/test";
-import { use, isUse, toValue, setRenderMode, getRenderMode } from "../../src/core/signal.ts";
+import { use, isUse, toValue } from "../../src/core/signal.ts";
+import { setRenderMode, getRenderMode } from "../../src/adapter/index.ts";
 import { REACTIVE } from "../../src/core/types.ts";
 
 describe("use — definition mode", () => {
