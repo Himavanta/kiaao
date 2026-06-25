@@ -1,6 +1,4 @@
 // kiaao — when/each directives with Owner-based cleanup
-// Replaces src/dom/when.ts and src/dom/each.ts.
-// Internal cleanup uses disposeOwner instead of DOM tree traversal.
 
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner } from "./owner.ts";
