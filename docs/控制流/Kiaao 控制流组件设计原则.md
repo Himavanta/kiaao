@@ -2,7 +2,7 @@
 
 **状态**：定稿
 **日期**：2026年6月26日
-**版本**：2.0
+**版本**：2.2
 
 ## 一、背景
 
@@ -29,19 +29,19 @@
 
 **根本原因**：在 Kiaao 中，节点的身份可能在其生命周期中发生替换。任何基于“创建时快照”的引用管理都会在面对这些场景时失效。
 
-## 三、解决方案：以 Owner 为稳定引用
+## 三、解决方案：以 Owner 为稳定引用，分支独立 Owner
 
-控制流组件的核心设计原则是：**以 Owner 为稳定的身份标识，动态获取节点集合，委托 Owner 树管理全部生命周期。**
+控制流组件的核心设计原则是：**以 Owner 为稳定的身份标识，为每个分支和每个条目创建独立的 Owner，委托 Owner 树管理全部生命周期。**
 
 ### 3.1 原则内涵
 
-1. **Owner 是稳定的**。从创建到销毁，Owner 对象不变。无论内部发生什么——异步组件替换占位符、Show 切换分支、Each 移动条目——Owner 始终代表同一个逻辑作用域。组件只需要持有 Owner 引用，就能在任何时候访问到当前的正确状态。
+1. **Owner 是稳定的**。从创建到销毁，Owner 对象不变。无论内部发生什么——异步组件替换占位符、Show 切换分支、Each 移动条目——Owner 始终代表同一个逻辑作用域。
 
-2. **`owner.elements` 是动态的**。它始终包含当前的真实顶层节点集合。异步组件 resolve 后，占位符被移出 `elements`，真实节点被加入。Show 切换分支后，旧分支节点被移出，新分支节点被加入。不需要维护任何节点快照，不需要追踪节点替换。
+2. **分支拥有独立 Owner**。Show 的每个活跃分支（主内容、fallback）、Each 的每个条目，都拥有自己的 Owner。这与 `handleComponent` 为每个组件函数创建 Owner 的原则一致——**一个逻辑作用域，一个 Owner**。
 
-   `owner.elements` 是 `Set<unknown>` 类型，定义于 `core/types.ts` 的 `Owner` 接口中。在浏览器环境下，其元素为 DOM `Node`；在 SSR 环境下为 `SSRNode`；在其它平台下为对应渲染元素。控制流组件通过 adapter 操作这些节点，保持平台无关。
+3. **`owner.elements` 是动态的**。它始终包含当前的真实顶层节点集合。异步组件 resolve 后，占位符被移出 `elements`，真实节点被加入。Show 切换分支后，旧分支 Owner 被整体销毁，新分支 Owner 持有新节点。不需要维护任何节点快照。
 
-3. **清理是递归且完整的**。`disposeOwner(owner)` 递归清理所有子 Owner、执行清理回调、断开信号订阅、移除 `elements` 中的所有渲染元素。调用方不需要知道内部结构——无论内部嵌套了多少层异步组件、条件渲染、列表渲染，一次调用即可完整销毁。
+4. **清理是递归且完整的**。`disposeOwner(owner)` 递归清理所有子 Owner、执行清理回调、断开信号订阅、移除 `elements` 中的所有渲染元素。分支切换时只需 `disposeOwner(branchOwner)` 即可销毁该分支内的所有资源，不需要手动清空 `elements` 或 `cleanups`。
 
 ### 3.2 当前架构的天然支持
 
@@ -54,7 +54,7 @@ const result = tag(props, context);
 // 合并 nodes 和 cleanups
 ```
 
-Show/Case/Each 作为普通函数组件实现时，它们的内部调用 `h()` 产生的所有子组件和 DOM 元素的 Owner，会通过 `mergeResults` 自动挂载到 Show/Case/Each 自身的 Owner 下。框架已经天然支持控制流组件的生命周期管理。
+控制流组件可以复用相同的模式——为每个分支或条目创建 Owner，通过 `adoptHResult`（`mergeResults` 的公开封装）将渲染结果挂载到该 Owner 下。
 
 ### 3.3 Each 的条目管理
 
@@ -71,27 +71,58 @@ const entries = [
 - **`owner`**：条目 Owner 的引用。这是稳定的——从条目创建到销毁，Owner 对象不变。
 - **节点集合**：不存储在条目对象中，而是在需要时从 `owner.elements` 动态获取。
 
+**Each 自身的 `elements` 仅包含锚点注释节点**。条目的所有 DOM 节点归属于各自的条目 Owner 的 `elements`。Each 通过锚点定位位置，通过条目 Owner 管理生命周期。两者职责分明。
+
 **Diff 流程**：Each 内部通过 `use(value, () => ...)` 订阅数组信号。当信号变化时，派生回调触发：
 
 1. 计算新旧 key 集合的差异。
-2. **移除条目**：找到对应的条目对象，调用 `disposeOwner(item.owner)`。Owner 树递归清理条目内部的所有内容——异步组件、Show/Case、指令等，并移除所有节点。然后从条目数组中删除该条目对象。
-3. **移动条目**：找到对应的条目对象，从 `item.owner.elements` 获取**当前**的顶层节点集合（这些节点可能是异步组件替换后的真实节点，可能是 Show 切换后的新内容），批量移动到新位置。
-4. **新增条目**：创建条目 Owner，调用渲染函数，收集返回的节点，插入 DOM，创建新的条目对象 `{ key, owner }` 并推入条目数组。
+2. **移除条目**：调用 `disposeOwner(item.owner)` 销毁旧条目 Owner，自动清理内部所有内容（包括异步组件、Show/Case、指令等）。然后从条目数组中删除该条目对象。
+3. **移动条目**：从 `item.owner.elements` 获取**当前**的顶层节点集合，通过 adapter 批量移动到新位置。
+4. **新增条目**：创建条目 Owner，调用渲染函数，通过 `adoptHResult` 将新节点的所有权归属到条目 Owner 下，插入 DOM。
 
 **`use(value, callback)` 机制**：控制流组件内部使用全局 `use` 的派生模式 `use(signal, fn)` 来订阅信号变化。这会创建一个派生信号，`fn` 作为计算函数在依赖变化时执行。控制流组件不关心派生信号的返回值，仅利用其副作用机制（`fn` 中执行 DOM 操作和 Owner 管理）。
 
 **与现有 each 指令的对比**：当前 `each` 属性指令在 `renderEachOnElement` 中维护了 `itemNodeMap: Map<unknown, HostNode[]>`，用于追踪条目节点和判断重排。组件形式的 Each 直接从 `owner.elements` 获取节点，不需要额外的映射表。迁移后可以减少一层冗余数据结构。
 
+**关于 `index` 参数**：渲染函数的 `index` 参数是条目的**创建索引**，在条目首次渲染时确定，之后不会随列表重排而更新。如果用户需要显示实时序号，应在渲染函数中根据 `item` 自行查找或计算。
+
+**无 `keyed` 时的全量重建**：不传 `keyed` 时，Each 默认进行全量重建（销毁所有旧条目 Owner，创建新条目 Owner），而非使用索引作为隐式 identity。原因是：索引 identity 在列表中间插入或删除时会导致所有后续条目的身份错位，可能引发微妙的 UI 状态错乱。全量重建牺牲了性能，但保证了绝对的正确性。用户如需高效增量更新，应提供 `keyed`。
+
 ### 3.4 Show 和 Case 的分支管理
 
-Show 和 Case 每次只管理一个活跃分支。它们内部同样通过 `use(value, () => ...)` 订阅信号变化：
+Show 和 Case 每次只管理一个活跃分支。它们为每个分支（主内容、fallback）创建独立的 Owner。这与 `handleComponent` 为组件函数创建 Owner 的模式完全一致。
 
-1. **Show**：持有当前分支 Owner 引用。当 `value` 变化时，销毁旧分支 Owner（如果有），创建新分支 Owner，调用 children 函数，收集返回的节点替换旧内容。
-2. **Case**：持有当前分支 Owner 引用。当 `value` 变化时，销毁旧分支 Owner（如果有），查找映射表中匹配的分支函数，创建新分支 Owner，收集返回的节点替换旧内容。未匹配时使用 fallback 或返回空。
+Show 内部维护当前活跃分支的 Owner 引用。当 `value` 变化时，通过 `use(value, () => ...)` 订阅信号，回调中：
 
-Show 和 Case 不需要维护节点数组，不需要 diff，不需要追踪异步替换——它们只需要在条件切换时销毁旧的、创建新的。Owner 树处理全部内部清理和节点管理。
+1. **销毁旧分支**：调用 `disposeOwner(activeBranchOwner)`，自动清理该分支内部的所有子 Owner、`elements`、`cleanups` 和 DOM 节点。Show 不需要手动清空自己的 `elements`——这些节点归属在分支 Owner 下，由 `disposeOwner` 一并处理。
+2. **创建新分支**：调用 `createOwner()` 创建新的分支 Owner，执行对应的 children 函数（主内容或 fallback），得到新的 `HResult`。
+3. **挂载**：调用 `adoptHResult(branchOwner, newHResult)` 将新内容的所有权归属到分支 Owner 下，并将分支 Owner 挂载到 Show 的 Owner 的 `children` 下。
+4. **替换 DOM**：通过 adapter 将新节点替换旧节点（移除旧 DOM，插入新 DOM）。
+5. **更新引用**：`activeBranchOwner = branchOwner`。
 
-### 3.5 Fault 的错误恢复（规划中，暂不实现）
+Case 同理，增加了映射表的 key 匹配步骤。如果新 key 与旧 key 相同，不触发任何更新（复用已渲染的 DOM）。
+
+**Show 自身的 Owner 在整个生命周期中是稳定的**——它只持有 `children` 引用，不直接持有内容节点的 `elements`。内容的节点归属在分支 Owner 下。这使得 Show 的逻辑从“手动管理内容”简化为“切换子 Owner”，与 `handleComponent` 处理子组件的模式完全一致。
+
+**关于注释占位符**：当 Show 首次渲染时条件为 false 且没有提供 fallback，应创建一个注释占位符并将其所有权归属到分支 Owner 的 `elements` 中，以保留 DOM 位置。后续条件切换时，`disposeOwner` 会销毁该分支 Owner（包括占位符），新分支 Owner 持有新节点。Each 在列表为空且无 fallback 时同理。
+
+### 3.5 实现所需的基础 API
+
+控制流组件的实现需要以下公开 API，这些 API 在当前代码库中已存在或仅需微小调整：
+
+1. **`context.owner`**：组件通过 `context` 访问自己的 Owner 引用。当前 `Context` 接口只暴露 `use`、`onMount`、`onUnmount`，需新增 `owner: Owner` 属性。这为控制流组件和高级组件提供了灵活操作自身 Owner 的能力。
+
+2. **`adoptHResult`**：封装 `mergeResults` 的逻辑，将 `HResult` 中的子 Owner 挂载到目标 Owner 下，合并 `cleanups` 和 `nodes` 到目标 Owner 的对应集合中。它是纯粹的所有权管理函数，不涉及 DOM 操作。其精确语义为：
+   - 若 `child.owner` 存在，将其挂载到目标 Owner 的 `children` 下，设置 `parent` 引用。
+   - 若 `child.cleanups` 存在，将其合并到目标 Owner 的 `cleanups` 中。
+   - 将 `child.nodes` 加入目标 Owner 的 `elements` 集合。
+   - 返回 `child.nodes` 数组，供调用方进行 DOM 插入操作。
+
+3. **`disposeOwner` 已公开**：`core/owner.ts` 中 `disposeOwner` 已导出，可直接用于清理旧分支和旧条目。
+
+4. **adapter 操作**：控制流组件通过 adapter（`getAdapter()`）进行 DOM 操作（`before`、`replaceWith`、`remove` 等），保持平台无关。
+
+### 3.6 Fault 的错误恢复（规划中，暂不实现）
 
 `Fault` 组件（对应其他框架的错误边界）计划在后续版本中引入。其设计结论已记录如下，但当前不实施：
 
@@ -101,7 +132,7 @@ Show 和 Case 不需要维护节点数组，不需要 diff，不需要追踪异�
 - `Fault` 支持嵌套使用——内层的 Fault 先捕获错误，如果内层 Fault 自身也失败，外层 Fault 会捕获。
 - 命名仍在讨论中（候选：`Fault`），最终名称将在实现时确定。
 
-### 3.6 Loading 的未来规划
+### 3.7 Loading 的未来规划
 
 `Loading` 组件（对应其他框架的异步边界）计划在未来引入，用于处理异步内容的加载状态。其 API 应与 `Show`/`Case`/`Fault` 保持一致，children 第一个函数为主内容，第二个函数为 fallback。当前暂不实现。
 
@@ -126,9 +157,9 @@ Show 和 Case 不需要维护节点数组，不需要 diff，不需要追踪异�
 
 所有控制流组件的 children 分支均为函数形式，保证内容在需要时才被创建。这与 Kiaao 的“显式、可预测”哲学一致——用户显式地用函数包裹延迟求值的内容，框架不会在条件不满足时提前执行。
 
-### 4.4 无注释占位符
+### 4.4 注释占位符的使用条件
 
-当条件不满足、key 未命中或列表为空且没有提供 fallback 时，控制流组件返回空数组 `[]`，不保留注释占位符。这与 `Fragment` 的行为一致——用户显式控制 DOM 结构。如果用户需要保留位置，可以通过 fallback 提供一个空的占位元素。
+当控制流组件有内容渲染时，活跃分支 Owner 的 `elements` 中的节点本身就是锚点——替换时可直接定位。只有在完全没有内容渲染时（条件不满足且无 fallback，列表为空且无 fallback），才需要返回注释占位符以保留 DOM 位置。占位符的所有权归属到对应的分支 Owner 或 Each 自身 Owner 的 `elements` 中。
 
 ### 4.5 异步资源管理
 
@@ -158,39 +189,42 @@ Each 在创建条目时，条目渲染函数可能返回异步组件的注释占
 
 ## 六、原则的适用范围
 
-| 适用场景        | 如何遵循                                                                                                  |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| 用户组件        | 由 `h()` 自动创建 Owner，开发者通过 `context.use` 绑定资源，卸载时自动清理                                |
-| Show/Case       | 持有分支 Owner 引用，切换时 `disposeOwner` 旧分支，创建新分支，从 `owner.elements` 获取节点替换占位符     |
-| Each            | 持有条目数组 `[{ key, owner }]`，diff 后通过 `owner.elements` 获取节点进行移动/移除，新增时创建条目 Owner |
-| Fault（规划中） | 持有主内容 Owner 和 fallback Owner，错误发生时切换，`reset` 时恢复                                        |
-| Loading（未来） | 持有主内容 Owner 和 fallback Owner，异步就绪时切换                                                        |
-| 透传组件        | Owner 的 `elements` 可能为空，实际节点在子 Owner 中，清理时递归处理                                       |
-| 异步组件        | 占位符被替换后，`owner.elements` 自动更新为真实节点                                                       |
-| Portal          | 持有 Portal Owner，`onMount` 中移动节点，`onUnmount` 中清理                                               |
-| lazy            | 内部返回异步组件，逻辑由 Owner 树自然处理                                                                 |
-| 动画扩展        | 通过 `context.use` 绑定动画信号到组件 Owner，卸载时自动清理                                               |
-| 跨端组件        | 同用户组件——Owner 树不依赖平台，`owner.elements` 的类型由 adapter 决定                                    |
-| 自定义指令      | **不适用**——指令不创建 Owner，只附加行为到已有元素                                                        |
+| 适用场景        | 如何遵循                                                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 用户组件        | 由 `h()` 自动创建 Owner，开发者通过 `context.use` 绑定资源，卸载时自动清理                                                          |
+| Show/Case       | 为每个活跃分支创建分支 Owner，切换时 `disposeOwner` 销毁旧分支，`createOwner` + `adoptHResult` 挂载新分支                           |
+| Each            | 为每个条目创建条目 Owner，持有条目数组 `[{ key, owner }]`，diff 后通过 `owner.elements` 获取节点进行移动/移除，新增时创建条目 Owner |
+| Fault（规划中） | 为主内容和 fallback 分别创建 Owner，错误发生时切换，`reset` 时恢复                                                                  |
+| Loading（未来） | 为主内容和 fallback 分别创建 Owner，异步就绪时切换                                                                                  |
+| 透传组件        | Owner 的 `elements` 可能为空，实际节点在子 Owner 中，清理时递归处理                                                                 |
+| 异步组件        | 占位符被替换后，`owner.elements` 自动更新为真实节点                                                                                 |
+| Portal          | 持有 Portal Owner，`onMount` 中移动节点，`onUnmount` 中清理                                                                         |
+| lazy            | 内部返回异步组件，逻辑由 Owner 树自然处理                                                                                           |
+| 动画扩展        | 通过 `context.use` 绑定动画信号到组件 Owner，卸载时自动清理                                                                         |
+| 跨端组件        | 同用户组件——Owner 树不依赖平台，`owner.elements` 的类型由 adapter 决定                                                              |
+| 自定义指令      | **不适用**——指令不创建 Owner，只附加行为到已有元素                                                                                  |
 
 ## 七、原则的意义
 
-**统一性**。所有组件和扩展遵循同一套生命周期管理范式，不需要各自发明清理逻辑。
+**统一性**。所有组件和扩展遵循同一套生命周期管理范式——**一个逻辑作用域，一个 Owner**。控制流组件不再需要手动管理 `elements` 和 `cleanups`，只需要切换子 Owner。
 
-**简化性**。复杂的异步嵌套、条件切换、列表更新被 Owner 树吸收。组件实现只需要操作 Owner，不需要追踪节点快照。
+**简化性**。`disposeOwner(branchOwner)` 一次调用即可销毁分支内的所有资源（子 Owner、DOM 节点、清理回调），不需要分层手动清理。
 
 **跨端友好**。Owner 树是纯 JS 数据结构，与平台无关。
 
-**可预测性**。调试时展开 Owner 树，可以看到完整的组件层级、当前节点、注册的清理回调。
+**可预测性**。调试时展开 Owner 树，可以看到完整的组件层级、活跃分支、当前节点、注册的清理回调。
 
 **可扩展性**。未来任何新组件只需理解这条原则，就能与现有组件一致地工作。
 
 ## 八、结论
 
-控制流组件族（Show/Case/Each，以及规划中的 Fault 和 Loading）的设计遵循一个核心原则：**以 Owner 为稳定的身份标识，动态获取节点集合，委托 Owner 树管理全部生命周期。**
+控制流组件族（Show/Case/Each，以及规划中的 Fault 和 Loading）的设计遵循两个核心原则：
 
-当前架构已经天然支持控制流组件——`handleComponent` 和 `mergeResults` 实现了 Owner 的自动挂载，`owner.elements` 提供了动态的节点视图，`disposeOwner` 提供了完整的递归清理。控制流组件不需要引入任何新机制，只需要在现有架构上构建映射和编排逻辑。
+1. **以 Owner 为稳定的身份标识，动态获取节点集合，委托 Owner 树管理全部生命周期。**
+2. **为每个分支和每个条目创建独立的 Owner——一个逻辑作用域，一个 Owner。**
 
-`Fault` 组件作为错误边界，其设计结论已记录，但当前暂不实现。`keyed` 属性用于 `Each` 的身份标识，避免与 JSX 编译器冲突。`fallback` 统一放在 children 的最后一个函数位置，且均为可选。异步资源管理通过 `onUnmount` 显式注册清理逻辑，框架不提供自动中断机制。
+分支独立 Owner 的设计从根源上消除了手动管理 `elements` 和 `cleanups` 的复杂性，让控制流组件的实现与 `handleComponent` 的组件模型完全一致。`adoptHResult` 作为所有权管理函数，封装了挂载、合并和节点注册的逻辑，调用方只需负责 DOM 操作。`disposeOwner` 提供完整的递归清理，一次调用即可销毁分支内的所有资源。
+
+`Fault` 组件作为错误边界，其设计结论已记录，但当前暂不实现。`keyed` 属性用于 `Each` 的身份标识，避免与 JSX 编译器冲突。`fallback` 统一放在 children 的最后一个函数位置，且均为可选。注释占位符仅在完全没有内容渲染时使用，有内容时活跃分支 Owner 的 `elements` 中的节点即为天然锚点。异步资源管理通过 `onUnmount` 显式注册清理逻辑，框架不提供自动中断机制。
 
 这一原则经过了全面场景的验证，覆盖了异步组件、控制流嵌套、透传组件、多根节点、自定义指令的组合使用和多层级混合嵌套。它是 Owner 树架构的自然产物，也是 Kiaoo 后续维护和拓展的基石。
