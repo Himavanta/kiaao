@@ -1,4 +1,4 @@
-# kiaao 框架规范 v5.0
+# kiaao 框架规范 v6.0
 
 **宣传语**：更少的概念，更少的编译，更多的控制，更高的性能。
 
@@ -25,10 +25,6 @@
 ### 闭包即作用域
 
 组件实例隔离和局部作用域通过 JavaScript 原生闭包实现。工厂函数每次调用创建独立的闭包和信号。框架不提供 `Context`、`provide/inject` 等作用域管理 API。
-
-### 原生控制流
-
-控制流通过 `h()` 的属性指令实现，直接依附于原生 DOM 元素，而非独立的组件。这保证了动态内容始终处于宿主元素的 `childNodes` 中，`disposeOwner` 沿 Owner 树的递归路径自然可抵达所有动态节点。
 
 ### 显式上下文
 
@@ -180,7 +176,17 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): Signal<void>;
 
 ## 三、`h(tag, props?, ...children)`
 
-统一创建函数。根据第一个参数的类型分三种模式：DOM 模式、组件模式、指令模式。
+统一创建函数。返回值为 `HResult` 对象，包含 `owner`、`nodes` 和可选的 `cleanups` 字段。
+
+```ts
+interface HResult {
+  owner: Owner | null;
+  nodes: Node[];
+  cleanups?: (() => void)[];
+}
+```
+
+根据第一个参数的类型分三种模式：DOM 模式、组件模式、指令模式。
 
 ### 3.1 DOM 模式（`tag` 为字符串）
 
@@ -194,7 +200,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): Signal<void>;
 
 **子节点处理**：
 
-- 若子节点为信号（`isUse` 为真）：创建文本占位，通过匿名派生绑定动态更新。清理函数注册到当前元素所属的 Owner。
+- 若子节点为信号（`isUse` 为真）：创建文本占位，通过匿名派生绑定动态更新。清理函数暂存于 `HResult.cleanups` 中，由父级 `handleComponent` 统一注册到 Owner。
 - 若为 DOM 节点：直接附加。
 - 其他值：转为字符串创建静态文本节点。
 
@@ -207,11 +213,11 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): Signal<void>;
 - **FORCE_ATTRIBUTE 列表**：标准 HTML 属性走 `setAttribute`；不在列表中的走 property 赋值。
 - **`aria-*` / `data-*`**：无条件走 `setAttribute`。
 - **布尔属性**：`true` 设空字符串，`false` 移除。
-- 响应式属性值（信号）自动创建匿名派生进行更新。
+- 响应式属性值（信号）自动创建匿名派生进行更新。清理函数暂存于 `HResult.cleanups` 中，由父级统一注册到 Owner。
 
-#### 控制流指令
+#### 控制流指令（`when` / `each`）
 
-`when` 和 `each` 仅对原生 HTML 元素生效。
+`when` 和 `each` 是当前的属性指令，仅对原生 HTML 元素生效。**规划中将重构为独立的 `Show` / `Case` / `Each` 组件。** 在迁移完成前，当前实现保持可用。
 
 ##### `when` 指令
 
@@ -250,10 +256,10 @@ interface ComponentContext {
 
 流程：
 
-1. 创建组件实例和对应的 Owner，构建 `context` 对象。
-2. 调用 `tag(props, context)`，获取返回的 DOM 节点。
-3. 将返回值中的节点注册到当前 Owner。
-4. 若返回值非 `Node`，创建注释节点作为占位（防御性兜底）。
+1. 创建组件 Owner，构建 `context` 对象。
+2. 调用 `tag(props, context)`，获取返回的 `HResult`（或 `Promise<HResult>`）。
+3. 将返回的 `HResult` 中的子 Owner 挂载到当前 Owner 的 `children`，将 `nodes` 注册到当前 Owner 的 `elements`，将 `cleanups` 注册到当前 Owner 的 `cleanups` 队列。
+4. 返回当前组件的 `HResult`。
 
 #### 3.2.3 异步组件
 
@@ -263,7 +269,8 @@ interface ComponentContext {
 2. 调用 `tag(props, context)`，获取返回的 Promise。
 3. 创建注释占位符并注册到 Owner。
 4. 等待 Promise resolve：
-   - 将真实 DOM 注册到 Owner，替换占位符。
+   - 将返回的 `HResult` 中的子 Owner 挂载到当前 Owner 的 `children`。
+   - 将真实节点注册到 Owner 的 `elements`，替换占位符。
    - 从 Owner 出发触发挂载。
 5. Promise reject 时打印错误。
 
@@ -317,13 +324,13 @@ interface DirectiveContext {
 
 ## 四、`createApp` API
 
-`createApp` 是 kiaao 应用的入口。它创建根 Owner，管理根组件的渲染和生命周期。
+`createApp` 是 kiaao 应用的入口。它接收 `h()` 的返回值（`HResult`），创建根 Owner，管理根组件的渲染和生命周期。
 
 ```ts
-function createApp(component: ComponentFunction, props?: Record<string, any>): App;
+function createApp(hr: HResult): App;
 
 interface App {
-  mount(container: string | Element): void;
+  mount(container: Element): void;
   unmount(): void;
 }
 ```
@@ -331,7 +338,7 @@ interface App {
 **使用示例**：
 
 ```tsx
-import { createApp, use } from "kiaao";
+import { createApp, h, use } from "kiaao";
 
 function App() {
   const count = use(0);
@@ -343,8 +350,8 @@ function App() {
   );
 }
 
-const app = createApp(App);
-app.mount("#app");
+const app = createApp(h(App, null));
+app.mount(document.getElementById("app")!);
 // 稍后
 app.unmount();
 ```
@@ -404,7 +411,7 @@ app.unmount();
 - 每个派生节点维护 `stops` 集合和统一的 `stop()` 方法。
 - 组件销毁时沿 Owner 树递归执行清理回调、断开信号订阅、移除渲染元素。
 - `context.use` 创建的信号/派生 → 组件 Owner 的清理队列。
-- DOM 绑定产生的匿名派生 → 组件 Owner 的清理队列。
+- DOM 绑定产生的匿名派生 → 通过 `HResult.cleanups` 传递给组件 Owner 的清理队列。
 - 指令的 `context.use` 创建的信号 → 当前活跃 Owner 的清理队列。
 
 ## 八、动画扩展（`kiaao/motion`）
@@ -436,24 +443,24 @@ app.unmount();
 
 ## 十、与 v3.4 的差异对照
 
-| 维度         | v3.4                            | v5.0                                            |
-| ------------ | ------------------------------- | ----------------------------------------------- |
-| 创建可写信号 | `define(init)` → `[get, set]`   | `use(init)` → `Signal<T>`                       |
-| 创建派生信号 | `derive(fn)` → `getter`         | `use(...deps, fn)` → `Signal<T>`                |
-| 副作用       | `effect(fn)` → `stop`           | 派生模式（不接收返回值），返回 `Signal<void>`   |
-| 细粒度订阅   | `getter(selector)`              | `use(signal, fn)`                               |
-| 规范化值     | `toUse(v)` → `[get, set]`       | `use(v)`（信号直接返回自身，非信号创建新信号）  |
-| 提取值       | `toVal(v)`                      | `toValue(v)`                                    |
-| 读写方式     | `getter()` / `setter(v)`        | `signal()` / `signal(v)`                        |
-| 生命周期注册 | `import { onMount, onUnmount }` | `context` 参数解构                              |
-| 组件级信号   | 不支持（需手动管理）            | `context.use`（自动清理）                       |
-| 组件函数签名 | `(props)`                       | `(props, context)`                              |
-| 异步组件     | 不支持                          | 返回 Promise 即为异步组件                       |
-| 自定义指令   | 不支持                          | `direct` 创建，元素级生命周期                   |
-| 动画扩展     | 无                              | `kiaao/motion`，业务与动画信号分离              |
-| 应用入口     | 全局 `mount`/`unmount`          | `createApp()` → `app.mount()` / `app.unmount()` |
-| 生命周期管理 | DOM 绑定（INSTANCE_KEY 等）     | Owner 树（JS 内存）                             |
-| Fragment     | 不支持                          | 直接返回 `Node[]`，无 DOM 痕迹                  |
+| 维度         | v3.4                            | v6.0                                           |
+| ------------ | ------------------------------- | ---------------------------------------------- |
+| 创建可写信号 | `define(init)` → `[get, set]`   | `use(init)` → `Signal<T>`                      |
+| 创建派生信号 | `derive(fn)` → `getter`         | `use(...deps, fn)` → `Signal<T>`               |
+| 副作用       | `effect(fn)` → `stop`           | 派生模式（不接收返回值），返回 `Signal<void>`  |
+| 细粒度订阅   | `getter(selector)`              | `use(signal, fn)`                              |
+| 规范化值     | `toUse(v)` → `[get, set]`       | `use(v)`（信号直接返回自身，非信号创建新信号） |
+| 提取值       | `toVal(v)`                      | `toValue(v)`                                   |
+| 读写方式     | `getter()` / `setter(v)`        | `signal()` / `signal(v)`                       |
+| 生命周期注册 | `import { onMount, onUnmount }` | `context` 参数解构                             |
+| 组件级信号   | 不支持（需手动管理）            | `context.use`（自动清理）                      |
+| 组件函数签名 | `(props)`                       | `(props, context)`                             |
+| 异步组件     | 不支持                          | 返回 Promise 即为异步组件                      |
+| 自定义指令   | 不支持                          | `direct` 创建，元素级生命周期                  |
+| 动画扩展     | 无                              | `kiaao/motion`，业务与动画信号分离             |
+| 应用入口     | 全局 `mount`/`unmount`          | `createApp(h(Component, null))`                |
+| 生命周期管理 | DOM 绑定（INSTANCE_KEY 等）     | Owner 树（JS 内存）                            |
+| Fragment     | 不支持                          | 直接返回 `Node[]`，无 DOM 痕迹                 |
 
 ## 十一、附录：属性处理策略摘要
 
@@ -463,6 +470,6 @@ app.unmount();
 - **事件**：`onXxx` 转为 `addEventListener`
 - **SSR 序列化**：仅输出 `attr:` 前缀、`style`、`aria-*`/`data-*`、FORCE_ATTRIBUTE 中的属性
 
-**文档版本**：v5.0  
-**撰写日期**：2026年6月23日  
+**文档版本**：v6.0  
+**撰写日期**：2026年6月26日  
 **状态**：定稿
