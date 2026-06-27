@@ -4,7 +4,6 @@
 import { getAdapter } from "../adapter/index.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
-import { createWhenElement, createEachElement } from "./directives.ts";
 import { createOwner } from "./owner.ts";
 import { normalizeChildren } from "./process-children.ts";
 import { processChildren } from "./process-children.ts";
@@ -16,7 +15,6 @@ import {
   isNotNil,
   isObject,
   isString,
-  isDefined,
   isNil,
 } from "./type-guards.ts";
 import {
@@ -39,38 +37,6 @@ export function Fragment(props: { children?: any }): any {
 
 function handleDomMode(tag: string, props: NullableProps = {}, children: any[]): HResult {
   const adapter = getAdapter();
-
-  // 控制流指令（需要用 any 解构可能不存在的指令属性）
-  const p = props as any;
-  if (isDefined(p?.when)) {
-    const { when, each, key, else: elseFn, ...rest } = p;
-    const orphanCleanups: CleanupFn[] = [];
-    const el = createWhenElement({
-      tag,
-      props: rest,
-      children,
-      whenFn: when,
-      eachFn: each,
-      keyFn: key,
-      elseFn,
-      cleanups: orphanCleanups,
-    });
-    return createHResult(null, [el], orphanCleanups);
-  }
-
-  if (isDefined(p?.each)) {
-    const { each, key, ...rest } = p;
-    const orphanCleanups: CleanupFn[] = [];
-    const el = createEachElement({
-      tag,
-      props: rest,
-      children,
-      eachFn: each,
-      keyFn: key,
-      cleanups: orphanCleanups,
-    });
-    return createHResult(null, [el], orphanCleanups);
-  }
 
   // 普通元素
   const el: any = adapter.createElement(tag);
