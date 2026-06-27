@@ -1,4 +1,4 @@
-// kiaao — createMotion: when mode animation directive
+// kiaao — createMotion: Show/Case mode animation directive
 // Business/animation signal separation. Users operate business signal directly,
 // the animation signal lags behind to allow exit animations to complete.
 

@@ -1,8 +1,13 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
-import { h } from "../core/index.ts";
+import { h, Case } from "../core/index.ts";
 import { use, toValue } from "../core/index.ts";
-import { type Signal, type HResult, type NullableProps } from "../core/index.ts";
+import {
+  type Signal,
+  type HResult,
+  type NullableProps,
+  type ComponentFunction,
+} from "../core/index.ts";
 import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────
@@ -81,7 +86,7 @@ function createRouterView(
 ): (props: RouterViewProps) => HResult {
   return (props: RouterViewProps) => {
     const myRoutes = props.routes;
-    const myFallback = props?.fallback ?? defaultFallback;
+    const myFallback: ComponentFunction = props?.fallback ?? defaultFallback;
     const myBase = props?.base;
 
     // 显式创建派生信号替代自动依赖收集
@@ -90,18 +95,11 @@ function createRouterView(
 
     // 将路由表转为映射表（初始化时执行一次）
     const routeMap = Object.fromEntries(
-      myRoutes.map((r) => [r.path, () => h(r.component, undefined)]),
+      myRoutes.map((r) => [r.path, () => h(r.component, undefined)] as const),
     );
 
-    return h(
-      "div",
-      {
-        when: segment,
-        else: () => myFallback(),
-        style: { display: "contents" },
-      },
-      routeMap,
-    );
+    // as any: h() overload expects children in props type, but children are passed as rest params
+    return h(Case as any, { value: segment }, routeMap, myFallback);
   };
 }
 
