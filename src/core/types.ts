@@ -30,6 +30,7 @@ export interface HResult {
   owner: Owner | null;
   nodes: HostNode[];
   cleanups?: CleanupFn[];
+  childResults?: any[];
 }
 
 /** processChildren 的返回值类型 */
@@ -43,6 +44,7 @@ export function createHResult(
   owner: Owner | null,
   nodes: HostNode[],
   cleanups?: CleanupFn[],
+  childResults?: any[],
 ): HResult {
   const result: HResult = {
     [HRESULT_SYMBOL]: true as const,
@@ -51,6 +53,9 @@ export function createHResult(
   };
   if (isNotNil(cleanups) && isNotEmpty(cleanups)) {
     result.cleanups = cleanups;
+  }
+  if (isNotNil(childResults) && isNotEmpty(childResults)) {
+    result.childResults = childResults;
   }
   return result;
 }

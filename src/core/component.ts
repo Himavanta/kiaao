@@ -4,8 +4,8 @@
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { normalizeChildren } from "./process-children.ts";
-import { registerSignalStop, type UseFunction } from "./signal.ts";
-import { isPromise, isArray, isNotEmpty } from "./type-guards.ts";
+import { registerSignalStop, isUse, use, type UseFunction } from "./signal.ts";
+import { isPromise, isArray, isNotEmpty, isObject } from "./type-guards.ts";
 import {
   type Signal,
   type Owner,
@@ -14,6 +14,7 @@ import {
   type HResult,
   createHResult,
   isHResult,
+  getSignalState,
   type NullableProps,
   type ComponentResult,
   type MergeableResult,
@@ -83,36 +84,75 @@ export function createContext(owner: Owner): Context {
   };
 }
 
-// ── Helper: merge HResult items into owner ──────────
+// ── Helper: nestBind — 统一遍历结果树，连接 Owner + 构建 DOM ────
 
-/**
- * 将子 HResult 的 owner、nodes、cleanups 合并到当前 owner。
- * 处理单值和数组（Fragment 返回多个根元素）。
- */
-function mergeResults(items: MergeableResult, owner: Owner): HostNode[] {
-  const allNodes: HostNode[] = [];
-  const list = isArray(items) ? items : [items];
+/** 从 HResult 提取宿主元素（首个节点） */
+function hostElement(result: HResult): HostNode {
+  const [el] = result.nodes;
+  return el;
+}
 
-  for (const item of list) {
-    if (isArray(item)) {
-      // 递归处理嵌套数组（Fragment 嵌套 Fragment 等场景）
-      const subNodes = mergeResults(item, owner);
-      allNodes.push(...subNodes);
-    } else if (isHResult(item)) {
-      if (item.owner) {
-        owner.children.push(item.owner);
-        item.owner.parent = owner;
-      }
-      if (item.cleanups) {
-        owner.cleanups.push(...item.cleanups);
-      }
-      allNodes.push(...item.nodes);
-    } else if (getAdapter().isNode(item)) {
-      allNodes.push(item);
+/** 将子节点列表 append 到父元素 */
+function appendChildren(parentEl: HostNode, children: HostNode[]): void {
+  if (!parentEl || children.length === 0) return;
+  const adapter = getAdapter();
+  for (const node of children) {
+    adapter.append(parentEl, node);
+  }
+}
+
+/** 遍历 HResult 的子结果树 */
+function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
+  if (result.owner) {
+    parentOwner.children.push(result.owner);
+    result.owner.parent = parentOwner;
+  }
+
+  const effectiveOwner = result.owner || parentOwner;
+
+  // 递归处理 DOM 元素的原始子节点树
+  if (result.childResults && result.childResults.length > 0) {
+    const allChildNodes: HostNode[] = [];
+    for (const child of result.childResults) {
+      allChildNodes.push(...nestBind(child, effectiveOwner));
+    }
+    appendChildren(hostElement(result)!, allChildNodes);
+  }
+
+  // 归集 cleanups 到有效 Owner
+  if (result.cleanups) {
+    for (const c of result.cleanups) {
+      effectiveOwner.cleanups.push(c);
     }
   }
 
-  return allNodes;
+  return result.nodes;
+}
+
+/** 处理原始值（非 HResult/非数组） */
+function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
+  if (getAdapter().isNode(item)) {
+    return [item];
+  }
+  if (isUse(item)) {
+    return [handleSignalChild(item, parentOwner)];
+  }
+  if (isObject(item) && "type" in (item as any)) {
+    return [item as HostNode];
+  }
+  return [getAdapter().createTextNode(String(item)) as HostNode];
+}
+
+function nestBind(items: any, parentOwner: Owner): HostNode[] {
+  if (isArray(items)) {
+    const allNodes: HostNode[] = [];
+    for (const item of items) {
+      allNodes.push(...nestBind(item, parentOwner));
+    }
+    return allNodes;
+  }
+  if (isHResult(items)) return nestBindResult(items, parentOwner);
+  return nestBindPrimitive(items, parentOwner);
 }
 
 // ── handleAsyncComponent ──────────────────────────────
@@ -126,11 +166,9 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
     .then((rawResult) => {
       if (owner.disposed) return;
 
-      const nodes = mergeResults(rawResult, owner);
+      const nodes = nestBind(rawResult, owner);
 
-      // mergeResults 过程中可能被 dispose（如快速导航离开）
       if (owner.disposed) {
-        // 已 merge 的子 Owner 会在父级 dispose 时一并清理
         return;
       }
 
@@ -148,6 +186,21 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
     });
 
   return createHResult(owner, [placeholder]);
+}
+
+// ── Helper: 信号绑定 ─────────────────────────────
+
+function handleSignalChild(signal: any, owner: Owner): HostNode {
+  const adapter = getAdapter();
+  const textNode = adapter.createTextNode("") as HostNode;
+  const derived = use(signal, () => {
+    (textNode as any).textContent = String(signal());
+  });
+  const stop = getSignalState(derived)?.stop;
+  if (stop) {
+    owner.cleanups.push(stop);
+  }
+  return textNode;
 }
 
 // ── handleComponent ───────────────────────────────────
@@ -179,7 +232,7 @@ export function handleComponent(
     return handleAsyncComponent(result, owner);
   }
 
-  const nodes = mergeResults(result, owner);
+  const nodes = nestBind(result, owner);
   nodes.forEach((n) => owner.elements.add(n));
   return createHResult(owner, nodes);
 }

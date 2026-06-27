@@ -6,7 +6,6 @@ import { handleComponent, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { normalizeChildren } from "./process-children.ts";
-import { processChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
 import {
   isBoolean,
@@ -42,11 +41,8 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
   const el: any = adapter.createElement(tag);
   const orphanCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, orphanCleanups);
-  const { nodes: childNodes, cleanups: childCleanups } = processChildren(children);
-  for (const node of childNodes) {
-    adapter.append(el, node);
-  }
-  return createHResult(null, [el], [...orphanCleanups, ...childCleanups]);
+  // 保留原始 children 树，交给 nestBind 统一处理
+  return createHResult(null, [el], [...orphanCleanups], children);
 }
 
 // ── Directive Mode ────────────────────────────────────
