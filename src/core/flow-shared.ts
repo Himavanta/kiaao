@@ -15,7 +15,7 @@ import type { Owner, HostNode, HResult } from "./types.ts";
 /** 创建注释锚点并注册到 Owner 的 elements */
 export function initAnchor(owner: Owner, label: string): HostNode {
   const adapter = getAdapter();
-  const anchor = adapter.createComment(label);
+  const anchor = adapter.comment(label);
   owner.elements.add(anchor);
   return anchor;
 }

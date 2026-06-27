@@ -140,24 +140,24 @@ export interface Owner {
 
 /** 渲染适配器：所有平台渲染操作通过此接口 */
 export interface RenderAdapter {
-  createElement(tag: string): HostNode;
-  createTextNode(text: string): HostNode;
-  createComment(text: string): HostNode;
+  el(tag: string): HostNode;
+  text(text: string): HostNode;
+  comment(text: string): HostNode;
   before(ref: HostNode, child: HostNode): void;
   append(parent: HostNode, child: HostNode): void;
   remove(node: HostNode): void;
-  replaceChildren(parent: HostNode): void;
-  replaceWith(oldNode: HostNode, ...newNodes: HostNode[]): void;
+  clear(parent: HostNode): void;
+  replace(oldNode: HostNode, ...newNodes: HostNode[]): void;
   setProp(el: HostNode, key: string, value: unknown): void;
-  addEventListener(el: HostNode, type: string, handler: (...args: any[]) => void): void;
-  removeEventListener(el: HostNode, type: string, handler: (...args: any[]) => void): void;
+  on(el: HostNode, type: string, handler: (...args: any[]) => void): void;
+  off(el: HostNode, type: string, handler: (...args: any[]) => void): void;
   /** 判断值是否为合法的宿主节点 */
   isNode(value: unknown): value is HostNode;
   /**
    * 获取宿主节点的前一个兄弟节点。用于 each 指令的位置判断。
    * DOM：返回 previousSibling；SSR：返回 null。
    */
-  getPreviousSibling(node: HostNode): HostNode;
+  prevSibling(node: HostNode): HostNode;
   /**
    * 可选：创建静态派生信号。SSR adapter 用于跳过响应式依赖追踪，直接求值。
    * DOM adapter 不实现此方法，core 走默认完整派生路径。

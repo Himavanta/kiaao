@@ -37,7 +37,7 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
   const adapter = getAdapter();
 
   // 普通元素
-  const el: any = adapter.createElement(tag);
+  const el: any = adapter.el(tag);
   const orphanCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, orphanCleanups);
   // 保留原始 children 树，交给 nestBind 统一处理
@@ -92,7 +92,7 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`);
     }
-    return createHResult(null, [getAdapter().createComment("") as Node]);
+    return createHResult(null, [getAdapter().comment("") as Node]);
   }
 
   if (isFunction(tag)) {

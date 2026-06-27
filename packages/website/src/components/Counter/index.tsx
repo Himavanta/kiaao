@@ -1,4 +1,5 @@
 import { use } from "kiaao";
+
 import style from "./style.module.css";
 
 export default function Counter() {

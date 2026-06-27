@@ -54,16 +54,16 @@ const EVENT_RE = /^on[A-Z]/;
 // ── Adapter ───────────────────────────────────────────
 
 export const browserAdapter: RenderAdapter = {
-  createElement(tag: string): Element {
+  el(tag: string): Element {
     if (SVG_TAGS.has(tag)) return document.createElementNS(SVG_NS, tag);
     return document.createElement(tag);
   },
 
-  createTextNode(text: string): Text {
+  text(text: string): Text {
     return document.createTextNode(text);
   },
 
-  createComment(text: string): Comment {
+  comment(text: string): Comment {
     return document.createComment(text);
   },
 
@@ -80,19 +80,19 @@ export const browserAdapter: RenderAdapter = {
     (node as ChildNode).remove();
   },
 
-  replaceChildren(parent: Node): void {
+  clear(parent: Node): void {
     (parent as Element).replaceChildren();
   },
 
-  replaceWith(oldNode: Node, ...newNodes: Node[]): void {
+  replace(oldNode: Node, ...newNodes: Node[]): void {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
 
-  removeEventListener(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
+  off(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
     el.removeEventListener(type, handler as EventListener);
   },
 
-  addEventListener(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
+  on(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
     el.addEventListener(type, handler as EventListener);
   },
 
@@ -100,7 +100,7 @@ export const browserAdapter: RenderAdapter = {
     return value instanceof Node;
   },
 
-  getPreviousSibling(node: HostNode): HostNode {
+  prevSibling(node: HostNode): HostNode {
     return (node as Node).previousSibling ?? null;
   },
 

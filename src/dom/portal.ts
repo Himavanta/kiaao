@@ -15,7 +15,7 @@ export function Portal(
   const target = isString(props.to)
     ? (document.querySelector(props.to) as HTMLElement | null)
     : props.to;
-  if (!target) return adapter.createComment("portal-missing-target") as Node;
+  if (!target) return adapter.comment("portal-missing-target") as Node;
 
   const nodes = isArray(props.children) ? props.children : [props.children];
 
@@ -33,7 +33,7 @@ export function Portal(
     }
   });
 
-  return adapter.createComment("portal") as Node;
+  return adapter.comment("portal") as Node;
 }
 
 (Portal as any)[SSR_COMPONENT] = () => {

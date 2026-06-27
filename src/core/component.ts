@@ -103,7 +103,7 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
     const [parentEl] = result.nodes;
     if (parentEl && isNotEmpty(allChildNodes)) {
       const adapter = getAdapter();
-      adapter.replaceChildren(parentEl);
+      adapter.clear(parentEl);
       for (const node of allChildNodes) {
         adapter.append(parentEl, node);
       }
@@ -131,7 +131,7 @@ function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
   if (isUse(item)) {
     return [handleSignalChild(item, parentOwner)];
   }
-  return [getAdapter().createTextNode(String(item)) as HostNode];
+  return [getAdapter().text(String(item)) as HostNode];
 }
 
 export function nestBind(items: any, parentOwner: Owner): HostNode[] {
@@ -150,7 +150,7 @@ export function nestBind(items: any, parentOwner: Owner): HostNode[] {
 
 function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
   const adapter = getAdapter();
-  const placeholder = adapter.createComment("async") as Comment;
+  const placeholder = adapter.comment("async") as Comment;
   owner.elements.add(placeholder);
 
   promise
@@ -167,7 +167,7 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
       nodes.forEach((n) => owner.elements.add(n));
 
       if (isNotEmpty(nodes)) {
-        adapter.replaceWith(placeholder, ...nodes);
+        adapter.replace(placeholder, ...nodes);
       }
       triggerMount(owner);
     })
@@ -183,7 +183,7 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
 
 function handleSignalChild(signal: any, owner: Owner): HostNode {
   const adapter = getAdapter();
-  const textNode = adapter.createTextNode("") as HostNode;
+  const textNode = adapter.text("") as HostNode;
   const derived = use(signal, () => {
     (textNode as any).textContent = String(signal());
   });
@@ -215,7 +215,7 @@ export function handleComponent(
   } catch (e) {
     console.error("[kiaao] component error:", e);
     disposeOwner(owner);
-    const comment = getAdapter().createComment("component error") as Node;
+    const comment = getAdapter().comment("component error") as Node;
     return createHResult(owner, [comment]);
   }
 

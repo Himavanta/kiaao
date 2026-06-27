@@ -77,8 +77,7 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevNode: any): any {
   const existingNodes = [...entry.result.owner!.elements];
   if (isEmpty(existingNodes)) return prevNode;
 
-  const needsMove =
-    isNotNil(prevNode) && getAdapter().getPreviousSibling(existingNodes[0]) !== prevNode;
+  const needsMove = isNotNil(prevNode) && getAdapter().prevSibling(existingNodes[0]) !== prevNode;
   if (needsMove) {
     for (const n of [...existingNodes].reverse()) {
       getAdapter().before(anchor, n);

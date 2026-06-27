@@ -89,15 +89,15 @@ const EVENT_RE = /^on[A-Z]/;
 // ── SSR Adapter ──────────────────────────────────────
 
 export const ssrAdapter: RenderAdapter = {
-  createElement(tag: string): SSRElement {
+  el(tag: string): SSRElement {
     return { type: "element", tag, attrs: {}, children: [] };
   },
 
-  createTextNode(text: string): SSRText {
+  text(text: string): SSRText {
     return { type: "text", value: text };
   },
 
-  createComment(text: string): SSRComment {
+  comment(text: string): SSRComment {
     return { type: "comment", value: text };
   },
 
@@ -117,19 +117,19 @@ export const ssrAdapter: RenderAdapter = {
     // SSR 无 DOM，空操作
   },
 
-  replaceChildren(_parent: unknown): void {
+  clear(_parent: unknown): void {
     // SSR 无 DOM，空操作
   },
 
-  replaceWith(_oldNode: unknown, ..._newNodes: unknown[]): void {
+  replace(_oldNode: unknown, ..._newNodes: unknown[]): void {
     // SSR 无 DOM，空操作
   },
 
-  addEventListener(): void {
+  on(): void {
     // SSR: 事件绑定不输出
   },
 
-  removeEventListener(): void {
+  off(): void {
     // SSR: 事件绑定不输出
   },
 
@@ -137,7 +137,7 @@ export const ssrAdapter: RenderAdapter = {
     return isObject(value) && "type" in value;
   },
 
-  getPreviousSibling(): HostNode {
+  prevSibling(): HostNode {
     return null;
   },
 
