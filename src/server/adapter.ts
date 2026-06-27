@@ -117,6 +117,10 @@ export const ssrAdapter: RenderAdapter = {
     // SSR 无 DOM，空操作
   },
 
+  replaceChildren(_parent: unknown): void {
+    // SSR 无 DOM，空操作
+  },
+
   replaceWith(_oldNode: unknown, ..._newNodes: unknown[]): void {
     // SSR 无 DOM，空操作
   },

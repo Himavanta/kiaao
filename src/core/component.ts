@@ -103,6 +103,7 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
     const [parentEl] = result.nodes;
     if (parentEl && isNotEmpty(allChildNodes)) {
       const adapter = getAdapter();
+      adapter.replaceChildren(parentEl);
       for (const node of allChildNodes) {
         adapter.append(parentEl, node);
       }

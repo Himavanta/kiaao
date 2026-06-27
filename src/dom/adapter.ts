@@ -80,6 +80,10 @@ export const browserAdapter: RenderAdapter = {
     (node as ChildNode).remove();
   },
 
+  replaceChildren(parent: Node): void {
+    (parent as Element).replaceChildren();
+  },
+
   replaceWith(oldNode: Node, ...newNodes: Node[]): void {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
