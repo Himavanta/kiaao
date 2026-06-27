@@ -63,11 +63,11 @@ interface ThemeItem {
   icon: string;
 }
 
-const themeOptions: ThemeItem[] = [
+const themeOptions = use<ThemeItem[]>([
   { label: "亮色", value: "light", icon: "lineicons:sun" },
   { label: "暗色", value: "dark", icon: "material-symbols:dark-mode-outline" },
   { label: "跟随系统", value: "system", icon: "lineicons:laptop" },
-];
+]);
 
 function ThemeItemRow({ item }: { item: Signal<ThemeItem> }) {
   const theme = use("light");
@@ -94,7 +94,7 @@ function ThemeMenu() {
       <Icon icon="lineicons:chevron-right" class="w-3 h-3 text-gray-300 shrink-0" />
 
       <div class="absolute right-full top-0 ml-2 min-w-32 rounded-lg border border-gray-200 bg-white py-1 shadow-lg hidden group-hover:block">
-        <Each value={use(themeOptions)} keyed={(v: ThemeItem) => v.value}>
+        <Each value={themeOptions} keyed={(v: ThemeItem) => v.value}>
           {ThemeItemRow}
         </Each>
       </div>
