@@ -25,12 +25,13 @@ export function initAnchor(owner: Owner, label: string): HostNode {
  * 渲染一个子组件并将其 Owner 挂载到目标 Owner 下，节点插入在锚点之前。
  * 返回 HResult 供调用方追踪。
  */
-export function adoptBranch(
-  parentOwner: Owner,
-  anchor: HostNode,
-  Component: ComponentFunction,
-  componentProps?: any,
-): HResult {
+export function adoptBranch(options: {
+  parentOwner: Owner;
+  anchor: HostNode;
+  Component: ComponentFunction;
+  componentProps?: any;
+}): HResult {
+  const { parentOwner, anchor, Component, componentProps } = options;
   const adapter = getAdapter();
   const r = h(Component, componentProps);
   const childOwner = r.owner!;

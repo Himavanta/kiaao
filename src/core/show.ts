@@ -31,9 +31,9 @@ export function Show(
       result = null;
     }
     if (toValue(props.value)) {
-      result = adoptBranch(context.owner, anchor, primary);
+      result = adoptBranch({ parentOwner: context.owner, anchor, Component: primary });
     } else if (isNotNil(fallback)) {
-      result = adoptBranch(context.owner, anchor, fallback);
+      result = adoptBranch({ parentOwner: context.owner, anchor, Component: fallback });
     }
   };
 

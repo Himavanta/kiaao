@@ -44,7 +44,7 @@ export function Case(
 
     const Component = resolveComponent(newValue);
     if (isNotNil(Component)) {
-      result = adoptBranch(context.owner, anchor, Component);
+      result = adoptBranch({ parentOwner: context.owner, anchor, Component });
     }
   };
 

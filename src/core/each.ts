@@ -39,55 +39,45 @@ export function Each(
   const renderEntry = (rawValue: any, identity: any, index: number): HResult => {
     const itemSignal = definitionMode(rawValue);
     itemSignalMap.set(identity, itemSignal);
-    return adoptBranch(context.owner, anchor, itemComponent!, {
-      item: itemSignal,
-      index,
+    return adoptBranch({
+      parentOwner: context.owner,
+      anchor,
+      Component: itemComponent!,
+      componentProps: { item: itemSignal, index },
     });
   };
 
-  // Core sync function: full rebuild or diff-based update
-  const sync = () => {
-    const source = toValue(props.value);
-    const items = isArray(source) ? source : [];
-    const keyFn = props.keyed;
-    const newEntries: Entry[] = [];
-
-    // ── Empty + fallback case ──
-    if (isEmpty(items)) {
-      for (const entry of entries) {
-        disposeOwner(entry.result.owner!);
-        itemSignalMap.delete(entry.key);
-      }
-      entries.length = 0;
-
-      if (isNotNil(fallbackComponent)) {
-        fallbackResult = adoptBranch(context.owner, anchor, fallbackComponent!);
-      }
-      return;
+  // Helper: clear all entries and optionally render fallback
+  const clearAllEntries = () => {
+    for (const entry of entries) {
+      disposeOwner(entry.result.owner!);
+      itemSignalMap.delete(entry.key);
     }
-
-    // ── Non-empty: ensure fallback is cleaned ──
-    if (isNotNil(fallbackResult)) {
-      disposeOwner(fallbackResult.owner!);
-      fallbackResult = null;
+    entries.length = 0;
+    if (isNotNil(fallbackComponent)) {
+      fallbackResult = adoptBranch({
+        parentOwner: context.owner,
+        anchor,
+        Component: fallbackComponent!,
+      });
     }
+  };
 
-    // ── Without keyed: full rebuild ──
-    if (isNil(keyFn)) {
-      for (const entry of entries) disposeOwner(entry.result.owner!);
-      itemSignalMap.clear();
-      entries.length = 0;
-
-      for (const [i, rawValue] of items.entries()) {
-        const result = renderEntry(rawValue, i, i);
-        newEntries.push({ key: i, result });
-      }
-      entries.push(...newEntries);
-      return;
+  // Helper: full rebuild without keyed (dispose all, recreate all)
+  const rebuildAll = (items: any[]) => {
+    for (const entry of entries) disposeOwner(entry.result.owner!);
+    itemSignalMap.clear();
+    entries.length = 0;
+    for (const [i, rawValue] of items.entries()) {
+      const result = renderEntry(rawValue, i, i);
+      entries.push({ key: i, result });
     }
+  };
 
-    // ── With keyed: diff ──
+  // Helper: diff-based update with keyed
+  const diffEntries = (items: any[], keyFn: (item: any, i: number) => any) => {
     const newKeys = new Set<any>();
+    const newEntries: Entry[] = [];
     let prevNode: any = null;
 
     for (const [i, rawValue] of items.entries()) {
@@ -96,23 +86,11 @@ export function Each(
 
       const existingIdx = entries.findIndex((e) => e.key === identity);
       if (existingIdx !== -1) {
-        // Retained entry
+        // Retained entry: update signal + reposition
         const existing = entries[existingIdx];
         const sig = itemSignalMap.get(identity);
         if (isNotNil(sig)) sig(rawValue);
-
-        // Reposition if needed
-        const existingNodes = [...existing.result.owner!.elements];
-        if (isNotEmpty(existingNodes)) {
-          const needsMove =
-            isNotNil(prevNode) && getAdapter().getPreviousSibling(existingNodes[0]) !== prevNode;
-          if (needsMove) {
-            for (const n of [...existingNodes].reverse()) {
-              getAdapter().before(anchor, n);
-            }
-          }
-          prevNode = existingNodes[existingNodes.length - 1];
-        }
+        prevNode = repositionEntry(existing, prevNode);
         newEntries.push(existing);
         continue;
       }
@@ -134,9 +112,51 @@ export function Each(
       }
     }
 
-    // Update entries
+    // Swap entry list
     entries.length = 0;
     entries.push(...newEntries);
+  };
+
+  // Helper: reposition an entry's nodes before the anchor if out of order
+  const repositionEntry = (entry: Entry, prevNode: any): any => {
+    const existingNodes = [...entry.result.owner!.elements];
+    if (isEmpty(existingNodes)) return prevNode;
+
+    const needsMove =
+      isNotNil(prevNode) && getAdapter().getPreviousSibling(existingNodes[0]) !== prevNode;
+    if (needsMove) {
+      for (const n of [...existingNodes].reverse()) {
+        getAdapter().before(anchor, n);
+      }
+    }
+    return existingNodes[existingNodes.length - 1];
+  };
+
+  // Core sync function: full rebuild or diff-based update
+  const sync = () => {
+    const source = toValue(props.value);
+    const items = isArray(source) ? source : [];
+
+    // ── Empty + fallback case ──
+    if (isEmpty(items)) {
+      clearAllEntries();
+      return;
+    }
+
+    // ── Non-empty: ensure fallback is cleaned ──
+    if (isNotNil(fallbackResult)) {
+      disposeOwner(fallbackResult.owner!);
+      fallbackResult = null;
+    }
+
+    // ── Without keyed: full rebuild ──
+    if (isNil(props.keyed)) {
+      rebuildAll(items);
+      return;
+    }
+
+    // ── With keyed: diff ──
+    diffEntries(items, props.keyed);
   };
 
   // Initial render: anchor is in DOM when onMount fires
