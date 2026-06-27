@@ -72,15 +72,19 @@ export const browserAdapter: RenderAdapter = {
   },
 
   append(parent: Node, child: Node): void {
+    // 非元素节点（Text、Comment 等）不能有子节点
+    if (parent.nodeType !== 1) return;
     if (VOID_ELEMENTS.has((parent as Element).localName || "")) return;
     (parent as ParentNode).append(child);
   },
 
   remove(node: Node): void {
+    if (!node) return;
     (node as ChildNode).remove();
   },
 
   clear(parent: Node): void {
+    if (parent.nodeType !== 1) return;
     (parent as Element).replaceChildren();
   },
 

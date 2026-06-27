@@ -23,8 +23,9 @@ export function getAdapter(): RenderAdapter {
   return _adapter;
 }
 
-/** 内部使用的 element 移除函数，无 adapter 时静默跳过 */
+/** 内部使用的 element 移除函数，无 adapter 或节点为空时静默跳过 */
 export function removeNode(node: unknown): void {
+  if (node == null) return;
   _adapter?.remove(node);
 }
 
