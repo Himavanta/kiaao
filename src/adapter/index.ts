@@ -4,6 +4,7 @@
 // setRenderMode/getRenderMode for platform mode (dom/ssr/hydrate).
 
 import type { RenderAdapter } from "../core/index.ts";
+import { isNil } from "../core/index.ts";
 
 // ── RenderAdapter ─────────────────────────────────────
 
@@ -25,7 +26,7 @@ export function getAdapter(): RenderAdapter {
 
 /** 内部使用的 element 移除函数，无 adapter 或节点为空时静默跳过 */
 export function removeNode(node: unknown): void {
-  if (node == null) return;
+  if (isNil(node)) return;
   _adapter?.remove(node);
 }
 
