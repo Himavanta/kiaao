@@ -2,7 +2,7 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter } from "../adapter/index.ts";
-import { handleComponent, type ComponentFunction } from "./component.ts";
+import { handleComponent, nestBind, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { setProps } from "./props.ts";
@@ -19,7 +19,6 @@ import {
 import {
   type HResult,
   createHResult,
-  isHResult,
   type NullableProps,
   type CleanupFn,
   type HostNode,
@@ -60,16 +59,12 @@ function handleDirectiveMode(
   // 指令创建自己的 Owner，通过 HResult 由父组件接管
   const owner = createOwner();
 
-  // 解包 children 中的 HResult
+  // 使用 nestBind 统一处理子结果树，确保子组件 Owner 连接正确
   const flatChildren = children.flat(Infinity);
   const allNodes: HostNode[] = [];
 
   for (const child of flatChildren) {
-    if (isHResult(child)) {
-      allNodes.push(...child.nodes);
-    } else if (getAdapter().isNode(child)) {
-      allNodes.push(child);
-    }
+    allNodes.push(...nestBind(child, owner));
   }
 
   for (const child of allNodes) {

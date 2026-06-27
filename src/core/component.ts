@@ -133,7 +133,7 @@ function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
   return [getAdapter().createTextNode(String(item)) as HostNode];
 }
 
-function nestBind(items: any, parentOwner: Owner): HostNode[] {
+export function nestBind(items: any, parentOwner: Owner): HostNode[] {
   if (isArray(items)) {
     const allNodes: HostNode[] = [];
     for (const item of items) {
