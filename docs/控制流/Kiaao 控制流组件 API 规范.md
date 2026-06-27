@@ -3,7 +3,7 @@
 **状态**：草案
 **关联**：[控制流组件设计原则](./控制流组件设计原则.md)
 **日期**：2026年6月27日
-**版本**：2.2
+**版本**：2.3
 
 > **类型说明**：本文档中的 `HostNode` 是平台无关的宿主节点类型（在浏览器环境下为 DOM `Node`，在 SSR 环境下为 `SSRNode`，在其它平台下为对应渲染元素类型）。`HostElement` 特指宿主元素类型（浏览器中为 `Element`）。`Component` 指 Kiaao 的组件函数（即接收 `(props, context)` 并返回 `HResult` 或 `Node[]` 的函数）。
 
@@ -15,16 +15,12 @@ Kiaao 提供三个控制流组件：`Show`、`Case`、`Each`。它们替代了�
 
 - **`fallback` 统一位置**：所有 fallback 都放在 children 的最后一个位置（组件引用），且均为可选。
 - **惰性渲染**：通过 `h()` 保证——控制流组件在条件不满足时不会调用 `h(Component)`，因此组件函数不会执行，其内部的所有资源都不会被创建。
-- **统一锚点**：每个组件始终维护一个注释锚点，作为组件 Owner 的 `elements` 的唯一节点。组件返回 `[anchor]` 给父级。所有内容节点通过 `adapter.before(anchor, node)` 插入在锚点之前。锚点永远留在 DOM 中，确保定位稳定。
+- **统一锚点**：每个组件始终维护一个注释锚点，它是组件 Owner 的 `elements` 中的**唯一节点**。组件初始渲染时只返回 `[anchor]` 给父级，内容节点不包含在返回值中。所有内容节点通过 `adapter.before(anchor, node)` 插入在锚点之前。锚点永远留在 DOM 中，确保定位稳定。
+- **初始渲染推迟到 `onMount`**：初始内容的渲染放在 `onMount` 回调中。此时锚点已通过返回值被父级插入 DOM，`adapter.before(anchor, node)` 可正常工作。内容节点不经过 `result.nodes`，因此不会进入组件的 `elements` 以及所有上级 Owner 的 `elements`。
 - **`keyed` 属性**：`Each` 使用 `keyed` prop 作为身份标识函数，避免与 JSX 编译器的 `key` 属性冲突。
 - **`context.owner`**：组件通过 `context.owner` 访问自己的 Owner 引用。控制流组件使用它来管理锚点和调用 `disposeOwner` 清理旧分支/条目。
 
-**关于手动 Owner 链接**：由于控制流组件是在信号回调中调用 `h()`，此时组件自身的 `handleComponent` 已经执行完毕，框架无法自动将 `h()` 返回的子 Owner 挂载到控制流组件的 Owner 下，也无法自动将节点插入 DOM。因此，控制流组件的信号回调中需要手动处理以下两步：
-
-1. **链接 Owner**：将 `h()` 返回的 `HResult.owner` 挂载到控制流组件的 Owner 的 `children` 下，设置 `parent` 引用。
-2. **插入 DOM**：遍历 `HResult.nodes`，通过 `adapter.before(anchor, node)` 将节点插入在锚点之前。
-
-这是所有通过信号回调动态调用 `h()` 的组件都必须遵循的通用模式。
+**关于手动 Owner 链接**：无论是在 `onMount` 中的初始渲染，还是后续信号回调中的分支切换，都需要手动将 `h()` 返回的 `HResult.owner` 链接到控制流组件的 Owner 下（设置 `parent` 引用、加入 `children` 数组），并将节点通过 `adapter.before(anchor, node)` 插入在锚点之前。这是所有在异步回调中动态调用 `h()` 的组件都必须遵循的通用模式。
 
 ## 二、`Show` — 条件显隐
 
@@ -57,23 +53,23 @@ function Show(
 
 ### 2.5 返回值
 
-返回 `[anchor]`（注释锚点节点数组）。内容节点通过 `adapter.before(anchor, ...)` 插入在锚点之前，不包含在返回值中。
+返回 `[anchor]`（注释锚点节点数组）。**内容节点不包含在返回值中**，而是通过 `adapter.before(anchor, ...)` 在 `onMount` 或信号回调中插入。
 
 ### 2.6 行为
 
-- **初始渲染**：创建锚点并插入 DOM。根据 `value` 的初始值决定渲染哪个组件：
+- **初始渲染**：创建锚点并返回 `[anchor]`。在 `onMount` 回调中根据 `value` 的初始值决定渲染哪个组件：
   - 若为 truthy，调用 `h(Primary)` 渲染主内容组件。
   - 若为 falsy 且提供了 fallback，调用 `h(Fallback)` 渲染 fallback 组件。
   - 若为 falsy 且未提供 fallback，不渲染任何组件，仅锚点存在。
-  - 将 `h()` 返回的 `HResult` 中的子 Owner 链接到 Show 的 Owner 下，将节点插入在锚点之前。
+  - 将 `h()` 返回的 `HResult.owner` 链接到 Show 的 Owner 下，将 `HResult.nodes` 中的节点通过 `adapter.before(anchor, node)` 插入在锚点之前。
   - 保存 `h()` 返回的 `HResult` 引用（`currentResult`），供后续切换时清理。
 - **条件切换**：当 `value` 变化时，Show 通过 `use(value, () => ...)` 订阅信号。回调中：
   1. 调用 `disposeOwner(currentResult.owner)` 销毁旧分支内容的所有资源。
   2. 根据新的 `value` 确定要渲染的组件（`Primary` 或 `Fallback`）。
   3. 如果组件存在，调用 `h(Component)` 渲染新分支内容，拿到新的 `HResult`。
-  4. 将新 `HResult` 中的子 Owner 链接到 Show 的 Owner 下，将节点插入在锚点之前。
+  4. 将新 `HResult.owner` 链接到 Show 的 Owner 下，将节点通过 `adapter.before(anchor, node)` 插入在锚点之前。
   5. 更新 `currentResult` 引用。
-- **内部机制**：Show 自身作为一个普通组件，由 `h()` 在组件模式下处理——Owner 自动创建，`onMount`/`onUnmount` 正常触发。Show 自身的 Owner 在整个生命周期中是稳定的，其 `elements` 仅包含锚点。
+- **内部机制**：Show 自身作为一个普通组件，由 `h()` 在组件模式下处理——Owner 自动创建，`onMount`/`onUnmount` 正常触发。Show 自身的 Owner 在整个生命周期中是稳定的，其 `elements` 仅包含锚点。内容节点归属于各自的分支 Owner，不在 Show 的 `elements` 中。
 
 ### 2.7 示例
 
@@ -152,11 +148,11 @@ function Case(
 
 ### 3.6 行为
 
-- **初始渲染**：根据 `value` 的初始值查找映射表。匹配成功则调用 `h(MatchedComponent)` 渲染对应组件；未匹配且提供了 fallback 则调用 `h(Fallback)`；否则不渲染任何组件。将 `HResult` 中的子 Owner 链接到 Case 的 Owner 下，将节点插入在锚点之前。保存 `currentResult` 引用。
+- **初始渲染**：创建锚点并返回 `[anchor]`。在 `onMount` 回调中根据 `value` 的初始值查找映射表。匹配成功则调用 `h(MatchedComponent)` 渲染对应组件；未匹配且提供了 fallback 则调用 `h(Fallback)`；否则不渲染任何组件。将 `HResult.owner` 链接到 Case 的 Owner 下，将节点插入在锚点之前。保存 `currentResult` 引用。
 - **分支切换**：当 `value` 变化时，通过 `use(value, () => ...)` 订阅信号。如果新 key 与旧 key 不同：
   1. `disposeOwner(currentResult.owner)` 销毁旧分支内容。
   2. 查找新 key 对应的分支组件（或 fallback），调用 `h(Component)` 渲染新分支，拿到新的 `HResult`。
-  3. 将新 `HResult` 中的子 Owner 链接到 Case 的 Owner 下，将节点插入在锚点之前。
+  3. 将新 `HResult.owner` 链接到 Case 的 Owner 下，将节点插入在锚点之前。
   4. 更新 `currentResult` 引用。
      如果新 key 与旧 key 相同，不触发任何更新。
 
@@ -229,7 +225,7 @@ function Each(
 
 ### 4.6 行为
 
-- **初始渲染**：创建锚点。遍历 `value` 数组，为每个条目调用 `h(ItemComponent, { item, index })` 渲染条目组件。将每个 `HResult` 中的子 Owner 链接到 Each 的 Owner 下，将节点插入在锚点之前。保存每个条目的 `HResult` 到条目数组（`itemResults`）。
+- **初始渲染**：创建锚点并返回 `[anchor]`。在 `onMount` 回调中遍历 `value` 数组，为每个条目调用 `h(ItemComponent, { item, index })` 渲染条目组件。将每个 `HResult.owner` 链接到 Each 的 Owner 下，将节点插入在锚点之前。保存每个条目的 `HResult` 到条目数组（`itemResults`）。
 - **增量更新（有 `keyed`）**：当 `value` 变化时，通过 `use(value, () => ...)` 订阅信号。回调中通过 `keyed` 计算新旧 key 集合，进行 diff：
   - **保留的条目**：复用已有的条目结果（`itemResult`）。如果位置变化，从 `itemResult.owner.elements` 获取当前节点集合，通过 adapter 批量移动到新位置。
   - **新增的条目**：调用 `h(ItemComponent, { item, index })` 渲染新条目，链接 Owner、插入 DOM，保存结果到条目数组。
@@ -296,7 +292,7 @@ function Comp() {
 
 ## 五、与 `Error` 组件的关系
 
-`Error` 组件（错误边界）是规划中的控制流组件。它的 API 应与 `Show`/`Case`/`Each` 保持一致：fallback 放在 children 的最后一个位置且可选，内部通过 `h()` 渲染子组件，使用统一锚点。fallback 接收 `{ error, reset }` props。当前暂不实现，将在后续版本中引入。
+`Error` 组件（错误边界）是规划中的控制流组件。它的 API 应与 `Show`/`Case`/`Each` 保持一致：fallback 放在 children 的最后一个位置且可选，内部通过 `h()` 渲染子组件，使用统一锚点，初始渲染推迟到 `onMount`。fallback 接收 `{ error, reset }` props。当前暂不实现，将在后续版本中引入。
 
 ## 六、迁移指南
 
@@ -384,3 +380,4 @@ function Comp() {
 - **全量重建（无 `keyed`）**：不传 `keyed` 时 Each 默认全量重建，每次数据变化销毁所有旧条目并重新渲染。对于频繁变化的大列表，推荐使用 `keyed`。
 - **与现有实现的关系**：当前 `each` 属性指令在 `renderEachOnElement` 中维护了 `itemNodeMap`。组件形式的 Each 直接从 `itemResult.owner.elements` 获取节点，不需要额外的映射表。迁移后可以减少一层冗余数据结构。
 - **异步条目**：条目渲染组件内部返回异步组件时，Each 在初始渲染时插入的是注释占位符。当异步组件 resolve 后，占位符被替换为真实 DOM。`owner.elements` 会自动更新。这不需要 Each 做任何特殊处理。
+- **`elements` 清洁性**：由于初始渲染推迟到 `onMount`，内容节点不经过 `result.nodes`，因此不会进入 Show/Each 的 `elements` 以及所有上级 Owner 的 `elements`。每个 Owner 的 `elements` 只包含它自己负责的节点，保持清洁。

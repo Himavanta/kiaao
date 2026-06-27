@@ -1,14 +1,12 @@
 // kiaao — Show: conditional rendering component
-// Replaces the old `when` boolean-mode directive.
 // Renders Primary component when value is truthy, Fallback when falsy.
 
-import { getAdapter } from "../adapter/index.ts";
 import type { ComponentFunction, Context } from "./component.ts";
-import { h } from "./h.ts";
+import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
 import { disposeOwner } from "./owner.ts";
-import { use, isUse, toValue } from "./signal.ts";
+import { toValue } from "./signal.ts";
 import { isNotNil } from "./type-guards.ts";
-import { getSignalState, type HostNode, type HResult } from "./types.ts";
+import type { HostNode, HResult } from "./types.ts";
 
 // ── Show ──────────────────────────────────────────────
 
@@ -19,47 +17,31 @@ export function Show(
   },
   context: Context,
 ): HostNode[] {
-  const adapter = getAdapter();
-  const anchor = adapter.createComment("show");
-  context.owner.elements.add(anchor);
+  const anchor = initAnchor(context.owner, "show");
+  const [primary, fallback] = normalizeChildList(props.children) as [
+    ComponentFunction,
+    ComponentFunction?,
+  ];
 
   let result: HResult | null = null;
 
-  // Render a branch component and link it under our Owner
-  const branch = (Component: ComponentFunction): HResult => {
-    const r = h(Component);
-    const owner = r.owner!;
-    owner.parent = context.owner;
-    context.owner.children.push(owner);
-    for (const node of r.nodes) {
-      adapter.before(anchor, node);
+  const renderBranch = () => {
+    if (isNotNil(result)) {
+      disposeOwner(result.owner!);
+      result = null;
     }
-    return r;
+    if (toValue(props.value)) {
+      result = adoptBranch(context.owner, anchor, primary);
+    } else if (isNotNil(fallback)) {
+      result = adoptBranch(context.owner, anchor, fallback);
+    }
   };
 
-  // Initial render
-  if (toValue(props.value)) {
-    result = branch(props.children[0]);
-  } else if (isNotNil(props.children[1])) {
-    result = branch(props.children[1]);
-  }
+  // Initial render: anchor is in DOM when onMount fires, so before() works
+  context.onMount(renderBranch);
 
-  // Subscribe to signal changes
-  if (isUse(props.value)) {
-    const derived = use(props.value, () => {
-      if (isNotNil(result)) {
-        disposeOwner(result.owner!);
-        result = null;
-      }
-      if (toValue(props.value)) {
-        result = branch(props.children[0]);
-      } else if (isNotNil(props.children[1])) {
-        result = branch(props.children[1]);
-      }
-    });
-    const state = getSignalState(derived);
-    if (state?.stop) context.owner.cleanups.push(state.stop);
-  }
+  // Subsequent changes via signal
+  subscribeSignal(context.owner, props.value, renderBranch);
 
   return [anchor];
 }
