@@ -83,6 +83,10 @@ export const browserAdapter: RenderAdapter = {
     (node as ChildNode).remove();
   },
 
+  setText(node: Node, value: string): void {
+    (node as Text).textContent = value;
+  },
+
   replace(oldNode: Node, ...newNodes: Node[]): void {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
