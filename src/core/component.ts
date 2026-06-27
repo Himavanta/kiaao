@@ -4,8 +4,7 @@
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, isUse, use, type UseFunction } from "./signal.ts";
-import { normalizeChildren } from "./type-guards.ts";
-import { isPromise, isArray, isNotEmpty } from "./type-guards.ts";
+import { normalizeChildren, isPromise, isArray, isNotEmpty, isNil } from "./type-guards.ts";
 import {
   type Signal,
   type Owner,
@@ -86,21 +85,6 @@ export function createContext(owner: Owner): Context {
 
 // ── Helper: nestBind — 统一遍历结果树，连接 Owner + 构建 DOM ────
 
-/** 从 HResult 提取宿主元素（首个节点） */
-function hostElement(result: HResult): HostNode {
-  const [el] = result.nodes;
-  return el;
-}
-
-/** 将子节点列表 append 到父元素 */
-function appendChildren(parentEl: HostNode, children: HostNode[]): void {
-  if (!parentEl || children.length === 0) return;
-  const adapter = getAdapter();
-  for (const node of children) {
-    adapter.append(parentEl, node);
-  }
-}
-
 /** 遍历 HResult 的子结果树 */
 function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
   if (result.owner) {
@@ -116,7 +100,13 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
     for (const child of result.childResults) {
       allChildNodes.push(...nestBind(child, effectiveOwner));
     }
-    appendChildren(hostElement(result)!, allChildNodes);
+    const [parentEl] = result.nodes;
+    if (parentEl && isNotEmpty(allChildNodes)) {
+      const adapter = getAdapter();
+      for (const node of allChildNodes) {
+        adapter.append(parentEl, node);
+      }
+    }
   }
 
   // 归集 cleanups 到有效 Owner
@@ -131,6 +121,9 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
 
 /** 处理原始值（非 HResult/非数组） */
 function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
+  if (isNil(item)) {
+    return [];
+  }
   if (getAdapter().isNode(item)) {
     return [item];
   }
