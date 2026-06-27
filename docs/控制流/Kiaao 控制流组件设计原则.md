@@ -2,7 +2,7 @@
 
 **状态**：定稿
 **日期**：2026年6月27日
-**版本**：3.1
+**版本**：3.2
 
 ## 一、背景
 
@@ -27,27 +27,32 @@
 5. **多根节点**：Fragment 返回多个并列的顶层节点。
 6. **Error 错误恢复**（规划中）：`reset` 时销毁 fallback 并重新渲染主内容。
 
-**根本原因**：在 Kiaao 中，节点的身份可能在其生命周期中发生替换。任何基于"创建时快照"的引用管理都会在面对这些场景时失效。
+**根本原因**：在 Kiaao 中，节点的身份可能在其生命周期中发生替换。任何基于“创建时快照”的引用管理都会在面对这些场景时失效。
 
 ## 三、解决方案：通过 `h()` 渲染子组件，复用组件生命周期
 
 控制流组件的核心设计原则是：**将惰性内容当作普通组件，通过 `h()` 渲染，让 `h()` 自动管理其完整的生命周期。**
 
-控制流组件不需要自己管理 Owner——`h()` 已经实现了组件渲染的完整生命周期管理。Show 在条件为 true 时调用 `h(Primary)`，在条件为 false 时调用 `h(Fallback)`。`h()` 内部会为每个组件创建 Owner、执行组件函数、返回 `HResult`、通过 `mergeResults` 将子 Owner 挂载到 Show 的 Owner 下。整个生命周期完全由 `h()` 管理。
+控制流组件不需要自己管理 Owner——`h()` 已经实现了组件渲染的完整生命周期管理。Show 在条件为 true 时调用 `h(Primary)`，在条件为 false 时调用 `h(Fallback)`。`h()` 内部会为每个组件创建 Owner、执行组件函数、返回 `HResult`。整个渲染过程被 `h()` 完全管理。
 
 ### 3.1 原则内涵
 
-1. **复用 `h()` 的组件渲染管道**。控制流组件将惰性内容作为普通组件通过 `h()` 渲染，不需要手动创建 Owner、不需要手动调用 `adoptHResult`、不需要手动 `disposeOwner`——`h()` 已经处理了这一切。
+1. **复用 `h()` 的组件渲染管道**。控制流组件将惰性内容作为普通组件通过 `h()` 渲染，`h()` 自动创建组件 Owner、执行组件函数、返回 `HResult`。控制流组件只需要在信号回调中决定调用哪个 `h()`。
 
-2. **惰性渲染通过 `h()` 保证**。在函数形式 children 中，惰性渲染通过"函数在需要时才被调用"来保证。在组件形式 children 中，惰性渲染通过"`h()` 在需要时才被调用"来保证。Show 在条件为 false 时根本不会调用 `h(Primary)`，因此 `Primary` 组件函数不会执行。这与 Kiaao 的"显式、可预测"哲学一致。
+2. **惰性渲染通过 `h()` 保证**。控制流组件在条件不满足时根本不会调用 `h(Component)`，因此组件函数不会执行。这与 Kiaao 的“显式、可预测”哲学一致。
 
-3. **`owner.elements` 是动态的**。它始终包含当前的真实顶层节点集合。异步组件 resolve 后，占位符被移出 `elements`，真实节点被加入。不需要维护任何节点快照。
+3. **手动处理 Owner 链接和 DOM 插入**。由于控制流组件是在信号回调中调用 `h()`，此时组件自身的 `handleComponent` 已经执行完毕，框架无法自动将 `h()` 返回的子 Owner 挂载到控制流组件的 Owner 下，也无法自动将节点插入 DOM。因此，信号回调中需要手动：
+   - 将 `h()` 返回的 `HResult.owner` 挂载到控制流组件的 Owner 的 `children` 下，设置 `parent` 引用。
+   - 遍历 `HResult.nodes`，通过 `adapter.before(anchor, node)` 将节点插入在锚点之前。
+     这是所有通过信号回调动态调用 `h()` 的组件都必须遵循的通用模式。
 
-4. **清理是递归且完整的**。`disposeOwner(owner)` 递归清理所有子 Owner。切换分支时，Show 保存上一次渲染的 `HResult`，通过 `disposeOwner(prevResult.owner)` 清理旧分支。条目移除时，Each 调用 `disposeOwner(itemResult.owner)` 清理条目。
+4. **`owner.elements` 是动态的**。它始终包含当前的真实顶层节点集合。异步组件 resolve 后，占位符被移出 `elements`，真实节点被加入。不需要维护任何节点快照。
+
+5. **清理是递归且完整的**。`disposeOwner(owner)` 递归清理所有子 Owner。切换分支时，Show 保存上一次渲染的 `HResult`，通过 `disposeOwner(prevResult.owner)` 清理旧分支。条目移除时，Each 调用 `disposeOwner(itemResult.owner)` 清理条目。
 
 ### 3.2 参数传递
 
-控制流组件的 children 是组件函数引用（而非惰性函数）。对于需要参数的场景（Each 的条目渲染、Error 的 fallback），参数通过 props 传递：
+控制流组件的 children 是组件函数引用。对于需要参数的场景（Each 的条目渲染、Error 的 fallback），参数通过 props 传递：
 
 - **Each**：条目渲染函数接收 `{ item, index }` props。Each 内部调用 `h(ItemComponent, { item, index })`。
 - **Error**（规划中）：fallback 接收 `{ error, reset }` props。Error 内部调用 `h(FallbackComponent, { error, reset })`。
@@ -69,8 +74,9 @@ Show 内部通过 `use(value, () => ...)` 订阅信号。当 `value` 变化时�
 
 1. 保存当前渲染的 `HResult`（如果有），调用 `disposeOwner(prevResult.owner)` 销毁旧分支内容。
 2. 根据新的 `value` 确定要渲染的组件（`Primary` 或 `Fallback`）。
-3. 如果组件存在，调用 `h(Component, {})`，通过 `mergeResults` 自动挂载子 Owner 到 Show 的 Owner 下，内容节点插入在锚点之前。
-4. 保存新的 `HResult` 引用供下次切换使用。
+3. 如果组件存在，调用 `h(Component)` 拿到新的 `HResult`。
+4. 将新 `HResult.owner` 链接到 Show 的 Owner 下，将新节点插入在锚点之前。
+5. 保存新的 `HResult` 引用供下次切换使用。
 
 Case 同理，增加了映射表的 key 匹配步骤。如果新 key 与旧 key 相同，不触发任何更新。
 
@@ -81,13 +87,13 @@ Each 通过 `use(value, () => ...)` 订阅数组信号。当信号变化时，�
 1. 计算新旧 key 集合的差异（如果提供了 `keyed`）。
 2. **移除条目**：调用 `disposeOwner(itemResult.owner)` 销毁旧条目内容。
 3. **移动条目**：从 `itemResult.owner.elements` 获取当前节点集合，通过 adapter 批量移动到新位置。
-4. **新增条目**：调用 `h(ItemComponent, { item, index })` 渲染新条目，`mergeResults` 自动挂载子 Owner 到 Each 的 Owner 下，节点插入在锚点之前。
+4. **新增条目**：调用 `h(ItemComponent, { item, index })` 渲染新条目，链接 Owner、插入 DOM，保存结果到条目数组。
 
 **关于 `index` 参数**：`index` 是条目的**创建索引**，在条目首次渲染时确定，之后不会随列表重排而更新。如果用户需要显示实时序号，应在渲染函数中根据 `item` 自行查找或计算。
 
 **无 `keyed` 时的全量重建**：不传 `keyed` 时，Each 默认全量重建（销毁所有旧条目，重新渲染所有新条目），而非使用索引作为隐式 identity。原因是索引 identity 在列表中间插入或删除时会导致所有后续条目的身份错位。全量重建牺牲了性能，但保证了绝对的正确性。
 
-**关于 fallback**：当 `value` 数组为空且提供了 fallback 组件时，Each 调用 `h(FallbackComponent, {})` 渲染 fallback，节点插入在锚点之前。如果未提供 fallback，仅锚点存在。
+**关于 fallback**：当 `value` 数组为空且提供了 fallback 组件时，Each 调用 `h(FallbackComponent, {})` 渲染 fallback，链接 Owner、插入 DOM。如果未提供 fallback，仅锚点存在。
 
 ### 3.6 基础 API
 
@@ -99,8 +105,6 @@ Each 通过 `use(value, () => ...)` 订阅数组信号。当信号变化时，�
 | `context.owner`       | 组件访问自己的 Owner 引用                       |
 | `disposeOwner(owner)` | 销毁旧分支/旧条目的所有资源（已公开）           |
 | adapter 操作          | 通过 `getAdapter()` 进行 DOM 操作，保持平台无关 |
-
-控制流组件不需要额外的所有权管理 API（如 `createScopedOwner`、`adoptHResult` 等）——`h()` 已经处理了所有所有权管理逻辑。
 
 ## 四、API 一致性约定
 
@@ -121,7 +125,7 @@ Each 通过 `use(value, () => ...)` 订阅数组信号。当信号变化时，�
 
 ### 4.3 惰性渲染
 
-惰性渲染通过 `h()` 保证——控制流组件在条件不满足时根本不会调用 `h(Component)`，因此组件函数不会执行，其内部的所有资源（派生、异步请求等）都不会被创建。
+惰性渲染通过 `h()` 保证——控制流组件在条件不满足时根本不会调用 `h(Component)`，因此组件函数不会执行，其内部的所有资源都不会被创建。
 
 ### 4.4 统一锚点
 
@@ -140,7 +144,7 @@ Show、Case、Each 都始终维护一个注释锚点作为组件 Owner 的 `elem
 | 适用场景        | 如何遵循                                                                                                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------- |
 | 用户组件        | 由 `h()` 自动创建 Owner，开发者通过 `context.use` 绑定资源，卸载时自动清理                                  |
-| Show/Case       | 通过 `h()` 渲染子组件，切换时 `disposeOwner` 清理旧分支，`h()` 渲染新分支                                   |
+| Show/Case       | 通过 `h()` 渲染子组件，切换时 `disposeOwner` 清理旧分支，手动链接新分支 Owner 并插入 DOM                    |
 | Each            | 通过 `h()` 渲染条目组件，持有条目结果数组 `[{ key, result }]`，diff 后通过 `result.owner.elements` 获取节点 |
 | Error（规划中） | 通过 `h()` 渲染主内容和 fallback 组件，错误发生时切换                                                       |
 | 透传组件        | Owner 的 `elements` 可能为空，实际节点在子 Owner 中，清理时递归处理                                         |
@@ -151,9 +155,9 @@ Show、Case、Each 都始终维护一个注释锚点作为组件 Owner 的 `elem
 
 ## 七、原则的意义
 
-**统一性**。控制流组件不再是特殊的存在——它们只是"根据条件决定渲染哪个子组件"的普通组件，与 Kiaao 的组件模型完全一致。
+**统一性**。控制流组件不再是特殊的存在——它们只是“根据条件决定渲染哪个子组件”的普通组件，与 Kiaao 的组件模型完全一致。
 
-**简化性**。控制流组件不需要手动管理作用域——`h()` 已经实现了组件渲染的完整生命周期管理。Show/Each 的实现大幅简化。
+**简化性**。控制流组件不需要手动管理作用域——`h()` 已经实现了组件渲染的完整生命周期管理。Show/Each 的实现只需在信号回调中决定调用哪个 `h()`，然后手动处理 Owner 链接和 DOM 插入。
 
 **跨端友好**。Owner 树是纯 JS 数据结构，与平台无关。
 
@@ -165,6 +169,6 @@ Show、Case、Each 都始终维护一个注释锚点作为组件 Owner 的 `elem
 
 控制流组件族的设计遵循一个核心原则：**将惰性内容当作普通组件，通过 `h()` 渲染，让 `h()` 自动管理其完整的生命周期。**
 
-控制流组件不需要自己管理 Owner——`h()` 已经处理了组件渲染的所有逻辑。Show/Each 只需要在信号回调中决定调用哪个 `h()`，其余全部委托给框架现有的组件渲染管道。这种设计最大化地复用了 Kiaoo 的现有基础设施，让控制流组件与普通组件在实现层面完全统一。
+控制流组件不需要自己管理 Owner——`h()` 已经处理了组件渲染的所有逻辑。Show/Each 只需要在信号回调中决定调用哪个 `h()`，然后手动链接 Owner 和插入 DOM。这种设计最大化地复用了 Kiaoo 的现有基础设施，让控制流组件与普通组件在实现层面完全统一。
 
 `keyed` 属性用于 `Each` 的身份标识，避免与 JSX 编译器冲突。`fallback` 统一放在 children 的最后一个位置，且均为可选。三个组件统一使用锚点机制保证 DOM 定位的稳定性。异步资源管理通过 `onUnmount` 显式注册清理逻辑，框架不提供自动中断机制。
