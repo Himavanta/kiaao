@@ -4,6 +4,7 @@
 import { getAdapter } from "../adapter/index.ts";
 import type { ComponentFunction } from "./component.ts";
 import { h } from "./h.ts";
+import { triggerMount } from "./owner.ts";
 import { use, isUse } from "./signal.ts";
 import { isArray } from "./type-guards.ts";
 import { getSignalState } from "./types.ts";
@@ -40,6 +41,7 @@ export function adoptBranch(options: {
   for (const node of r.nodes) {
     adapter.before(anchor, node);
   }
+  triggerMount(childOwner);
   return r;
 }
 
