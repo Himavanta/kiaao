@@ -43,10 +43,12 @@ function safeCall(fn: () => void | Promise<void>, label: string): void {
  *
  * 清理顺序：
  * 1. 执行 unmountCallbacks（onUnmount 回调）
- * 2. 执行 cleanups（派生 stop、指令清理等）
- * 3. 移除 elements 中所有渲染元素
- * 4. 递归销毁所有子 Owner（遍历快照副本，防止迭代错位）
- * 5. 清空 children 数组
+ * 执行顺序：
+ * 1. 从父 Owner children 中移除自身
+ * 2. 递归销毁所有子 Owner（子先销毁）
+ * 3. 执行 unmountCallbacks
+ * 4. 执行 cleanups
+ * 5. 移除 elements
  */
 export function disposeOwner(owner: Owner): void {
   if (owner.disposed) return;
@@ -57,6 +59,13 @@ export function disposeOwner(owner: Owner): void {
     const idx = owner.parent.children.indexOf(owner);
     if (idx !== -1) owner.parent.children.splice(idx, 1);
   }
+
+  // 先递归销毁子 Owner，确保子先 unmount
+  const children = [...owner.children];
+  for (const child of children) {
+    disposeOwner(child);
+  }
+  owner.children.length = 0;
 
   // 1. Execute unmount callbacks
   for (const cb of owner.unmountCallbacks) {
@@ -70,18 +79,11 @@ export function disposeOwner(owner: Owner): void {
   }
   owner.cleanups.length = 0;
 
-  // 3. Remove all owned elements from the DOM (via adapter if registered)
+  // 3. Remove all owned elements from the DOM
   for (const el of owner.elements) {
     removeNode(el);
   }
   owner.elements.clear();
-
-  // 4. Recursively dispose children (iterate copy, clear after)
-  const children = [...owner.children];
-  for (const child of children) {
-    disposeOwner(child);
-  }
-  owner.children.length = 0;
 }
 
 // ── triggerMount ──────────────────────────────────────
