@@ -6,23 +6,23 @@ import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./
 import { disposeOwner } from "./owner.ts";
 import { toValue } from "./signal.ts";
 import { isNotNil } from "./type-guards.ts";
-import type { HostNode, HResult } from "./types.ts";
+import { type HResult, type ControlFlowChildren, type MaybeSignal } from "./types.ts";
+import { createHResult } from "./types.ts";
 
 // ── Show ──────────────────────────────────────────────
 
 export function Show(
   props: {
-    value: any;
-    children: [ComponentFunction, ComponentFunction?];
+    value: MaybeSignal<boolean>;
+    children: ControlFlowChildren<ComponentFunction, ComponentFunction>;
   },
   context: Context,
-): HostNode[] {
+): HResult {
   const anchor = initAnchor(context.owner, "show");
   const [primary, fallback] = normalizeChildList(props.children) as [
     ComponentFunction,
     ComponentFunction?,
   ];
-
   let result: HResult | null = null;
 
   const renderBranch = () => {
@@ -43,5 +43,5 @@ export function Show(
   // Subsequent changes via signal
   subscribeSignal(context.owner, props.value, renderBranch);
 
-  return [anchor];
+  return createHResult(null, [anchor]);
 }

@@ -8,7 +8,15 @@ import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./
 import { disposeOwner } from "./owner.ts";
 import { toValue, definitionMode } from "./signal.ts";
 import { isArray, isNotEmpty, isEmpty, isNil, isNotNil } from "./type-guards.ts";
-import type { Owner, HostNode, HResult, Signal } from "./types.ts";
+import type {
+  Owner,
+  HostNode,
+  HResult,
+  ControlFlowChildren,
+  MaybeSignal,
+  Signal,
+} from "./types.ts";
+import { createHResult } from "./types.ts";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -122,14 +130,17 @@ function diffEntries(state: EachState, items: any[], keyFn: (item: any, i: numbe
 
 // ── Each ──────────────────────────────────────────────
 
-export function Each(
+export function Each<T = any>(
   props: {
-    value: any[];
-    keyed?: (item: any, index: number) => any;
-    children: [ComponentFunction<{ item: () => any; index: number }>, ComponentFunction?];
+    value: MaybeSignal<T[]>;
+    keyed?: (item: T, index: number) => any;
+    children: ControlFlowChildren<
+      ComponentFunction<{ item: Signal<T>; index: number }>,
+      ComponentFunction
+    >;
   },
   context: Context,
-): HostNode[] {
+): HResult {
   const anchor = initAnchor(context.owner, "each");
   const [itemComponent, fallbackComponent] = normalizeChildList(props.children);
 
@@ -167,5 +178,5 @@ export function Each(
 
   context.onMount(sync);
   subscribeSignal(context.owner, props.value, sync);
-  return [anchor];
+  return createHResult(null, [anchor]);
 }

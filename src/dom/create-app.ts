@@ -9,11 +9,12 @@ export interface App {
 }
 
 /**
- * 创建一个kiaao应用实例。
+ * 创建一个 kiaao 应用实例。
  * 接受 `h()` 的返回值（HResult），管理整个组件树的生命周期。
  *
  * 用法：
  *   createApp(h(MyComponent, { name: "kiaao" })).mount(document.body);
+ *   createApp(<MyComponent />).mount(document.body);
  */
 export function createApp(hr: HResult): App {
   const rootOwner = createOwner();

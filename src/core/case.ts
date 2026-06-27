@@ -6,17 +6,18 @@ import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./
 import { disposeOwner } from "./owner.ts";
 import { toValue } from "./signal.ts";
 import { isNotNil, isString } from "./type-guards.ts";
-import type { HostNode, HResult } from "./types.ts";
+import type { HResult, ControlFlowChildren, MaybeSignal } from "./types.ts";
+import { createHResult } from "./types.ts";
 
 // ── Case ──────────────────────────────────────────────
 
 export function Case(
   props: {
-    value: any;
-    children: [Record<string, ComponentFunction>, ComponentFunction?];
+    value: MaybeSignal<string>;
+    children: ControlFlowChildren<Record<string, ComponentFunction>, ComponentFunction>;
   },
   context: Context,
-): HostNode[] {
+): HResult {
   const anchor = initAnchor(context.owner, "case");
   const childList = normalizeChildList(props.children);
   const [mappingTable, fallbackComponent] = childList as [
@@ -54,5 +55,5 @@ export function Case(
   // Subsequent changes via signal
   subscribeSignal(context.owner, props.value, renderBranch);
 
-  return [anchor];
+  return createHResult(null, [anchor]);
 }

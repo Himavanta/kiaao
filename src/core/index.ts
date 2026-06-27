@@ -67,6 +67,8 @@ export type {
   HostNode,
   RenderAdapter,
   ProcessChildrenResult,
+  ControlFlowChildren,
+  MaybeSignal,
 } from "./types.ts";
 export {
   REACTIVE,

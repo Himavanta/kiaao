@@ -56,7 +56,7 @@ export namespace JSX {
   export type Element = HResult;
   export interface ElementClass {
     (props: Props, context?: Context): HResult;
-    (el: Element, props: Props, ctx: DirectiveContext): void;
+    (el: HResult, props: Props, ctx: DirectiveContext): void;
   }
   export interface ElementChildrenAttribute {
     children: any;

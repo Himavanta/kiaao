@@ -1,4 +1,4 @@
-import { use, toValue } from "kiaao";
+import { toValue, type Context } from "kiaao";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -33,8 +33,8 @@ function fetchRaw(name: string): Promise<IconifyResponse> {
 
 // ── Component ──────────────────────────────────────────
 
-export default function Icon(props: Record<string, any>) {
-  const [data, setData] = use<IconData | null>(null);
+export default function Icon(props: Record<string, any>, { use }: Context) {
+  const data = use<IconData | null>(null);
   const { icon, ...svgProps } = props;
 
   const name = toValue(icon);
@@ -43,7 +43,7 @@ export default function Icon(props: Record<string, any>) {
       .then((res) => {
         const entry = res.icons[name.split(":")[1]];
         if (!entry) throw new Error(`Icon not found: ${name}`);
-        setData({
+        data({
           body: entry.body,
           width: entry.width || res.width || 24,
           height: entry.height || res.height || 24,
@@ -52,8 +52,8 @@ export default function Icon(props: Record<string, any>) {
       .catch((err) => console.error("[icon] failed to load:", err));
   }
 
-  const [body] = use(data, () => data()?.body ?? "");
-  const [viewBox] = use(data, () => {
+  const body = use(data, () => data()?.body ?? "");
+  const viewBox = use(data, () => {
     const d = data();
     return `0 0 ${d?.width || 24} ${d?.height || 24}`;
   });

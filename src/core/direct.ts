@@ -2,7 +2,7 @@
 
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "./type-guards.ts";
-import { DIRECT_KEY, type Owner, type Props, type HostNode } from "./types.ts";
+import { DIRECT_KEY, type Owner, type Props, type HostNode, type HResult } from "./types.ts";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -20,11 +20,12 @@ export type DirectiveFunction = (
 
 // ── JSX component signature ────────────────────────────
 
-type JSXComponentSignature = (props: Props) => HostNode;
+/** JSX 组件调用签名——表示此函数可作为 JSX 标签使用 */
+type JSXComponentSignature = (props: Props) => HResult;
 
 // ── direct() ───────────────────────────────────────────
 
-export const direct = <T extends DirectiveFunction>(fn: T): T & JSXComponentSignature => {
+export const direct = <T extends DirectiveFunction>(fn: T): JSXComponentSignature & T => {
   (fn as any)[DIRECT_KEY] = true;
   return fn as T & JSXComponentSignature;
 };

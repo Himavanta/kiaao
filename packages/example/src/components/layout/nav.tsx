@@ -1,10 +1,11 @@
-import { use, type Getter } from "kiaao";
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
 import Icon from "/src/ui/icon";
+import { use, Each, type Signal } from "kiaao";
+
 import { UserCard } from "./user";
 
-const [menus] = use<MainNavItem[]>(mainNavs);
-const [navPlugin] = use(mainNavPlugin);
+const menus = use<MainNavItem[]>(mainNavs);
+const navPlugin = use(mainNavPlugin);
 
 const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");
 
@@ -17,22 +18,22 @@ function Logo() {
   );
 }
 
-function MenuItem({ item }: { item: Getter<MainNavItem> }) {
-  const [itemPath] = use(item, () => `/i/${item().path}`);
-  const [linkClass] = use(currentPath, item, () =>
+function MenuItem({ item }: { item: Signal<MainNavItem> }) {
+  const itemPath = use(item, () => `/i/${item().path}`);
+  const linkClass = use(currentPath, item, () =>
     cn(
       "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
       currentPath() === `/i/${item().path}` && "bg-white shadow-md text-blue-700 hover:bg-white",
     ),
   );
-  const [iconClass] = use(currentPath, item, () =>
+  const iconClass = use(currentPath, item, () =>
     cn("h-4 w-4", currentPath() === `/i/${item().path}` && " text-blue-700"),
   );
-  const [itemIcon] = use(item, () => item().icon);
-  const [spanClass] = use(currentPath, item, () =>
+  const itemIcon = use(item, () => item().icon);
+  const spanClass = use(currentPath, item, () =>
     cn(currentPath() === `/i/${item().path}` && " text-blue-700"),
   );
-  const [itemTitle] = use(item, () => item().title);
+  const itemTitle = use(item, () => item().title);
 
   return (
     <Link to={itemPath} class={linkClass}>
@@ -47,12 +48,14 @@ export default function () {
     <nav class="h-14 w-full flex border-b border-gray-200 justify-between items-center px-4 z-1">
       <Logo />
 
-      <section each={menus} key={(v: MainNavItem) => v.path} class="flex items-center gap-4 ">
-        {(item: Getter<MainNavItem>) => <MenuItem item={item} />}
+      <section class="flex items-center gap-4">
+        <Each value={menus} keyed={(v: MainNavItem) => v.path}>
+          {MenuItem}
+        </Each>
       </section>
 
       <section class="flex items-center gap-4">
-        <MenuItem item={navPlugin} />
+        <MenuItem item={navPlugin as unknown as Signal<MainNavItem>} />
         <UserCard />
       </section>
     </nav>

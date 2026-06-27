@@ -1,28 +1,16 @@
 // kiaao — 通用下拉菜单组件
-//
-// 用法：
-//   <Dropdown trigger={<UserIcon />}>
-//     <div>面板内容</div>
-//   </Dropdown>
-//
 // 点击 trigger 区域切换面板显隐，点击面板外部或按 Escape 关闭。
-// 面板进入/退出使用 Motion 指令驱动，退出动画播放完毕后 DOM 才移除。
 
-import { type Context } from "kiaao";
+import { Show, type Context, type HResult } from "kiaao";
 import { createMotion } from "kiaao/motion";
 
 type Placement = "bottom-left" | "bottom-right" | "top-left" | "top-right";
 
 interface DropdownProps {
-  /** 触发器元素（点击切换面板） */
   trigger: any;
-  /** 下拉面板内容 */
   children: any;
-  /** 面板相对 trigger 的位置 */
   placement?: Placement;
-  /** 点击外部关闭（默认 true） */
   closeOnOutsideClick?: boolean;
-  /** Escape 键关闭（默认 true） */
   closeOnEscape?: boolean;
 }
 
@@ -34,12 +22,12 @@ const PLACEMENT_CLASS: Record<Placement, string> = {
 };
 
 export default function Dropdown(props: DropdownProps, context: Context) {
-  const { use } = context;
-  const [open, setOpen] = use<boolean>(false);
+  const { use: useFn } = context;
+  const open = useFn<boolean>(false);
   const [visible, Motion] = createMotion(open, context);
 
-  const toggle = () => setOpen((v) => !v);
-  const close = () => setOpen(false);
+  const toggle = () => open((v: boolean) => !v);
+  const close = () => open(false);
 
   const {
     trigger,
@@ -54,34 +42,32 @@ export default function Dropdown(props: DropdownProps, context: Context) {
     <div class="relative inline-block">
       <div onClick={toggle}>{trigger}</div>
 
-      <div when={visible} class="contents">
-        <Motion
-          from={{ opacity: 0, transform: "scale(0.95)" }}
-          to={{ opacity: 1, transform: "scale(1)" }}
-          duration={0.15}
-        >
-          <div
-            class={`absolute ${PLACEMENT_CLASS[placement]}`}
-            onClick={(e: MouseEvent) => e.stopPropagation()}
+      <Show value={visible}>
+        {() => (
+          <Motion
+            from={{ opacity: 0, transform: "scale(0.95)" }}
+            to={{ opacity: 1, transform: "scale(1)" }}
+            duration={0.15}
           >
-            {children}
-          </div>
-        </Motion>
-      </div>
+            <div
+              class={`absolute ${PLACEMENT_CLASS[placement]}`}
+              onClick={(e: MouseEvent) => e.stopPropagation()}
+            >
+              {children}
+            </div>
+          </Motion>
+        )}
+      </Show>
     </div>
   );
+  const rootNode = (rootEl as HResult).nodes[0] as HTMLElement;
 
   // ── 事件监听 ─────────────────────────────────────────
-  //
-  // 直接在组件创建时注册，不使用 onMount/onUnmount 嵌套。
-  // 使用 window 的 click 捕获阶段，composedPath 检测点击源。
-
   const cleanups: (() => void)[] = [];
 
-  // 点击外部关闭（捕获阶段）
   if (closeOnOutsideClick) {
     const onClick = (e: MouseEvent) => {
-      if (rootEl.contains(e.target as Node)) return;
+      if (rootNode.contains(e.target as Node)) return;
       if (!open()) return;
       close();
     };
@@ -89,7 +75,6 @@ export default function Dropdown(props: DropdownProps, context: Context) {
     cleanups.push(() => window.removeEventListener("click", onClick, true));
   }
 
-  // Escape 关闭
   if (closeOnEscape) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && open()) close();

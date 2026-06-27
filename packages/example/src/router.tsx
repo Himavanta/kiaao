@@ -4,7 +4,7 @@ import { createRouter, type Route } from "kiaao/router";
 export const { RouterView, Link, navigate, currentPath, currentParams } = createRouter();
 
 export const appRoutes = [
-  { path: "", component: () => (navigate("/i/apps"), null) },
+  { path: "", component: () => (navigate("/i/apps"), (<div />)) },
   { path: "i", component: lazy(() => import("./components/layout")) },
 ];
 

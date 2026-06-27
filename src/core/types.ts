@@ -81,6 +81,19 @@ export type MergeableResult = HostNode;
 /** 清理函数 */
 export type CleanupFn = () => void;
 
+/**
+ * 控制流组件 children 类型：单值或 [primary, fallback?] 元组。
+ * handleComponent 会通过 normalizeChildren 将单值解包，
+ * 故组件内需用 normalizeChildList 重新包装。
+ */
+export type ControlFlowChildren<T, F> = T | [T, F?];
+
+/**
+ * 值为 T 或 Signal<T>，用于 props 类型声明。
+ * 类似 Vue 的 MaybeRef<T>，但对应 Kiaao 的 Signal 体系。
+ */
+export type MaybeSignal<T> = T | Signal<T>;
+
 // ── Signal Internal Types ──────────────────────────────
 
 /** 定义节点（use(init)）的内部状态 */
