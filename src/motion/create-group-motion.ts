@@ -4,10 +4,10 @@
 
 import { animate } from "motion/mini";
 
-import { direct, type DirectiveContext } from "../core/index.ts";
 import { use } from "../core/index.ts";
 import { isEmpty, isDefined } from "../core/index.ts";
-import { type Signal, type Props, type HostNode } from "../core/index.ts";
+import { type Signal } from "../core/index.ts";
+import { direct } from "../dom/index.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -161,8 +161,7 @@ export function createGroupMotion<T, K = any>(
     });
   });
 
-  const GroupMotion = direct((el: HostNode, props: Props, ctx: DirectiveContext) => {
-    const element = el as Element;
+  const GroupMotion = direct((element, props, ctx) => {
     const config = parseMotionProps(props);
 
     // 在元素挂载前设 from 初始样式，onMount 时 animate(element, to) 过渡

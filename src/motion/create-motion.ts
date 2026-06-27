@@ -2,10 +2,8 @@
 // Business/animation signal separation. Users operate business signal directly,
 // the animation signal lags behind to allow exit animations to complete.
 
-import { direct, type DirectiveContext } from "../core/index.ts";
-import { use } from "../core/index.ts";
-import { isEmpty, isNotEmpty } from "../core/index.ts";
-import { type Signal, type Props, type HostNode } from "../core/index.ts";
+import { use, isEmpty, isNotEmpty, type Signal } from "../core/index.ts";
+import { direct } from "../dom/index.ts";
 import {
   type ElementMotionConfig,
   type Generation,
@@ -93,8 +91,7 @@ export function createMotion(
     });
   });
 
-  const Motion = direct((el: HostNode, props: Props, ctx: DirectiveContext) => {
-    const element = el as Element;
+  const Motion = direct((element, props, ctx) => {
     const config = parseMotionProps(props);
 
     // 在元素挂载前设 from 初始样式，onMount 时 animate(element, to) 过渡

@@ -11,7 +11,8 @@ try {
 
 export * from "./core/index.ts";
 
-// DOM-specific exports
+// DOM-specific exports — override core versions where applicable
+export { direct } from "./dom/index.ts";
 export { Portal, lazy, createApp, isNode, isElement, isSVGElement } from "./dom/index.ts";
 
 // JSX runtime

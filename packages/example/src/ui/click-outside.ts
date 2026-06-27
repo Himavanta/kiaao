@@ -1,20 +1,19 @@
-// kiaao — clickOutside directive: detects clicks outside the element
+// kiaao — ClickOutside directive: detects clicks outside the element
 // Usage:
-//   <clickOutside onClickOutside={handler}>
+//   <ClickOutside onClickOutside={handler}>
 //     <div>content</div>
-//   </clickOutside>
+//   </ClickOutside>
 
-import { direct, type DirectiveContext, type Props } from "kiaao";
+import { direct, type Props } from "kiaao";
 
 interface ClickOutsideProps extends Props {
   onClickOutside?: (e: MouseEvent) => void;
 }
 
-export const ClickOutside = direct((el, props: ClickOutsideProps, ctx: DirectiveContext) => {
-  const element = el as HTMLElement;
+export const ClickOutside = direct((el, props: ClickOutsideProps, ctx) => {
   ctx.onMount(() => {
     const handler = (e: MouseEvent) => {
-      if (element.contains(e.target as Node)) return;
+      if (el.contains(e.target as Node)) return;
       props.onClickOutside?.(e);
     };
     window.addEventListener("click", handler, true);
