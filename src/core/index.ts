@@ -28,9 +28,6 @@ export { Each } from "./each.ts";
 // Props handling
 export { setProps } from "./props.ts";
 
-// Children processing
-export { processChildren } from "./process-children.ts";
-
 // Type-guards
 export {
   isArray,
@@ -52,6 +49,7 @@ export {
   isPlainObject,
   isRecord,
   attrToString,
+  normalizeChildren,
 } from "./type-guards.ts";
 
 // Core types
@@ -66,7 +64,6 @@ export type {
   CleanupFn,
   HostNode,
   RenderAdapter,
-  ProcessChildrenResult,
   ControlFlowChildren,
   MaybeSignal,
 } from "./types.ts";

@@ -3,9 +3,9 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
-import { normalizeChildren } from "./process-children.ts";
 import { registerSignalStop, isUse, use, type UseFunction } from "./signal.ts";
-import { isPromise, isArray, isNotEmpty, isObject } from "./type-guards.ts";
+import { normalizeChildren } from "./type-guards.ts";
+import { isPromise, isArray, isNotEmpty } from "./type-guards.ts";
 import {
   type Signal,
   type Owner,
@@ -136,9 +136,6 @@ function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
   }
   if (isUse(item)) {
     return [handleSignalChild(item, parentOwner)];
-  }
-  if (isObject(item) && "type" in (item as any)) {
-    return [item as HostNode];
   }
   return [getAdapter().createTextNode(String(item)) as HostNode];
 }

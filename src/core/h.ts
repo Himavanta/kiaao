@@ -5,8 +5,8 @@ import { getAdapter } from "../adapter/index.ts";
 import { handleComponent, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
-import { normalizeChildren } from "./process-children.ts";
 import { setProps } from "./props.ts";
+import { normalizeChildren } from "./type-guards.ts";
 import {
   isBoolean,
   isFunction,

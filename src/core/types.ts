@@ -33,12 +33,6 @@ export interface HResult {
   childResults?: any[];
 }
 
-/** processChildren 的返回值类型 */
-export interface ProcessChildrenResult {
-  nodes: HostNode[];
-  cleanups: CleanupFn[];
-}
-
 /** 创建 HResult 对象 */
 export function createHResult(
   owner: Owner | null,

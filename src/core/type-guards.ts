@@ -30,3 +30,11 @@ export const isRecord = (v: any): v is Record<string, any> =>
 /** 将值转为属性字符串：对象 JSON 序列化，其他直接 String */
 export const attrToString = (value: unknown): string =>
   isObject(value) ? JSON.stringify(value) : String(value as unknown as string | number | boolean);
+
+/**
+ * 将扁平化 children 数组归一化：单元素展开，多元素保持数组。
+ * handleComponent 通过此函数处理 JSX 的 children 透传。
+ */
+export function normalizeChildren<T>(children: T[]): T | T[] {
+  return isSingle(children) ? children[0] : children;
+}
