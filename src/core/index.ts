@@ -20,6 +20,9 @@ export { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 export { direct, createDirectiveContext, isDirective } from "./direct.ts";
 export type { DirectiveFunction, DirectiveContext } from "./direct.ts";
 
+// Control flow components
+export { Show } from "./show.ts";
+
 // Props handling
 export { setProps } from "./props.ts";
 

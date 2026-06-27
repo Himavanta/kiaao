@@ -25,6 +25,7 @@ export interface Context {
   onMount: (fn: () => void | Promise<void>) => void;
   onUnmount: (fn: () => void | Promise<void>) => void;
   use: UseFunction;
+  owner: Owner;
 }
 
 export type ComponentFunction<P = any> = (props: P, context: Context) => ComponentResult;
@@ -78,6 +79,7 @@ export function createContext(owner: Owner): Context {
       owner.unmountCallbacks.push(fn);
     },
     use: createContextUse(owner),
+    owner,
   };
 }
 
