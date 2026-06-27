@@ -17,6 +17,7 @@ import {
   type NullableProps,
   type ComponentResult,
   type MergeableResult,
+  type CleanupFn,
 } from "./types.ts";
 
 // ── Context ───────────────────────────────────────────
@@ -94,18 +95,20 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
 
   const effectiveOwner = result.owner || parentOwner;
 
-  // 递归处理 DOM 元素的原始子节点树
+  // 递归处理子节点树
   if (result.childResults && result.childResults.length > 0) {
     const allChildNodes: HostNode[] = [];
     for (const child of result.childResults) {
       allChildNodes.push(...nestBind(child, effectiveOwner));
     }
-    const [parentEl] = result.nodes;
-    if (parentEl && isNotEmpty(allChildNodes)) {
-      const adapter = getAdapter();
-      adapter.clear(parentEl);
-      for (const node of allChildNodes) {
-        adapter.append(parentEl, node);
+
+    if (result.owner) {
+      const [parentEl] = result.nodes;
+      if (parentEl && isNotEmpty(allChildNodes)) {
+        const adapter = getAdapter();
+        for (const node of allChildNodes) {
+          adapter.append(parentEl, node);
+        }
       }
     }
   }
@@ -150,7 +153,7 @@ export function nestBind(items: any, parentOwner: Owner): HostNode[] {
 
 function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
   const adapter = getAdapter();
-  const placeholder = adapter.comment("async") as Comment;
+  const placeholder = adapter.comment("async");
   owner.elements.add(placeholder);
 
   promise
@@ -182,15 +185,22 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
 // ── Helper: 信号绑定 ─────────────────────────────
 
 function handleSignalChild(signal: any, owner: Owner): HostNode {
+  return bindSignalToTextNode(signal, owner.cleanups);
+}
+
+/**
+ * 创建信号绑定的文本节点。
+ * 返回文本节点，信号变化时自动更新值。
+ * stop 函数推入 cleanups 数组，供 disposeOwner 清理。
+ */
+export function bindSignalToTextNode(signal: any, cleanups: CleanupFn[]): HostNode {
   const adapter = getAdapter();
   const textNode = adapter.text("") as HostNode;
   const derived = use(signal, () => {
-    (textNode as any).textContent = String(signal());
+    adapter.setText(textNode, String(signal()));
   });
   const stop = getSignalState(derived)?.stop;
-  if (stop) {
-    owner.cleanups.push(stop);
-  }
+  if (stop) cleanups.push(stop);
   return textNode;
 }
 
@@ -215,7 +225,7 @@ export function handleComponent(
   } catch (e) {
     console.error("[kiaao] component error:", e);
     disposeOwner(owner);
-    const comment = getAdapter().comment("component error") as Node;
+    const comment = getAdapter().comment("component error");
     return createHResult(owner, [comment]);
   }
 

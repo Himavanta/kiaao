@@ -126,6 +126,10 @@ export const ssrAdapter: RenderAdapter = {
     if (n.type === "text") n.value = value;
   },
 
+  clear(_parent: unknown): void {
+    // SSR 无 DOM，空操作
+  },
+
   on(): void {
     // SSR: 事件绑定不输出
   },
