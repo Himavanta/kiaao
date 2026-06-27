@@ -14,7 +14,7 @@ setAdapter(browserAdapter);
 
 /** Mount result nodes into a container and trigger lifecycle */
 function mount(result: HResult): HTMLElement {
-  const container = browserAdapter.createElement("div") as HTMLElement;
+  const container = browserAdapter.el("div") as HTMLElement;
   for (const node of result.nodes) {
     browserAdapter.append(container, node as Node);
   }

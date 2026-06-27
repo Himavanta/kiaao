@@ -2,10 +2,11 @@
 // kiaao — createApp tests
 
 import { expect, test, describe } from "vite-plus/test";
-import { createApp } from "../../src/core/create-app.ts";
+
+import { setAdapter } from "../../src/adapter/index.ts";
 import { h } from "../../src/core/h.ts";
-import { setAdapter } from "../../src/core/types.ts";
 import { browserAdapter } from "../../src/dom/adapter.ts";
+import { createApp } from "../../src/dom/create-app.ts";
 
 setAdapter(browserAdapter);
 
