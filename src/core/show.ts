@@ -8,8 +8,7 @@ import { h } from "./h.ts";
 import { disposeOwner } from "./owner.ts";
 import { use, isUse, toValue } from "./signal.ts";
 import { isNotNil } from "./type-guards.ts";
-import { getSignalState } from "./types.ts";
-import type { HostNode, HResult } from "./types.ts";
+import { getSignalState, type HostNode, type HResult } from "./types.ts";
 
 // ── Show ──────────────────────────────────────────────
 

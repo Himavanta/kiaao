@@ -22,6 +22,7 @@ export type { DirectiveFunction, DirectiveContext } from "./direct.ts";
 
 // Control flow components
 export { Show } from "./show.ts";
+export { Case } from "./case.ts";
 
 // Props handling
 export { setProps } from "./props.ts";
