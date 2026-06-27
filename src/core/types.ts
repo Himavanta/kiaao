@@ -146,7 +146,6 @@ export interface RenderAdapter {
   before(ref: HostNode, child: HostNode): void;
   append(parent: HostNode, child: HostNode): void;
   remove(node: HostNode): void;
-  clear(parent: HostNode): void;
   replace(oldNode: HostNode, ...newNodes: HostNode[]): void;
   setProp(el: HostNode, key: string, value: unknown): void;
   on(el: HostNode, type: string, handler: (...args: any[]) => void): void;
