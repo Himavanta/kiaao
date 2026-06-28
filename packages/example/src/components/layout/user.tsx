@@ -69,17 +69,19 @@ const themeOptions = use<ThemeItem[]>([
   { label: "跟随系统", value: "system", icon: "lineicons:laptop" },
 ]);
 
+/** 共享主题信号，所有 ThemeItemRow 共用 */
+const currentTheme = use("light");
+
 function ThemeItemRow({ item }: { item: Signal<ThemeItem> }) {
-  const theme = use("light");
-  const rowClass = use(theme, item, () =>
+  const rowClass = use(currentTheme, item, () =>
     cn(
       "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
-      item().value === theme() && "text-blue-600 hover:text-blue-600",
+      currentTheme() === item().value && "text-blue-600 hover:text-blue-600",
     ),
   );
 
   return (
-    <div class={rowClass} onClick={() => theme(item().value)}>
+    <div class={rowClass} onClick={() => currentTheme(item().value)}>
       <Icon icon={item().icon} class="w-4 h-4" />
       <span>{item().label}</span>
     </div>
@@ -118,56 +120,58 @@ function UserIcon({ onClick }: { onClick?: () => void }) {
 export function UserCard() {
   return (
     <Dropdown trigger={<UserIcon />}>
-      <div class="z-50 rounded-xl border border-gray-200 bg-white shadow-lg py-3 flex flex-col w-60">
-        <header class="flex items-center justify-between gap-5 pr-3 pl-4 pb-2">
-          <div>
-            <div class="font-medium text-sm">Dify</div>
-            <div class="text-xs text-gray-500">demo@demo.com</div>
-          </div>
-          <UserIcon />
-        </header>
+      {() => (
+        <div class="z-50 rounded-xl border border-gray-200 bg-white shadow-lg py-3 flex flex-col w-60">
+          <header class="flex items-center justify-between gap-5 pr-3 pl-4 pb-2">
+            <div>
+              <div class="font-medium text-sm">Dify</div>
+              <div class="text-xs text-gray-500">demo@demo.com</div>
+            </div>
+            <UserIcon />
+          </header>
 
-        <MenuRow icon="lineicons:user" href="/i/settings/account">
-          账户
-        </MenuRow>
-        <MenuRow icon="lineicons:cog" href="/i/settings/general">
-          设置
-        </MenuRow>
+          <MenuRow icon="lineicons:user" href="/i/settings/account">
+            账户
+          </MenuRow>
+          <MenuRow icon="lineicons:cog" href="/i/settings/general">
+            设置
+          </MenuRow>
 
-        <MenuSeparator />
+          <MenuSeparator />
 
-        <MenuRow icon="lineicons:book" href="https://docs.example.com" external>
-          查看帮助文档
-        </MenuRow>
-        <MenuRow icon="lineicons:headphone" href="https://support.example.com" external>
-          支持
-        </MenuRow>
-        <MenuRow icon="lineicons:shield" href="https://example.com/compliance" external>
-          合规
-        </MenuRow>
+          <MenuRow icon="lineicons:book" href="https://docs.example.com" external>
+            查看帮助文档
+          </MenuRow>
+          <MenuRow icon="lineicons:headphone" href="https://support.example.com" external>
+            支持
+          </MenuRow>
+          <MenuRow icon="lineicons:shield" href="https://example.com/compliance" external>
+            合规
+          </MenuRow>
 
-        <MenuSeparator />
+          <MenuSeparator />
 
-        <MenuRow icon="lineicons:map" href="https://roadmap.example.com" external>
-          路线图
-        </MenuRow>
-        <MenuRow icon="lineicons:github" href="https://github.com" external>
-          Github
-        </MenuRow>
-        <MenuRow icon="lineicons:info" href="/about">
-          关于
-        </MenuRow>
+          <MenuRow icon="lineicons:map" href="https://roadmap.example.com" external>
+            路线图
+          </MenuRow>
+          <MenuRow icon="lineicons:github" href="https://github.com" external>
+            Github
+          </MenuRow>
+          <MenuRow icon="lineicons:info" href="/about">
+            关于
+          </MenuRow>
 
-        <MenuSeparator />
+          <MenuSeparator />
 
-        <ThemeMenu />
+          <ThemeMenu />
 
-        <MenuSeparator />
+          <MenuSeparator />
 
-        <MenuRow icon="lineicons:exit" onClick={() => console.log("logout")}>
-          <span class="text-red-500">登出</span>
-        </MenuRow>
-      </div>
+          <MenuRow icon="lineicons:exit" onClick={() => console.log("logout")}>
+            <span class="text-red-500">登出</span>
+          </MenuRow>
+        </div>
+      )}
     </Dropdown>
   );
 }
