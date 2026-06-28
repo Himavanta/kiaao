@@ -11,8 +11,7 @@ import { getSignalState, type HostNode, type NullableProps, type CleanupFn } fro
 
 /**
  * 遍历 props 并设置到宿主节点。
- * 所有属性（含事件）统一走 `adapter.setProp`，由各平台 adaper 内部分发。
- * 事件不需要响应式绑定——`onClick={fn}` 是一次性绑定的函数。
+ * 所有属性（含事件）统一走 `adapter.setProp`，各平台 adapter 自行处理事件清理。
  */
 export function setProps(el: HostNode, props: NullableProps = {}, cleanups?: CleanupFn[]): void {
   if (!isRecord(props)) return;
@@ -34,8 +33,8 @@ export function setProps(el: HostNode, props: NullableProps = {}, cleanups?: Cle
         cleanups.push(stop);
       }
     } else {
-      // 静态值（含事件处理函数）——统一走 adapter.setProp
-      adapter.setProp(el, key, value);
+      // 静态值（含事件处理函数）——adapter 自行处理清理
+      adapter.setProp(el, key, value, cleanups);
     }
   }
 }

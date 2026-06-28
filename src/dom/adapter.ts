@@ -1,8 +1,8 @@
 // kiaao — Browser RenderAdapter implementation
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
-import { isObject, attrToString } from "../core/index.ts";
-import type { RenderAdapter, HostNode } from "../core/index.ts";
+import { isObject, isFunction, attrToString } from "../core/index.ts";
+import type { RenderAdapter, HostNode, CleanupFn } from "../core/index.ts";
 
 // ── SVG ───────────────────────────────────────────────
 
@@ -112,10 +112,14 @@ export const browserAdapter: RenderAdapter = {
     return (node as Node).previousSibling ?? null;
   },
 
-  setProp(el: any, key: string, value: unknown): void {
+  setProp(el: any, key: string, value: unknown, cleanups?: CleanupFn[]): void {
     // 事件绑定——on + 大写字母开头（如 onClick、onClickOutside）
     if (EVENT_RE.test(key)) {
-      el.addEventListener(key.slice(2).toLowerCase(), value as any);
+      if (isFunction(value)) {
+        const eventType = key.slice(2).toLowerCase();
+        el.addEventListener(eventType, value as any);
+        cleanups?.push(() => el.removeEventListener(eventType, value as any));
+      }
       return;
     }
 

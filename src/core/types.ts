@@ -151,7 +151,7 @@ export interface RenderAdapter {
   clear(parent: HostNode): void;
   setText(node: HostNode, value: string): void;
   replace(oldNode: HostNode, ...newNodes: HostNode[]): void;
-  setProp(el: HostNode, key: string, value: unknown): void;
+  setProp(el: HostNode, key: string, value: unknown, cleanups?: CleanupFn[]): void;
   on(el: HostNode, type: string, handler: (...args: any[]) => void): void;
   off(el: HostNode, type: string, handler: (...args: any[]) => void): void;
   /** 判断值是否为合法的宿主节点 */
