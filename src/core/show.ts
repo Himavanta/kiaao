@@ -3,7 +3,7 @@
 
 import type { ComponentFunction, Context } from "./component.ts";
 import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
-import { disposeOwner } from "./owner.ts";
+import { disposeOwner, createOwner } from "./owner.ts";
 import { toValue } from "./signal.ts";
 import { isNotNil } from "./type-guards.ts";
 import { type HResult, type ControlFlowChildren, type MaybeSignal } from "./types.ts";
@@ -19,6 +19,9 @@ export function Show(
   context: Context,
 ): HResult {
   const anchor = initAnchor(context.owner, "show");
+  // 轻量 Owner 使 nestBindResult 统一处理，无 owner=null 分支
+  const anchorOwner = createOwner({ lightweight: true });
+  anchorOwner.elements.add(anchor);
   const [primary, fallback] = normalizeChildList(props.children) as [
     ComponentFunction,
     ComponentFunction?,
@@ -43,5 +46,5 @@ export function Show(
   // Subsequent changes via signal
   subscribeSignal(context.owner, props.value, renderBranch);
 
-  return createHResult(null, [anchor]);
+  return createHResult(anchorOwner, [anchor]);
 }

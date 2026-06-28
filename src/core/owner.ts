@@ -12,7 +12,7 @@ import type { Owner } from "./types.ts";
  * Owner 之间通过 parent/children 指针形成所有权树。
  * 创建后不自动关联父 Owner——由调用方在父级 children 中 push。
  */
-export function createOwner(): Owner {
+export function createOwner(options?: { lightweight?: boolean }): Owner {
   return {
     parent: null,
     children: [],
@@ -21,6 +21,7 @@ export function createOwner(): Owner {
     unmountCallbacks: [],
     elements: new Set(),
     disposed: false,
+    isLightweight: options?.lightweight || false,
   };
 }
 
@@ -97,6 +98,14 @@ export function triggerMount(owner: Owner, visited: Set<Owner> = new Set()): voi
   if (owner.disposed) return;
   if (visited.has(owner)) return;
   visited.add(owner);
+
+  // 轻量 Owner：透传子 Owner，不触发自身回调
+  if (owner.isLightweight) {
+    for (const child of owner.children) {
+      triggerMount(child, visited);
+    }
+    return;
+  }
 
   // Execute mount callbacks
   for (const cb of owner.mountCallbacks) {

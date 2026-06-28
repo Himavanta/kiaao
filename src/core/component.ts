@@ -4,7 +4,14 @@
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
 import { registerSignalStop, isUse, use, type UseFunction } from "./signal.ts";
-import { normalizeChildren, isPromise, isArray, isNotEmpty, isNil } from "./type-guards.ts";
+import {
+  normalizeChildren,
+  isPromise,
+  isArray,
+  isNotEmpty,
+  isNotNil,
+  isNil,
+} from "./type-guards.ts";
 import {
   type Signal,
   type Owner,
@@ -88,27 +95,26 @@ export function createContext(owner: Owner): Context {
 
 /** 遍历 HResult 的子结果树 */
 function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
-  if (result.owner) {
-    parentOwner.children.push(result.owner);
-    result.owner.parent = parentOwner;
+  // Owner 始终存在，但防止父子相同导致自引用
+  if (result.owner !== parentOwner) {
+    parentOwner.children.push(result.owner!);
+    result.owner!.parent = parentOwner;
   }
 
-  const effectiveOwner = result.owner || parentOwner;
+  const effectiveOwner = result.owner!;
 
   // 递归处理子节点树
-  if (result.childResults && result.childResults.length > 0) {
+  if (isNotNil(result.childResults) && isNotEmpty(result.childResults)) {
     const allChildNodes: HostNode[] = [];
     for (const child of result.childResults) {
       allChildNodes.push(...nestBind(child, effectiveOwner));
     }
 
-    if (result.owner) {
-      const [parentEl] = result.nodes;
-      if (parentEl && isNotEmpty(allChildNodes)) {
-        const adapter = getAdapter();
-        for (const node of allChildNodes) {
-          adapter.append(parentEl, node);
-        }
+    const [parentEl] = result.nodes;
+    if (parentEl && isNotEmpty(allChildNodes)) {
+      const adapter = getAdapter();
+      for (const node of allChildNodes) {
+        adapter.append(parentEl, node);
       }
     }
   }

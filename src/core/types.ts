@@ -134,6 +134,8 @@ export interface Owner {
   unmountCallbacks: CleanupFn[];
   elements: Set<unknown>;
   disposed: boolean;
+  /** 轻量 Owner：DOM 元素临时 Owner，nestBind 遍历后 children 被转移即弃用 */
+  isLightweight?: boolean;
 }
 
 // ── RenderAdapter Interface ────────────────────────────

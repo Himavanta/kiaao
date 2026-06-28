@@ -2,17 +2,11 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter } from "../adapter/index.ts";
-import {
-  handleComponent,
-  nestBind,
-  bindSignalToTextNode,
-  type ComponentFunction,
-} from "./component.ts";
+import { handleComponent, nestBind, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { setProps } from "./props.ts";
-import { isUse } from "./signal.ts";
-import { normalizeChildren, isArray } from "./type-guards.ts";
+import { normalizeChildren } from "./type-guards.ts";
 import {
   isBoolean,
   isFunction,
@@ -26,7 +20,6 @@ import {
 import {
   type HResult,
   createHResult,
-  isHResult,
   type NullableProps,
   type CleanupFn,
   type HostNode,
@@ -46,46 +39,12 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
 
   // 普通元素
   const el: any = adapter.el(tag);
+  const owner = createOwner({ lightweight: true });
+  owner.elements.add(el);
   const orphanCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, orphanCleanups);
-  // 将子节点展开并 append 到元素（nestBind 只连 owner，不重复 append）
-  for (const child of children) {
-    processChild(child, el, orphanCleanups);
-  }
-  return createHResult(null, [el], [...orphanCleanups], children);
-}
-
-/** 展开单个子节点并 append 到父元素 */
-function processChild(child: any, parentEl: HostNode, cleanups: CleanupFn[]): void {
-  const adapter = getAdapter();
-  if (child == null) return;
-  if (isArray(child)) {
-    for (const c of child) processChild(c, parentEl, cleanups);
-    return;
-  }
-  if (isHResult(child)) {
-    const [parentNode] = child.nodes;
-    if (parentNode) {
-      // childResults 存在时重建子节点（处理共享 HResult 的 dispose 后重建）
-      if (child.childResults) {
-        const adapter = getAdapter();
-        adapter.clear(parentNode);
-        for (const sub of child.childResults) processChild(sub, parentNode, cleanups);
-      }
-      adapter.append(parentEl, parentNode);
-    }
-    if (child.cleanups) cleanups.push(...child.cleanups);
-    return;
-  }
-  if (adapter.isNode(child)) {
-    adapter.append(parentEl, child);
-    return;
-  }
-  if (isUse(child)) {
-    adapter.append(parentEl, bindSignalToTextNode(child, cleanups));
-    return;
-  }
-  adapter.append(parentEl, adapter.text(String(child)));
+  // 子节点由 nestBind 统一处理，handleDomMode 只创建元素
+  return createHResult(owner, [el], [...orphanCleanups], children);
 }
 
 // ── Directive Mode ────────────────────────────────────
@@ -159,5 +118,10 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
     return handleComponent(tag as ComponentFunction, props, children);
   }
 
-  return handleDomMode(tag, props, children);
+  const result = handleDomMode(tag, props, children);
+  // 处理独立 h() 调用的子节点（组件内由 handleComponent 的 nestBind 处理）
+  nestBind(result, result.owner!);
+  // 清空 childResults，防止组件内 nestBind 重复处理
+  (result as any).childResults = null;
+  return result;
 }
