@@ -121,7 +121,5 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
   const result = handleDomMode(tag, props, children);
   // 处理独立 h() 调用的子节点（组件内由 handleComponent 的 nestBind 处理）
   nestBind(result, result.owner!);
-  // 清空 childResults，防止组件内 nestBind 重复处理
-  (result as any).childResults = null;
   return result;
 }

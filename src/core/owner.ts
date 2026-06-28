@@ -80,11 +80,13 @@ export function disposeOwner(owner: Owner): void {
   }
   owner.cleanups.length = 0;
 
-  // 3. Remove all owned elements from the DOM
-  for (const el of owner.elements) {
-    removeNode(el);
+  // 3. Remove all owned elements from the DOM（轻量 Owner 的元素由父级 dispose 统一清理）
+  if (!owner.isLightweight) {
+    for (const el of owner.elements) {
+      removeNode(el);
+    }
+    owner.elements.clear();
   }
-  owner.elements.clear();
 }
 
 // ── triggerMount ──────────────────────────────────────
