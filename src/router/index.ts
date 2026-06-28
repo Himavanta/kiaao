@@ -1,24 +1,15 @@
 // kiaao — Router: hash-free client-side routing with nested layout support.
 
-import { h, Case } from "../core/index.ts";
-import { use, toValue } from "../core/index.ts";
-import {
-  type Context,
-  type Signal,
-  type HResult,
-  type NullableProps,
-  type ComponentFunction,
-} from "../core/index.ts";
-import { getPathname, pushState as pushHistory, getSearch, parseSearch } from "./utils.ts";
+import type { ComponentFunction, Context, HResult, Signal } from "../core/index.ts";
+import { Case, h, toValue, use } from "../core/index.ts";
+import { getPathname, getSearch, parseSearch, pushState as pushHistory } from "./utils.ts";
 
 // ── Types ──────────────────────────────────────────────
-
-export type RouteComponent = (props?: NullableProps) => HResult;
 
 export interface Route {
   /** 单个路径段，不允许包含 /。空字符串表示默认子路由。 */
   path: string;
-  component: RouteComponent;
+  component: ComponentFunction;
 }
 
 /** RouterView 的配置属性，可用于嵌套路由场景。 */
@@ -28,7 +19,7 @@ export interface RouterViewProps {
   /** 专属路由表。路由表不能为空。 */
   routes: Route[];
   /** 无匹配时的后备内容，不传则使用 createRouter 的全局 fallback。 */
-  fallback?: RouteComponent;
+  fallback?: ComponentFunction;
 }
 
 export interface RouterLinkProps {
@@ -41,7 +32,7 @@ export interface RouterLinkProps {
 
 export interface RouterOptions {
   /** 当没有路由匹配时显示的后备组件。 */
-  fallback?: RouteComponent;
+  fallback?: ComponentFunction;
 }
 
 export interface Router {
@@ -82,7 +73,7 @@ function extractSegment(fullPath: string, base?: string): string | null {
 
 /** 创建 RouterView 组件：根据当前路径匹配路由并渲染对应组件 */
 function createRouterView(
-  defaultFallback: RouteComponent,
+  defaultFallback: ComponentFunction,
   currentPath: Signal<string>,
 ): (props: RouterViewProps, context?: Context) => HResult {
   return (props: RouterViewProps) => {

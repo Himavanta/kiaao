@@ -30,13 +30,13 @@ export const mainNavs: Array<MainNavItem> = [
     title: "知识库",
     icon: "material-symbols:book-5",
     path: "dataset",
-    component: lazy(() => import("./components/dashbord")),
+    component: lazy(() => import("./test/group-motion.tsx")),
   },
   {
     title: "工具",
     icon: "icon-park-twotone:toolkit",
     path: "tools",
-    component: lazy(() => import("./components/dashbord")),
+    component: lazy(() => import("./test/motion.tsx")),
   },
 ];
 

@@ -6,23 +6,23 @@ import { handleComponent, nestBind, type ComponentFunction } from "./component.t
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { setProps } from "./props.ts";
-import { normalizeChildren } from "./type-guards.ts";
 import {
   isBoolean,
-  isFunction,
   isEmpty,
+  isFunction,
+  isNil,
   isNotEmpty,
   isNotNil,
   isObject,
   isString,
-  isNil,
+  normalizeChildren,
 } from "./type-guards.ts";
 import {
-  type HResult,
   createHResult,
-  type NullableProps,
   type CleanupFn,
   type HostNode,
+  type HResult,
+  type NullableProps,
 } from "./types.ts";
 
 // ── Fragment ─────────────────────────────────────────

@@ -27,7 +27,7 @@ export default function (_: any, context: Context) {
     <div class="h-full w-full flex flex-col gap-4 p-6">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">each 模式</h2>
-        <span class="text-sm text-gray-500">{items().length} 项</span>
+        <span class="text-sm text-gray-500">{use(items, () => items().length)} 项</span>
       </div>
 
       <div>

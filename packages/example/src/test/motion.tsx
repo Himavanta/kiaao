@@ -10,14 +10,14 @@ export default function (_: any, context: Context) {
     <div class="h-full w-full flex flex-col gap-4 p-6">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">when 模式</h2>
-        <span class="text-sm text-gray-500">业务状态：{text()}</span>
+        <span class="text-sm text-gray-500">业务状态：{text}</span>
       </div>
 
       <button
         onClick={() => state(!state())}
         class="self-start px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
       >
-        {text()}
+        切换
       </button>
 
       <Show value={visible}>

@@ -2,11 +2,11 @@
 // Selects a branch component from a mapping table based on `value`.
 
 import type { ComponentFunction, Context } from "./component.ts";
-import { initAnchor, adoptBranch, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
-import { disposeOwner, createOwner } from "./owner.ts";
+import { adoptBranch, initAnchor, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
+import { createOwner, disposeOwner } from "./owner.ts";
 import { toValue } from "./signal.ts";
 import { isNotNil, isString } from "./type-guards.ts";
-import type { HResult, ControlFlowChildren, MaybeSignal } from "./types.ts";
+import type { ControlFlowChildren, HResult, MaybeSignal } from "./types.ts";
 import { createHResult } from "./types.ts";
 
 // ── Case ──────────────────────────────────────────────

@@ -118,14 +118,16 @@ describe("multi-signal — same element", () => {
   test("signal bound to style then overridden by static style", () => {
     const color = use("red");
 
-    // This pattern is supported: signal creates derived binding, static overrides
     const el = browserAdapter.el("div") as HTMLElement;
     const adapter = getAdapter();
 
+    // Each setProp fully replaces style
     adapter.setProp(el, "style", { color: color() } as any);
-    adapter.setProp(el, "style", { fontSize: "20px" });
-
     expect(el.style.color).toBe("red");
+
+    // Full replacement: previous style cleared
+    adapter.setProp(el, "style", { fontSize: "20px" });
+    expect(el.style.color).toBe("");
     expect(el.style.fontSize).toBe("20px");
   });
 });

@@ -2,7 +2,7 @@
 
 import { registerSignalStop, type UseFunction } from "./signal.ts";
 import { isFunction } from "./type-guards.ts";
-import { DIRECT_KEY, type Owner, type Props, type HostNode, type HResult } from "./types.ts";
+import { DIRECT_KEY, type HostNode, type HResult, type Owner, type Props } from "./types.ts";
 
 // ── Types ──────────────────────────────────────────────
 

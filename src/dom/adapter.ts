@@ -134,10 +134,11 @@ export const browserAdapter: RenderAdapter = {
       return;
     }
 
-    // style 对象 → 增量合并 CSSStyleDeclaration
+    // style 对象 → 全量替换：先清空再合并
     if (key === "style" && isObject(value)) {
       const elStyle = (el as any).style;
       if (elStyle && isObject(elStyle)) {
+        el.removeAttribute("style");
         Object.assign(elStyle, value);
         return;
       }

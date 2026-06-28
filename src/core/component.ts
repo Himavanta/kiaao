@@ -3,29 +3,29 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount } from "./owner.ts";
-import { registerSignalStop, isUse, use, type UseFunction } from "./signal.ts";
+import { isUse, registerSignalStop, use, type UseFunction } from "./signal.ts";
 import {
-  normalizeChildren,
-  isPromise,
   isArray,
+  isFunction,
+  isNil,
   isNotEmpty,
   isNotNil,
-  isNil,
-  isFunction,
+  isPromise,
+  normalizeChildren,
 } from "./type-guards.ts";
 import {
-  type Signal,
-  type Owner,
-  type HostNode,
-  REACTIVE,
-  type HResult,
   createHResult,
-  isHResult,
   getSignalState,
-  type NullableProps,
-  type ComponentResult,
-  type MergeableResult,
+  isHResult,
+  REACTIVE,
   type CleanupFn,
+  type ComponentResult,
+  type HostNode,
+  type HResult,
+  type MergeableResult,
+  type NullableProps,
+  type Owner,
+  type Signal,
 } from "./types.ts";
 
 // ── Context ───────────────────────────────────────────

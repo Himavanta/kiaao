@@ -141,25 +141,27 @@ describe("setProps — extreme", () => {
 
 // ── 样式增量合并 ──────────────────────────────────────
 
-describe("style — incremental merge", () => {
-  test("multiple style props merge correctly", () => {
+describe("style — full replacement", () => {
+  test("multiple style props — full replacement", () => {
     const el = browserAdapter.el("div") as HTMLElement;
 
     setProps(el, { style: { color: "red" } });
     setProps(el, { style: { fontSize: "20px" } });
 
-    expect(el.style.color).toBe("red");
+    // Full replacement: color cleared
+    expect(el.style.color).toBe("");
     expect(el.style.fontSize).toBe("20px");
   });
 
-  test("style object overrides previous values", () => {
+  test("style object — full replacement removes old", () => {
     const el = browserAdapter.el("div") as HTMLElement;
 
     setProps(el, { style: { color: "red", fontSize: "12px" } });
     setProps(el, { style: { color: "blue" } });
 
+    // Full replacement: fontSize cleared
     expect(el.style.color).toBe("blue");
-    expect(el.style.fontSize).toBe("12px"); // Not overridden
+    expect(el.style.fontSize).toBe("");
   });
 });
 
