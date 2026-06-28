@@ -11,6 +11,7 @@ import {
   isNotEmpty,
   isNotNil,
   isNil,
+  isFunction,
 } from "./type-guards.ts";
 import {
   type Signal,
@@ -151,6 +152,9 @@ function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
   }
   if (isUse(item)) {
     return [handleSignalChild(item, parentOwner)];
+  }
+  if (isFunction(item)) {
+    return nestBind(item(), parentOwner);
   }
   return [getAdapter().text(String(item)) as HostNode];
 }

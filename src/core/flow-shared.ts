@@ -6,7 +6,7 @@ import type { ComponentFunction } from "./component.ts";
 import { h } from "./h.ts";
 import { triggerMount } from "./owner.ts";
 import { use, isUse } from "./signal.ts";
-import { isArray } from "./type-guards.ts";
+import { isArray, isFunction } from "./type-guards.ts";
 import { getSignalState } from "./types.ts";
 import type { Owner, HostNode, HResult } from "./types.ts";
 
@@ -34,7 +34,12 @@ export function adoptBranch(options: {
 }): HResult {
   const { parentOwner, anchor, Component, componentProps } = options;
   const adapter = getAdapter();
-  const r = h(Component, componentProps);
+  // children 为函数时调用以获取新内容（跨控制流开关重建）
+  const props =
+    componentProps && isFunction(componentProps.children)
+      ? { ...componentProps, children: componentProps.children() }
+      : componentProps;
+  const r = h(Component, props);
   const childOwner = r.owner!;
   childOwner.parent = parentOwner;
   parentOwner.children.push(childOwner);
