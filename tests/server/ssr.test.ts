@@ -2,8 +2,9 @@
 // kiaao — SSR rendering tests
 
 import { expect, test, describe } from "vite-plus/test";
-import { renderToString } from "../../src/server/index.ts";
+
 import { h } from "../../src/core/h.ts";
+import { renderToString } from "../../src/server/index.ts";
 
 describe("renderToString", () => {
   test("renders basic component to HTML string", () => {

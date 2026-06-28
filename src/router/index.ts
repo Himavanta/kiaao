@@ -3,6 +3,7 @@
 import { h, Case } from "../core/index.ts";
 import { use, toValue } from "../core/index.ts";
 import {
+  type Context,
   type Signal,
   type HResult,
   type NullableProps,
@@ -45,7 +46,7 @@ export interface RouterOptions {
 
 export interface Router {
   /** View component — renders the matched route */
-  RouterView: (props: RouterViewProps) => HResult;
+  RouterView: (props: RouterViewProps, context?: Context) => HResult;
   /** Programmatic navigation */
   navigate: (path: string) => void;
   /** Current pathname signal (getter) */
@@ -83,7 +84,7 @@ function extractSegment(fullPath: string, base?: string): string | null {
 function createRouterView(
   defaultFallback: RouteComponent,
   currentPath: Signal<string>,
-): (props: RouterViewProps) => HResult {
+): (props: RouterViewProps, context?: Context) => HResult {
   return (props: RouterViewProps) => {
     const myRoutes = props.routes;
     const myFallback: ComponentFunction = props?.fallback ?? defaultFallback;

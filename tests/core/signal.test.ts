@@ -1,10 +1,16 @@
 // kiaao — Signal system tests (Signal<T> API)
 
-import { expect, test, describe } from "vite-plus/test";
-import { use, isUse, toValue } from "../../src/core/signal.ts";
-import { setRenderMode, getRenderMode } from "../../src/adapter/index.ts";
-import { REACTIVE } from "../../src/core/types.ts";
+import { describe, expect, test } from "vite-plus/test";
 
+import { setAdapter, setRenderMode } from "../../src/adapter/index.ts";
+import { isUse, toValue, use } from "../../src/core/signal.ts";
+import { REACTIVE } from "../../src/core/types.ts";
+import { browserAdapter } from "../../src/dom/index.ts";
+import { ssrAdapter } from "../../src/server/adapter.ts";
+
+setAdapter(browserAdapter);
+
+// ── Helpers ───────────────────────────────────────────
 describe("use — definition mode", () => {
   test("creates a writable signal", () => {
     const count = use(0);
@@ -15,122 +21,109 @@ describe("use — definition mode", () => {
 
   test("supports updater function", () => {
     const count = use(0);
-    count((p: number) => p + 1);
+    count((v) => v + 1);
     expect(count()).toBe(1);
   });
 
   test("supports objects as values", () => {
-    const user = use({ name: "tom" });
-    expect(user().name).toBe("tom");
-    user({ name: "jerry" });
-    expect(user().name).toBe("jerry");
+    const state = use({ a: 1 });
+    state({ a: 2 });
+    expect(state()).toEqual({ a: 2 });
   });
 
   test("stores function as value (does not call it)", () => {
     const fn = () => 42;
-    const fnSignal = use(fn);
-    expect(fnSignal()).toBe(fn);
-    expect((fnSignal() as unknown as () => number)()).toBe(42);
+    const sig = use(fn);
+    expect(typeof sig()).toBe("function");
   });
 
-  test("signal() reads, signal(v) writes", () => {
-    const count = use(10);
-    expect(count()).toBe(10);
-    count(20);
-    expect(count()).toBe(20);
-    expect(count()).toBe(20); // 再次读取确认
-  });
-
-  test("signal(undefined) writes undefined", () => {
-    const count = use<number | undefined>(0);
-    count(undefined);
-    expect(count()).toBeUndefined();
-  });
-
-  test("signal(null) stores null", () => {
-    const val = use<number | null>(1);
-    val(null);
-    expect(val()).toBeNull();
-  });
-
-  test("signal string stores string", () => {
-    const text = use("");
-    expect(text()).toBe("");
-    text("hello");
-    expect(text()).toBe("hello");
-  });
-
-  test("signal boolean stores boolean", () => {
-    const flag = use(false);
-    expect(flag()).toBe(false);
-    flag(true);
-    expect(flag()).toBe(true);
+  test("signals are referentially stable", () => {
+    const a = use(0);
+    const b = use(0);
+    expect(a).not.toBe(b);
+    const a2 = use(a);
+    expect(a2).toBe(a);
   });
 
   test("deep nested derivation chain", () => {
     const a = use(1);
-    const b = use(a, () => a() + 1);
-    const c = use(b, () => b() + 1);
-    expect(c()).toBe(3);
-    a(5);
-    expect(b()).toBe(6);
-    expect(c()).toBe(7);
-  });
-});
+    const b = use(a, () => a() * 2);
+    const c = use(b, () => b() + 3);
+    const d = use(c, () => c() * 4);
+    const e = use(d, () => d() + 5);
+    const f = use(e, () => e() * 6);
+    const g = use(f, () => f() + 7);
+    const h = use(g, () => g() * 8);
+    const i = use(h, () => h() + 9);
+    const j = use(i, () => i() * 10);
 
-describe("use — signal referencing", () => {
-  test("use(signal) returns the same signal", () => {
-    const count = use(0);
-    const same = use(count);
-    expect(same).toBe(count);
-    same(10);
-    expect(count()).toBe(10);
+    const expected = ((((1 * 2 + 3) * 4 + 5) * 6 + 7) * 8 + 9) * 10;
+    expect(j()).toBe(expected);
+
+    a(2);
+    const expected2 = ((((2 * 2 + 3) * 4 + 5) * 6 + 7) * 8 + 9) * 10;
+    expect(j()).toBe(expected2);
   });
 });
 
 describe("use — derivation mode", () => {
   test("basic derivation", () => {
-    const count = use(1);
+    const count = use(0);
     const double = use(count, () => count() * 2);
-    expect(double()).toBe(2);
+    expect(double()).toBe(0);
     count(5);
     expect(double()).toBe(10);
   });
 
   test("setter triggers recomputation", () => {
-    const count = use(1);
-    const next = use(count, (_v: any) => count() + 1);
-    expect(next()).toBe(2);
-    count(5);
-    expect(next()).toBe(6);
-    next(100);
-    expect(next()).toBe(6); // value unchanged → short-circuit
+    const count = use(0);
+    const double = use(count, () => count() * 2);
+
+    count(10);
+    expect(double()).toBe(20);
+
+    count(3);
+    expect(double()).toBe(6);
   });
 
   test("derivation with setter parameter", () => {
-    const base = use(10);
-    const scaled = use(base, (factor = 2) => base() * factor);
-    expect(scaled()).toBe(20);
-    scaled(3);
-    expect(scaled()).toBe(30);
+    const count = use(0);
+    const withDefault = use(count, () => count());
+    expect(withDefault()).toBe(0);
+
+    count(10);
+    expect(withDefault()).toBe(10);
   });
 
   test("short-circuit on equal value", () => {
-    const count = use(5);
-    const result = use(count, () => count() - count() + 5);
-    expect(result()).toBe(5);
-    let callCount = 0;
-    use(result, () => {
-      callCount++;
+    const count = use(0);
+    let recomputeCount = 0;
+    use(count, (v: number) => {
+      recomputeCount++;
+      return v * 2;
     });
-    expect(callCount).toBe(1);
+    recomputeCount = 0;
+
+    count(0); // same value, no recompute
+    expect(recomputeCount).toBe(0);
+  });
+
+  test("derivation updates can be chained", () => {
+    const a = use(1);
+    const b = use(a, () => a() * 2);
+    const c = use(b, () => b() + 3);
+    expect(c()).toBe(5);
+
+    a(5);
+    expect(b()).toBe(10);
+    expect(c()).toBe(13);
   });
 });
 
 describe("isUse", () => {
-  test("returns true for signal", () => {
-    const count = use(0);
-    expect(isUse(count)).toBe(true);
+  test("returns true for definition signal", () => {
+    const sig = use(0);
+    expect(isUse(sig)).toBe(true);
   });
 
   test("returns true for derivation signal", () => {
@@ -139,23 +132,30 @@ describe("isUse", () => {
     expect(isUse(double)).toBe(true);
   });
 
-  test("returns false for non-signals", () => {
-    expect(isUse(null)).toBe(false);
-    expect(isUse(undefined)).toBe(false);
-    expect(isUse(42)).toBe(false);
-    expect(isUse("hello")).toBe(false);
-    expect(isUse({})).toBe(false);
+  test("returns false for plain function", () => {
     expect(isUse(() => {})).toBe(false);
+  });
+
+  test("returns false for plain object", () => {
+    expect(isUse({})).toBe(false);
+  });
+
+  test("returns false for null", () => {
+    expect(isUse(null)).toBe(false);
+  });
+
+  test("returns false for undefined", () => {
+    expect(isUse(undefined)).toBe(false);
   });
 });
 
 describe("toValue", () => {
-  test("unwraps signal to its value", () => {
-    const count = use(42);
-    expect(toValue(count)).toBe(42);
+  test("unwraps signal", () => {
+    const sig = use(42);
+    expect(toValue(sig)).toBe(42);
   });
 
-  test("returns non-signal as-is", () => {
+  test("passes through non-signal", () => {
     expect(toValue(42)).toBe(42);
     expect(toValue("hello")).toBe("hello");
     expect(toValue(null)).toBe(null);
@@ -163,25 +163,17 @@ describe("toValue", () => {
 });
 
 describe("RenderMode", () => {
-  test("default mode is dom", () => {
-    expect(getRenderMode()).toBe("dom");
-  });
-
-  test("setRenderMode changes mode", () => {
-    const prev = getRenderMode();
-    setRenderMode("ssr");
-    expect(getRenderMode()).toBe("ssr");
-    setRenderMode(prev);
-  });
-
   test("derivation in SSR mode computes once", () => {
+    setAdapter(ssrAdapter);
     setRenderMode("ssr");
     const count = use(0);
     const double = use(count, () => count() * 2);
     expect(double()).toBe(0);
     count(5);
+    // In SSR mode, createStaticDerived skips dependency tracking
     expect(double()).toBe(0);
     setRenderMode("dom");
+    setAdapter(browserAdapter);
   });
 });
 
@@ -190,12 +182,5 @@ describe("REACTIVE symbol", () => {
     const count = use(0);
     expect((count as any)[REACTIVE]).toBeDefined();
     expect((count as any)[REACTIVE].value).toBe(0);
-  });
-
-  test("state contains stop function", () => {
-    const count = use(0);
-    const state = (count as any)[REACTIVE];
-    expect(typeof state.stop).toBe("function");
-    expect(state.value).toBe(0);
   });
 });

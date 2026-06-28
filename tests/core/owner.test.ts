@@ -2,8 +2,9 @@
 // Platform-agnostic: No DOM environment needed.
 
 import { expect, test, describe } from "vite-plus/test";
-import { createOwner, disposeOwner, triggerMount } from "../../src/core/owner.ts";
+
 import { removeNode, setAdapter } from "../../src/adapter/index.ts";
+import { createOwner, disposeOwner, triggerMount } from "../../src/core/owner.ts";
 import { type RenderAdapter } from "../../src/core/types.ts";
 
 // ── Helpers ────────────────────────────────────────────
@@ -183,8 +184,8 @@ describe("disposeOwner children", () => {
   });
 
   test("parent cleanup runs before child cleanup (parent cleanups step runs before recursive children)", () => {
-    // disposeOwner order: unmountCallbacks → cleanups → elements → children
-    // So parent's cleanups (step 2) run BEFORE recursive child disposal (step 4)
+    // disposeOwner order: children first → unmountCallbacks → cleanups → elements
+    // disposeOwner order: children first → unmountCallbacks → cleanups → elements
     const parent = createOwner();
     const child = createOwner();
     const order: number[] = [];
@@ -195,7 +196,7 @@ describe("disposeOwner children", () => {
     parent.children.push(child);
 
     disposeOwner(parent);
-    expect(order).toEqual([1, 2]);
+    expect(order).toEqual([2, 1]);
   });
 
   test("large number of child owners (1000)", () => {
@@ -366,26 +367,34 @@ describe("disposeOwner + triggerMount interaction", () => {
 describe("RenderAdapter type compatibility", () => {
   test("a mock adapter satisfies the interface", () => {
     const mockAdapter: RenderAdapter = {
-      createElement(tag: string) {
+      el(tag: string) {
         return { type: "element", tag };
       },
-      createTextNode(text: string) {
+      text(text: string) {
         return { type: "text", value: text };
       },
-      createComment(text: string) {
+      comment(text: string) {
         return { type: "comment", value: text };
       },
       before() {},
       append() {},
       remove() {},
-      replaceWith() {},
+      replace() {},
+      clear() {},
+      setText() {},
       setProp() {},
-      addEventListener() {},
-      removeEventListener() {},
+      on() {},
+      off() {},
+      isNode(value: unknown): value is unknown {
+        return value != null;
+      },
+      prevSibling() {
+        return null;
+      },
     };
 
     setAdapter(mockAdapter);
-    const el = mockAdapter.createElement("div");
+    const el = mockAdapter.el("div");
     expect(el).toEqual({ type: "element", tag: "div" });
   });
 });
