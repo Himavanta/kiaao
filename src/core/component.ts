@@ -96,13 +96,13 @@ export function createContext(owner: Owner): Context {
 
 /** 遍历 HResult 的子结果树 */
 function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
-  // Owner 始终存在，但防止父子相同导致自引用
-  if (result.owner !== parentOwner) {
-    parentOwner.children.push(result.owner!);
-    result.owner!.parent = parentOwner;
+  // Owner 连接：防止父子相同导致自引用，轻量 Owner 跳过 parent 赋值
+  if (result.owner && result.owner !== parentOwner) {
+    parentOwner.children.push(result.owner);
+    result.owner.parent = parentOwner;
   }
 
-  const effectiveOwner = result.owner!;
+  const effectiveOwner = result.owner ?? parentOwner;
 
   // 递归处理子节点树
   if (isNotNil(result.childResults) && isNotEmpty(result.childResults)) {
