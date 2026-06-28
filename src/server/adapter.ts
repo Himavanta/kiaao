@@ -126,8 +126,10 @@ export const ssrAdapter: RenderAdapter = {
     if (n.type === "text") n.value = value;
   },
 
-  clear(_parent: unknown): void {
-    // SSR 无 DOM，空操作
+  clear(parent: unknown): void {
+    if (!isObject(parent)) return;
+    const p = parent as SSRElement;
+    if (p.type === "element") p.children.length = 0;
   },
 
   on(): void {
