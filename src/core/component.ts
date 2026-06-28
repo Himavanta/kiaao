@@ -251,6 +251,10 @@ export function handleComponent(
     return createHResult(owner, [comment]);
   }
 
+  if (isNil(result)) {
+    return createHResult(owner, []);
+  }
+
   if (isPromise(result)) {
     return handleAsyncComponent(result, owner);
   }

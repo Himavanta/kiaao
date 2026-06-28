@@ -72,7 +72,16 @@ export type Props = Record<string, any>;
 export type NullableProps = Props | null | undefined;
 
 /** 组件函数返回值的类型：同步结果为 HResult 或 HResult 数组，异步结果为 Promise */
-export type ComponentResult = HResult | HResult[] | HostNode[] | Promise<HResult | HResult[]>;
+export type ComponentResult =
+  | HResult
+  | HResult[]
+  | HostNode[]
+  | Promise<HResult | HResult[]>
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
 
 /** 可合并到 Owner 树的渲染结果 */
 export type MergeableResult = HostNode;
