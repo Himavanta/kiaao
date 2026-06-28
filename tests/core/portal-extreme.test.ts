@@ -4,7 +4,7 @@
 import { expect, test, describe } from "vite-plus/test";
 
 import { setAdapter } from "../../src/adapter/index.ts";
-import { h, use, triggerMount, disposeOwner } from "../../src/core/index.ts";
+import { h, use, triggerMount, disposeOwner, Show } from "../../src/core/index.ts";
 import { browserAdapter, Portal } from "../../src/dom/index.ts";
 
 setAdapter(browserAdapter);
@@ -133,13 +133,17 @@ describe("Portal — 极端场景", () => {
   });
 
   // Portal 在函数子 + 信号 toggle 下清理（当前已知限制：轻量 Owner 的 onUnmount 在 dispose 级联中不触发）
-  test.todo("Portal 在 Show 内切换不泄漏", () => {
+  test("Portal 在 Show 内切换不泄漏", () => {
     const target = document.createElement("div");
     document.body.append(target);
     const show = use(true);
 
-    const el = h("div", null, () =>
-      show() ? h(Portal as any, { to: target }, h("span", null, "visible")) : null,
+    const el = h(
+      "div",
+      null,
+      h(Show as any, { value: show }, () =>
+        h(Portal as any, { to: target }, h("span", null, "visible")),
+      ),
     );
     if (el.owner) triggerMount(el.owner);
     expect(target.children.length).toBe(1);
