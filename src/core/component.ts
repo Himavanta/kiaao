@@ -127,6 +127,17 @@ function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
     }
   }
 
+  // 轻量 Owner：children 上提给 parentOwner，自身从树中移除
+  if (effectiveOwner.isLightweight && effectiveOwner !== parentOwner) {
+    for (const child of effectiveOwner.children) {
+      child.parent = parentOwner;
+      parentOwner.children.push(child);
+    }
+    effectiveOwner.children.length = 0;
+    const idx = parentOwner.children.indexOf(effectiveOwner);
+    if (idx !== -1) parentOwner.children.splice(idx, 1);
+  }
+
   return result.nodes;
 }
 
