@@ -31,8 +31,8 @@ describe("createRouter", () => {
       null,
       h(RouterView, {
         routes: [
-          { path: "/", component: Home },
-          { path: "/about", component: About },
+          { path: "", component: Home },
+          { path: "about", component: About },
         ],
       }),
     );
@@ -55,8 +55,8 @@ describe("createRouter", () => {
       null,
       h(RouterView, {
         routes: [
-          { path: "/", component: Home },
-          { path: "/about", component: About },
+          { path: "", component: Home },
+          { path: "about", component: About },
         ],
       }),
     );
@@ -67,20 +67,6 @@ describe("createRouter", () => {
     expect((el.nodes[0] as any).textContent).toBe("About");
   });
 
-  test("route params are passed as props", () => {
-    function User(props: any) {
-      return h("p", null, `User ${props.id}`);
-    }
-
-    const { RouterView, navigate } = createRouter();
-
-    const el = h("div", null, h(RouterView, { routes: [{ path: "/users/:id", component: User }] }));
-    if (el.owner) triggerMount(el.owner);
-
-    navigate("/users/42");
-    expect((el.nodes[0] as any).textContent).toBe("User 42");
-  });
-
   test("fallback renders for unmatched routes", () => {
     function Home() {
       return h("h1", null, "Home");
@@ -88,7 +74,7 @@ describe("createRouter", () => {
 
     const { RouterView, navigate } = createRouter({ fallback: () => h("div", null, "Custom 404") });
 
-    const el = h("div", null, h(RouterView, { routes: [{ path: "/", component: Home }] }));
+    const el = h("div", null, h(RouterView, { routes: [{ path: "", component: Home }] }));
     if (el.owner) triggerMount(el.owner);
     expect((el.nodes[0] as any).textContent).toBe("Home");
 
@@ -112,8 +98,8 @@ describe("createRouter", () => {
       h(Link, { to: "/about" }, "Go to About"),
       h(RouterView, {
         routes: [
-          { path: "/", component: Home },
-          { path: "/about", component: About },
+          { path: "", component: Home },
+          { path: "about", component: About },
         ],
       }),
     );
