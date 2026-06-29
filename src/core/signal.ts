@@ -27,7 +27,8 @@ export function registerSignalStop(args: any[], register: (stop: () => void) => 
   const result = (use as (...a: any[]) => any)(...args);
 
   // 引用已有信号 → 直接返回，不注册清理
-  if (isSingle(args) && isUse(args[0]) && result === args[0]) {
+  const [firstArg] = args;
+  if (isSingle(args) && isUse(firstArg) && result === firstArg) {
     return result;
   }
 
@@ -48,7 +49,7 @@ export type UseFunction = {
 
 export const use: UseFunction = ((...args: any[]): any => {
   if (isSingle(args)) {
-    const val = args[0];
+    const [val] = args;
     if (isUse(val)) {
       return val; // 直接返回信号本身
     }

@@ -36,5 +36,6 @@ export const attrToString = (value: unknown): string =>
  * handleComponent 通过此函数处理 JSX 的 children 透传。
  */
 export function normalizeChildren<T>(children: T[]): T | T[] {
-  return isSingle(children) ? children[0] : children;
+  const [first] = children;
+  return isSingle(children) ? first : children;
 }

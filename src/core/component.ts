@@ -177,7 +177,7 @@ void adoptResult;
 
 // ── handleAsyncComponent ──────────────────────────────
 
-function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
+export function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
   const adapter = getAdapter();
   const placeholder = adapter.comment("async");
   owner.elements.add(placeholder);

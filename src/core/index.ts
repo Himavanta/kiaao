@@ -10,7 +10,13 @@ export type { UseFunction } from "./signal.ts";
 export { h, Fragment } from "./h.ts";
 
 // Component model
-export { handleComponent, createContext } from "./component.ts";
+export {
+  handleComponent,
+  createContext,
+  handleAsyncComponent,
+  toHResult,
+  adoptResult,
+} from "./component.ts";
 export type { Context, ComponentFunction } from "./component.ts";
 
 // Owner lifecycle
