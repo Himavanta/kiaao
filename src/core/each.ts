@@ -5,7 +5,7 @@
 import { getAdapter } from "../adapter/index.ts";
 import type { ComponentFunction, Context } from "./component.ts";
 import { adoptBranch, initAnchor, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
-import { createOwner, disposeOwner } from "./owner.ts";
+import { disposeOwner } from "./owner.ts";
 import { definitionMode, toValue } from "./signal.ts";
 import { isArray, isEmpty, isNil, isNotEmpty, isNotNil } from "./type-guards.ts";
 import type {
@@ -178,7 +178,5 @@ export function Each<T = any>(
 
   context.onMount(sync);
   subscribeSignal(context.owner, props.value, sync);
-  const anchorOwner = createOwner({ lightweight: true });
-  anchorOwner.elements.add(anchor);
-  return createHResult(anchorOwner, [anchor], [], []);
+  return createHResult(null, [anchor], [], []);
 }

@@ -9,10 +9,9 @@ import type { Owner } from "./types.ts";
 
 /**
  * 创建一个新的 Owner 对象。
- * 轻量 Owner（lightweight）由 isLightweight 标记，
- * 在 nestBind 中被 evacuation 逻辑处理，后续阶段将被移除。
+ * Owner 之间通过 parent/children 指针形成所有权树。
  */
-export function createOwner(options?: { lightweight?: boolean }): Owner {
+export function createOwner(): Owner {
   return {
     parent: null,
     children: [],
@@ -21,7 +20,6 @@ export function createOwner(options?: { lightweight?: boolean }): Owner {
     unmountCallbacks: [],
     elements: new Set(),
     disposed: false,
-    isLightweight: options?.lightweight || false,
   };
 }
 
@@ -80,13 +78,11 @@ export function disposeOwner(owner: Owner): void {
   }
   owner.cleanups.length = 0;
 
-  // 3. Remove all owned elements from the DOM（轻量 Owner 的元素由父级 dispose 统一清理）
-  if (!owner.isLightweight) {
-    for (const el of owner.elements) {
-      removeNode(el);
-    }
-    owner.elements.clear();
+  // 3. Remove all owned elements from the DOM
+  for (const el of owner.elements) {
+    removeNode(el);
   }
+  owner.elements.clear();
 }
 
 // ── triggerMount ──────────────────────────────────────
@@ -100,14 +96,6 @@ export function triggerMount(owner: Owner, visited: Set<Owner> = new Set()): voi
   if (owner.disposed) return;
   if (visited.has(owner)) return;
   visited.add(owner);
-
-  // 轻量 Owner：透传子 Owner，不触发自身回调
-  if (owner.isLightweight) {
-    for (const child of owner.children) {
-      triggerMount(child, visited);
-    }
-    return;
-  }
 
   // Execute mount callbacks
   for (const cb of owner.mountCallbacks) {

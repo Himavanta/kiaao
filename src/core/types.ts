@@ -138,8 +138,6 @@ export interface Owner {
   unmountCallbacks: CleanupFn[];
   elements: Set<unknown>;
   disposed: boolean;
-  /** @deprecated 不再通过 createOwner 设置，暂保留供 nestBind 过渡 */
-  isLightweight?: boolean;
 }
 
 // ── RenderAdapter Interface ────────────────────────────
