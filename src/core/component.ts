@@ -92,6 +92,90 @@ export function createContext(owner: Owner): Context {
   };
 }
 
+// ── toHResult — 子内容标准化 ──────────────────────────
+
+/**
+ * 将任意类型的子内容统一转换为 HResult。
+ * 替代原 nestBindPrimitive 的职责。
+ */
+function toHResult(child: any): HResult {
+  if (isHResult(child)) return child;
+
+  if (isUse(child)) {
+    const adapter = getAdapter();
+    const textNode = adapter.text("");
+    const derived = use(child, () => adapter.setText(textNode, String(child())));
+    const stop = getSignalState(derived)?.stop;
+    const cleanups = stop ? [stop] : [];
+    return createHResult(null, [textNode], [], cleanups);
+  }
+
+  if (isFunction(child)) {
+    return toHResult(child());
+  }
+
+  if (isArray(child)) {
+    const pending: Owner[] = [];
+    const cleanups: CleanupFn[] = [];
+    const nodes: HostNode[] = [];
+    for (const item of child.flat()) {
+      const hr = toHResult(item);
+      nodes.push(...hr.nodes);
+      if (hr.owner) {
+        pending.push(hr.owner);
+      } else {
+        pending.push(...hr.pending);
+        cleanups.push(...hr.cleanups);
+      }
+    }
+    return createHResult(null, nodes, pending, cleanups);
+  }
+
+  if (getAdapter().isNode(child)) {
+    return createHResult(null, [child], [], []);
+  }
+
+  if (isNil(child)) {
+    return createHResult(null, [], [], []);
+  }
+
+  return createHResult(null, [getAdapter().text(String(child))], [], []);
+}
+
+// ── adoptResult — 内部吸收函数 ─────────────────────────
+
+/**
+ * 将 HResult 的资源吸收到指定 Owner。
+ * - 边界 HResult（hr.owner 非空）：仅挂接 Owner，不吸节点
+ * - 非边界 HResult：吸收 nodes、pending、cleanups
+ */
+function adoptResult(owner: Owner, hr: HResult): HostNode[] {
+  if (hr.owner) {
+    // 边界：只挂接组件/指令 Owner
+    if (!hr.owner.disposed) {
+      owner.children.push(hr.owner);
+      hr.owner.parent = owner;
+    }
+    return hr.nodes;
+  }
+  // 非边界：吸收所有资源
+  for (const node of hr.nodes) {
+    owner.elements.add(node);
+  }
+  for (const childOwner of hr.pending) {
+    if (!childOwner.disposed) {
+      owner.children.push(childOwner);
+      childOwner.parent = owner;
+    }
+  }
+  owner.cleanups.push(...hr.cleanups);
+  return hr.nodes;
+}
+
+// 临时引用防止未使用警告，后续阶段接入后删除
+void toHResult;
+void adoptResult;
+
 // ── Helper: nestBind — 统一遍历结果树，连接 Owner + 构建 DOM ────
 
 /** 遍历 HResult 的子结果树 */
