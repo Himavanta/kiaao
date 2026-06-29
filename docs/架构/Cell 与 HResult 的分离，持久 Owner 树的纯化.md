@@ -244,6 +244,11 @@ function toHResult(child: any): HResult {
     return createHResult(null, nodes, pending, cleanups);
   }
 
+  // 原生 DOM 节点：直接使用，不转为字符串
+  if (getAdapter().isNode(child)) {
+    return createHResult(null, [child], [], []);
+  }
+
   if (isNil(child)) {
     return createHResult(null, [], [], []);
   }
