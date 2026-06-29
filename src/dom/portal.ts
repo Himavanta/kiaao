@@ -4,6 +4,7 @@
 import { getAdapter } from "../adapter/index.ts";
 import type { Context, HResult } from "../core/index.ts";
 import { adoptResult, createHResult, isString, SSR_COMPONENT, toHResult } from "../core/index.ts";
+import { querySelector } from "./dom-utils.ts";
 import { isNode } from "./type-guards.ts";
 
 export function Portal(
@@ -17,9 +18,7 @@ export function Portal(
     return createHResult(null, [adapter.comment("portal-no-ctx")], [], []);
   }
 
-  const target = isString(props.to)
-    ? (document.querySelector(props.to) as HTMLElement | null)
-    : props.to;
+  const target = isString(props.to) ? (querySelector(props.to) as HTMLElement | null) : props.to;
 
   if (!target) {
     return createHResult(null, [adapter.comment("portal-missing-target")], [], []);

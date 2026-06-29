@@ -3,6 +3,14 @@
 
 import { isObject, isFunction, attrToString } from "../core/index.ts";
 import type { RenderAdapter, HostNode, CleanupFn } from "../core/index.ts";
+import {
+  createElement,
+  createElementNS,
+  createTextNode,
+  createComment,
+  addEventListener,
+  removeEventListener,
+} from "./dom-utils.ts";
 
 // ── SVG ───────────────────────────────────────────────
 
@@ -15,38 +23,14 @@ const VOID_ELEMENTS = splitSet(
 );
 
 const SVG_TAGS = splitSet(
-  "svg g defs symbol marker clipPath mask pattern switch use foreignObject " +
-    "circle ellipse rect line polyline polygon path " +
-    "text tspan textPath " +
-    "linearGradient radialGradient stop " +
-    "filter feBlend feColorMatrix feComponentTransfer " +
-    "feComposite feConvolveMatrix feDiffuseLighting feDisplacementMap " +
-    "feDropShadow feFlood feFuncA feFuncB feFuncG feFuncR " +
-    "feGaussianBlur feImage feMerge feMergeNode feMorphology " +
-    "feOffset feSpecularLighting feTile feTurbulence " +
-    "animate animateTransform animateMotion set " +
-    "desc metadata image",
+  "svg g defs symbol marker clipPath mask pattern switch use foreignObject circle ellipse rect line polyline polygon path text tspan textPath linearGradient radialGradient stop filter feBlend feColorMatrix feComponentTransfer feComposite feConvolveMatrix feDiffuseLighting feDisplacementMap feDropShadow feFlood feFuncA feFuncB feFuncG feFuncR feGaussianBlur feImage feMerge feMergeNode feMorphology feOffset feSpecularLighting feTile feTurbulence animate animateTransform animateMotion set desc metadata image",
 );
 
 // ── FORCE_ATTRIBUTE Set ────────────────────────────────
 // 需要在客户端走 setAttribute、在 SSR 中输出的属性集合。
 
 const FORCE_ATTRIBUTE = splitSet(
-  "class id lang dir title hidden tabindex " +
-    "accesskey contenteditable draggable spellcheck " +
-    "autocapitalize translate slot " +
-    "name type placeholder required disabled readonly " +
-    "maxlength minlength size min max step pattern " +
-    "autocomplete autofocus multiple accept capture selected " +
-    "href target rel download hreflang ping referrerpolicy " +
-    "src alt width height srcset sizes loading decoding " +
-    "crossorigin poster preload autoplay controls loop muted playsinline " +
-    "srcdoc sandbox allow allowfullscreen frameborder " +
-    "colspan rowspan headers scope " +
-    "async defer integrity media charset httpEquiv " +
-    "for usemap ismap cite datetime " +
-    "form formaction formenctype formmethod formnovalidate " +
-    "formtarget novalidate nonce",
+  "class id lang dir title hidden tabindex accesskey contenteditable draggable spellcheck autocapitalize translate slot name type placeholder required disabled readonly maxlength minlength size min max step pattern autocomplete autofocus multiple accept capture selected href target rel download hreflang ping referrerpolicy src alt width height srcset sizes loading decoding crossorigin poster preload autoplay controls loop muted playsinline srcdoc sandbox allow allowfullscreen frameborder colspan rowspan headers scope async defer integrity media charset httpEquiv for usemap ismap cite datetime form formaction formenctype formmethod formnovalidate formtarget novalidate nonce",
 );
 
 const EVENT_RE = /^on[A-Z]/;
@@ -55,16 +39,16 @@ const EVENT_RE = /^on[A-Z]/;
 
 export const browserAdapter: RenderAdapter = {
   el(tag: string): Element {
-    if (SVG_TAGS.has(tag)) return document.createElementNS(SVG_NS, tag);
-    return document.createElement(tag);
+    if (SVG_TAGS.has(tag)) return createElementNS(SVG_NS, tag);
+    return createElement(tag);
   },
 
   text(text: string): Text {
-    return document.createTextNode(text);
+    return createTextNode(text);
   },
 
   comment(text: string): Comment {
-    return document.createComment(text);
+    return createComment(text);
   },
 
   before(ref: Node, child: Node): void {
@@ -97,11 +81,11 @@ export const browserAdapter: RenderAdapter = {
   },
 
   off(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
-    el.removeEventListener(type, handler as EventListener);
+    removeEventListener(el, type, handler as any);
   },
 
   on(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
-    el.addEventListener(type, handler as EventListener);
+    addEventListener(el, type, handler as any);
   },
 
   isNode(value: unknown): value is Node {
@@ -121,8 +105,8 @@ export const browserAdapter: RenderAdapter = {
     if (EVENT_RE.test(key)) {
       if (isFunction(value)) {
         const eventType = key.slice(2).toLowerCase();
-        el.addEventListener(eventType, value as any);
-        cleanups?.push(() => el.removeEventListener(eventType, value as any));
+        addEventListener(el, eventType, value as any);
+        cleanups?.push(() => removeEventListener(el, eventType, value as any));
       }
       return;
     }
