@@ -108,6 +108,10 @@ export const browserAdapter: RenderAdapter = {
     return value instanceof Node;
   },
 
+  isElement(value: unknown): value is Element {
+    return value instanceof Element;
+  },
+
   prevSibling(node: HostNode): HostNode {
     return (node as Node).previousSibling ?? null;
   },

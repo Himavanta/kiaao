@@ -9,8 +9,8 @@ import type { Owner } from "./types.ts";
 
 /**
  * 创建一个新的 Owner 对象。
- * Owner 之间通过 parent/children 指针形成所有权树。
- * 创建后不自动关联父 Owner——由调用方在父级 children 中 push。
+ * 轻量 Owner（lightweight）由 isLightweight 标记，
+ * 在 nestBind 中被 evacuation 逻辑处理，后续阶段将被移除。
  */
 export function createOwner(options?: { lightweight?: boolean }): Owner {
   return {

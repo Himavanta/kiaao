@@ -18,21 +18,21 @@ describe("HResult", () => {
     expect(result[HRESULT_SYMBOL]).toBe(true);
     expect(result.owner).toBe(owner);
     expect(result.nodes).toBe(nodes);
-    expect(result.cleanups).toBeUndefined();
+    expect(result.cleanups).toEqual([]);
   });
 
   test("createHResult with cleanups", () => {
     const owner = createOwner();
     const nodes = [document.createElement("span")];
     const cleanups = [() => {}];
-    const result = createHResult(owner, nodes, cleanups);
+    const result = createHResult(owner, nodes, [], cleanups);
     expect(result.cleanups).toBe(cleanups);
     expect(result.cleanups!.length).toBe(1);
   });
 
-  test("createHResult with empty cleanups omits the field", () => {
-    const result = createHResult(null, [document.createElement("div")], []);
-    expect(result.cleanups).toBeUndefined();
+  test("createHResult with empty cleanups defaults to empty array", () => {
+    const result = createHResult(null, [document.createElement("div")]);
+    expect(result.cleanups).toEqual([]);
   });
 
   test("createHResult with null owner", () => {

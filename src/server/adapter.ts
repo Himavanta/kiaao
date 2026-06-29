@@ -144,6 +144,10 @@ export const ssrAdapter: RenderAdapter = {
     return isObject(value) && "type" in value;
   },
 
+  isElement(value: unknown): value is SSRElement {
+    return isObject(value) && (value as any).type === "element";
+  },
+
   prevSibling(): HostNode {
     return null;
   },

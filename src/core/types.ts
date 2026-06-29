@@ -29,7 +29,9 @@ export interface HResult {
   [HRESULT_SYMBOL]: true;
   owner: Owner | null;
   nodes: HostNode[];
-  cleanups?: CleanupFn[];
+  pending: Owner[];
+  cleanups: CleanupFn[];
+  /** @deprecated 将在 nestBind 移除后删除 */
   childResults?: any[];
 }
 
@@ -37,17 +39,18 @@ export interface HResult {
 export function createHResult(
   owner: Owner | null,
   nodes: HostNode[],
-  cleanups?: CleanupFn[],
+  pending: Owner[] = [],
+  cleanups: CleanupFn[] = [],
+  /** @deprecated 临时保留，nestBind 移除后删除 */
   childResults?: any[],
 ): HResult {
   const result: HResult = {
     [HRESULT_SYMBOL]: true as const,
     owner,
     nodes,
+    pending,
+    cleanups,
   };
-  if (isNotNil(cleanups) && isNotEmpty(cleanups)) {
-    result.cleanups = cleanups;
-  }
   if (isNotNil(childResults) && isNotEmpty(childResults)) {
     result.childResults = childResults;
   }
@@ -143,7 +146,7 @@ export interface Owner {
   unmountCallbacks: CleanupFn[];
   elements: Set<unknown>;
   disposed: boolean;
-  /** 轻量 Owner：DOM 元素临时 Owner，nestBind 遍历后 children 被转移即弃用 */
+  /** @deprecated 不再通过 createOwner 设置，暂保留供 nestBind 过渡 */
   isLightweight?: boolean;
 }
 
@@ -165,6 +168,8 @@ export interface RenderAdapter {
   off(el: HostNode, type: string, handler: (...args: any[]) => void): void;
   /** 判断值是否为合法的宿主节点 */
   isNode(value: unknown): value is HostNode;
+  /** 判断值是否为 Element（用于指令过滤非 Element 节点） */
+  isElement(value: unknown): value is HostNode;
   /**
    * 获取宿主节点的前一个兄弟节点。用于 each 指令的位置判断。
    * DOM：返回 previousSibling；SSR：返回 null。

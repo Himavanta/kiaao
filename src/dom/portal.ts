@@ -53,12 +53,7 @@ export function Portal(
   }
 
   if (!target) {
-    return createHResult(
-      lwOwner,
-      [adapter.comment("portal-missing-target")],
-      undefined,
-      childResults,
-    );
+    return createHResult(lwOwner, [adapter.comment("portal-missing-target")], [], [], childResults);
   }
 
   const portalNodes = extractPortalNodes(props.children);
@@ -72,7 +67,7 @@ export function Portal(
     }
   });
 
-  return createHResult(lwOwner, [adapter.comment("portal")], undefined, childResults);
+  return createHResult(lwOwner, [adapter.comment("portal")], [], [], childResults);
 }
 
 (Portal as any)[SSR_COMPONENT] = () => {

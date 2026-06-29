@@ -96,7 +96,7 @@ export function createContext(owner: Owner): Context {
 
 /** 遍历 HResult 的子结果树 */
 function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
-  // Owner 连接：防止父子相同导致自引用，轻量 Owner 跳过 parent 赋值
+  // Owner 连接：防止父子相同导致自引用
   if (result.owner && result.owner !== parentOwner) {
     parentOwner.children.push(result.owner);
     result.owner.parent = parentOwner;
@@ -201,7 +201,7 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
       console.error("[kiaao] async component error:", err);
     });
 
-  return createHResult(owner, [placeholder]);
+  return createHResult(owner, [placeholder], [], []);
 }
 
 // ── Helper: 信号绑定 ─────────────────────────────
@@ -248,7 +248,7 @@ export function handleComponent(
     console.error("[kiaao] component error:", e);
     disposeOwner(owner);
     const comment = getAdapter().comment("component error");
-    return createHResult(owner, [comment]);
+    return createHResult(owner, [comment], [], []);
   }
 
   if (isPromise(result)) {
@@ -257,5 +257,5 @@ export function handleComponent(
 
   const nodes = nestBind(result, owner);
   nodes.forEach((n) => owner.elements.add(n));
-  return createHResult(owner, nodes);
+  return createHResult(owner, nodes, [], []);
 }

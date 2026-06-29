@@ -44,7 +44,7 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
   const orphanCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, orphanCleanups);
   // 子节点由 nestBind 统一处理，handleDomMode 只创建元素
-  return createHResult(owner, [el], [...orphanCleanups], children);
+  return createHResult(owner, [el], [], [...orphanCleanups], children);
 }
 
 // ── Directive Mode ────────────────────────────────────
@@ -87,7 +87,7 @@ function handleDirectiveMode(
     }
   }
 
-  return createHResult(owner, allNodes);
+  return createHResult(owner, allNodes, [], []);
 }
 
 // ── h() ────────────────────────────────────────────────
@@ -101,14 +101,14 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`);
     }
-    return createHResult(null, [getAdapter().comment("")]);
+    return createHResult(null, [getAdapter().comment("")], [], []);
   }
 
   if (isString(tag) && isEmpty(tag)) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("[kiaao] empty string tag, falling back to comment node");
     }
-    return createHResult(null, [getAdapter().comment("")]);
+    return createHResult(null, [getAdapter().comment("")], [], []);
   }
 
   if (isFunction(tag)) {

@@ -46,5 +46,5 @@ export function Show(
   // Subsequent changes via signal
   subscribeSignal(context.owner, props.value, renderBranch);
 
-  return createHResult(anchorOwner, [anchor]);
+  return createHResult(anchorOwner, [anchor], [], []);
 }

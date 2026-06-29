@@ -179,5 +179,5 @@ export function Each<T = any>(
   subscribeSignal(context.owner, props.value, sync);
   const anchorOwner = createOwner({ lightweight: true });
   anchorOwner.elements.add(anchor);
-  return createHResult(anchorOwner, [anchor]);
+  return createHResult(anchorOwner, [anchor], [], []);
 }
