@@ -3,7 +3,7 @@
 
 import type { ComponentFunction, Context } from "./component.ts";
 import { adoptBranch, initAnchor, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
-import { createOwner, disposeOwner } from "./owner.ts";
+import { disposeOwner } from "./owner.ts";
 import { toValue } from "./signal.ts";
 import { isNotNil, isString } from "./type-guards.ts";
 import type { ControlFlowChildren, HResult, MaybeSignal } from "./types.ts";
@@ -55,7 +55,5 @@ export function Case(
   // Subsequent changes via signal
   subscribeSignal(context.owner, props.value, renderBranch);
 
-  const anchorOwner = createOwner({ lightweight: true });
-  anchorOwner.elements.add(anchor);
-  return createHResult(anchorOwner, [anchor], [], []);
+  return createHResult(null, [anchor], [], []);
 }

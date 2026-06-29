@@ -2,7 +2,7 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter } from "../adapter/index.ts";
-import { handleComponent, nestBind, toHResult, type ComponentFunction } from "./component.ts";
+import { handleComponent, toHResult, adoptResult, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { setProps } from "./props.ts";
@@ -40,8 +40,6 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
   const el = adapter.el(tag);
   const pending: Owner[] = [];
   const cleanups: CleanupFn[] = [];
-  const allNodes: HostNode[] = [el];
-
   const propCleanups: CleanupFn[] = [];
   setProps(el, isObject(props) ? props : null, propCleanups);
   cleanups.push(...propCleanups);
@@ -56,11 +54,10 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
     }
     for (const node of hr.nodes) {
       adapter.append(el, node);
-      allNodes.push(node);
     }
   }
 
-  return createHResult(null, allNodes, pending, cleanups);
+  return createHResult(null, [el], pending, cleanups);
 }
 
 // ── Directive Mode ────────────────────────────────────
@@ -78,16 +75,17 @@ function handleDirectiveMode(
   // 指令创建自己的 Owner，通过 HResult 由父组件接管
   const owner = createOwner();
 
-  // 使用 nestBind 统一处理子结果树，确保子组件 Owner 连接正确
   const flatChildren = children.flat(Infinity);
   const allNodes: HostNode[] = [];
 
   for (const child of flatChildren) {
-    allNodes.push(...nestBind(child, owner));
+    const childHr = toHResult(child);
+    const nodes = adoptResult(owner, childHr);
+    allNodes.push(...nodes);
   }
 
   for (const child of allNodes) {
-    if (getAdapter().isNode(child)) {
+    if (getAdapter().isElement(child)) {
       const ctx = createDirectiveContext(owner);
       try {
         (tag as DirectiveFunction)(child as any, dirProps, ctx);

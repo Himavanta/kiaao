@@ -69,7 +69,7 @@ describe("递归组件", () => {
 
     expect(container.children.length).toBe(1);
 
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     expect(container.children.length).toBe(0);
   });
 });

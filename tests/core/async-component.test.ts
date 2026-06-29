@@ -11,11 +11,15 @@ import { browserAdapter } from "../../src/dom/index.ts";
 setAdapter(browserAdapter);
 
 function mount(result: HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const container = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(container, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return container;
 }
 
@@ -92,7 +96,7 @@ describe("async component — lifecycle", () => {
     };
     const result = h(Comp as any);
     mount(result);
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     expect(unmountCount).toBe(1);
   });
 
@@ -105,7 +109,7 @@ describe("async component — lifecycle", () => {
     const result = h(Comp as any);
     mount(result);
     // Dispose before resolve
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     // Resolve after dispose
     resolvePromise(h("div", null, "late"));
     await new Promise((r) => setTimeout(r, 10));

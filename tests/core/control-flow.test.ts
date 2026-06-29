@@ -18,7 +18,7 @@ function mount(result: HResult): HTMLElement {
   for (const node of result.nodes) {
     browserAdapter.append(container, node as Node);
   }
-  triggerMount(result.owner!);
+  if (result.owner) triggerMount(result.owner);
   return container;
 }
 

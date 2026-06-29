@@ -9,7 +9,6 @@ import {
   isFunction,
   isNil,
   isNotEmpty,
-  isNotNil,
   isPromise,
   normalizeChildren,
 } from "./type-guards.ts";
@@ -176,85 +175,6 @@ export function adoptResult(owner: Owner, hr: HResult): HostNode[] {
 void toHResult;
 void adoptResult;
 
-// ── Helper: nestBind — 统一遍历结果树，连接 Owner + 构建 DOM ────
-
-/** 遍历 HResult 的子结果树 */
-function nestBindResult(result: HResult, parentOwner: Owner): HostNode[] {
-  // Owner 连接：防止父子相同导致自引用
-  if (result.owner && result.owner !== parentOwner) {
-    parentOwner.children.push(result.owner);
-    result.owner.parent = parentOwner;
-  }
-
-  const effectiveOwner = result.owner ?? parentOwner;
-
-  // 递归处理子节点树
-  if (isNotNil(result.childResults) && isNotEmpty(result.childResults)) {
-    const allChildNodes: HostNode[] = [];
-    for (const child of result.childResults) {
-      allChildNodes.push(...nestBind(child, effectiveOwner));
-    }
-
-    const [parentEl] = result.nodes;
-    if (parentEl && isNotEmpty(allChildNodes)) {
-      const adapter = getAdapter();
-      adapter.clear(parentEl);
-      for (const node of allChildNodes) {
-        adapter.append(parentEl, node);
-      }
-    }
-  }
-
-  // 归集 cleanups 到有效 Owner
-  if (result.cleanups) {
-    for (const c of result.cleanups) {
-      effectiveOwner.cleanups.push(c);
-    }
-  }
-
-  // 轻量 Owner：children 上提给 parentOwner，自身从树中移除
-  if (effectiveOwner.isLightweight && effectiveOwner !== parentOwner) {
-    for (const child of effectiveOwner.children) {
-      child.parent = parentOwner;
-      parentOwner.children.push(child);
-    }
-    effectiveOwner.children.length = 0;
-    const idx = parentOwner.children.indexOf(effectiveOwner);
-    if (idx !== -1) parentOwner.children.splice(idx, 1);
-  }
-
-  return result.nodes;
-}
-
-/** 处理原始值（非 HResult/非数组） */
-function nestBindPrimitive(item: any, parentOwner: Owner): HostNode[] {
-  if (isNil(item)) {
-    return [];
-  }
-  if (getAdapter().isNode(item)) {
-    return [item];
-  }
-  if (isUse(item)) {
-    return [handleSignalChild(item, parentOwner)];
-  }
-  if (isFunction(item)) {
-    return nestBind(item(), parentOwner);
-  }
-  return [getAdapter().text(String(item)) as HostNode];
-}
-
-export function nestBind(items: any, parentOwner: Owner): HostNode[] {
-  if (isArray(items)) {
-    const allNodes: HostNode[] = [];
-    for (const item of items) {
-      allNodes.push(...nestBind(item, parentOwner));
-    }
-    return allNodes;
-  }
-  if (isHResult(items)) return nestBindResult(items, parentOwner);
-  return nestBindPrimitive(items, parentOwner);
-}
-
 // ── handleAsyncComponent ──────────────────────────────
 
 function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): HResult {
@@ -266,17 +186,15 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
     .then((rawResult) => {
       if (owner.disposed) return;
 
-      const nodes = nestBind(rawResult, owner);
+      const resolvedHr = toHResult(rawResult);
+      const newNodes = adoptResult(owner, resolvedHr);
 
-      if (owner.disposed) {
-        return;
-      }
+      if (owner.disposed) return;
 
       owner.elements.delete(placeholder);
-      nodes.forEach((n) => owner.elements.add(n));
 
-      if (isNotEmpty(nodes)) {
-        adapter.replace(placeholder, ...nodes);
+      if (isNotEmpty(newNodes)) {
+        adapter.replace(placeholder, ...newNodes);
       }
       triggerMount(owner);
     })
@@ -289,10 +207,6 @@ function handleAsyncComponent(promise: Promise<MergeableResult>, owner: Owner): 
 }
 
 // ── Helper: 信号绑定 ─────────────────────────────
-
-function handleSignalChild(signal: any, owner: Owner): HostNode {
-  return bindSignalToTextNode(signal, owner.cleanups);
-}
 
 /**
  * 创建信号绑定的文本节点。
@@ -339,7 +253,7 @@ export function handleComponent(
     return handleAsyncComponent(result, owner);
   }
 
-  const nodes = nestBind(result, owner);
-  nodes.forEach((n) => owner.elements.add(n));
-  return createHResult(owner, nodes, [], []);
+  const childHr = toHResult(result);
+  adoptResult(owner, childHr);
+  return createHResult(owner, childHr.nodes, [], []);
 }

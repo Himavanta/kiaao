@@ -11,11 +11,15 @@ import { browserAdapter } from "../../src/dom/index.ts";
 setAdapter(browserAdapter);
 
 function mount(result: HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const container = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(container, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return container;
 }
 
@@ -41,8 +45,7 @@ describe("disposeOwner — idempotence", () => {
     browserAdapter.append(container, result.nodes[0] as any);
 
     expect(container.querySelector(".to-remove")).toBeTruthy();
-    disposeOwner(result.owner!);
-    // The element was owner=null, so disposeOwner doesn't remove it
+    if (result.owner) disposeOwner(result.owner);
   });
 
   test("component owner dispose removes its elements from DOM", () => {
@@ -51,7 +54,7 @@ describe("disposeOwner — idempotence", () => {
     const container = mount(result);
 
     expect(container.querySelector(".comp-el")).toBeTruthy();
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     // After dispose, element should be removed
   });
 
@@ -82,7 +85,7 @@ describe("disposeOwner — idempotence", () => {
     const container = mount(result);
 
     expect(container.querySelector(".child-el")).toBeTruthy();
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
   });
 
   test("repeated create + dispose 100 times does not leak elements", () => {
@@ -96,7 +99,7 @@ describe("disposeOwner — idempotence", () => {
         browserAdapter.append(container, node as any);
       }
       if (result.owner) triggerMount(result.owner);
-      disposeOwner(result.owner!);
+      if (result.owner) disposeOwner(result.owner);
     }
 
     expect(container.children.length).toBe(0);

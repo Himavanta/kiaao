@@ -15,11 +15,15 @@ beforeEach(() => {
 });
 
 function mount(result: import("../../src/core/types.ts").HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const c = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(c, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return c;
 }
 
@@ -206,16 +210,19 @@ describe("Router — Link 组件", () => {
       return h("span", null, "home");
     }
 
-    const el = h(
-      "div",
-      null,
-      h(Link as any, { to: "/about" }, "link"),
-      h(RouterView as any, { routes: [{ path: "", component: Home }] }),
-    );
+    function TestApp() {
+      return h(
+        "div",
+        null,
+        h(Link as any, { to: "/about" }, "link"),
+        h(RouterView as any, { routes: [{ path: "", component: Home }] }),
+      );
+    }
+    const el = h(TestApp);
     const container = mount(el);
 
     const a = container.querySelector("a")!;
-    disposeOwner(el.owner!);
+    if (el.owner) disposeOwner(el.owner);
     // dispose 后点击不应触发 navigate
     a.click();
     expect(true).toBe(true);

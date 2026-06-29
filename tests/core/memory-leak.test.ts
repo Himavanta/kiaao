@@ -11,11 +11,15 @@ import { browserAdapter } from "../../src/dom/index.ts";
 setAdapter(browserAdapter);
 
 function mount(result: HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const container = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(container, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return container;
 }
 
@@ -33,7 +37,7 @@ describe("memory — create/dispose cycle", () => {
         browserAdapter.append(container, node as any);
       }
       if (result.owner) triggerMount(result.owner);
-      disposeOwner(result.owner!);
+      if (result.owner) disposeOwner(result.owner);
     }
 
     expect(container.children.length).toBe(0);
@@ -93,7 +97,7 @@ describe("memory — deep tree", () => {
     const result = deepTree(50);
     const container = mount(result);
     expect(container.querySelector(".leaf")).toBeTruthy();
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
   });
 
   test("component tree depth 30 disposes cleanly", () => {
@@ -106,7 +110,7 @@ describe("memory — deep tree", () => {
     const result = h(Level as any, { depth: 30 });
     const container = mount(result);
     expect(container?.querySelector(".leaf")).toBeTruthy();
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     // After dispose, leaf should be removed from DOM
   });
 });

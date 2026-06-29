@@ -10,11 +10,15 @@ import { browserAdapter } from "../../src/dom/index.ts";
 setAdapter(browserAdapter);
 
 function mount(result: import("../../src/core/types.ts").HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const c = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(c, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return c;
 }
 
@@ -183,44 +187,49 @@ describe("事件 — 自定义事件", () => {
 describe("事件 — dispose 清理", () => {
   test("dispose 后事件不触发", () => {
     let clicked = false;
-    const el = h(
-      "button",
-      {
-        onClick: () => {
-          clicked = true;
+    function App() {
+      return h(
+        "button",
+        {
+          onClick: () => {
+            clicked = true;
+          },
         },
-      },
-      "dispose",
-    );
+        "dispose",
+      );
+    }
+    const el = h(App as any);
     const container = mount(el);
     const btn = container.querySelector("button")!;
 
-    disposeOwner(el.owner!);
+    if (el.owner) disposeOwner(el.owner);
     btn.click();
-    // dispose 后事件监听应被移除
     expect(clicked).toBe(false);
   });
 
   test("dispose 后移除事件监听", () => {
     let count = 0;
-    const el = h(
-      "button",
-      {
-        onClick: () => {
-          count++;
+    function App() {
+      return h(
+        "button",
+        {
+          onClick: () => {
+            count++;
+          },
         },
-      },
-      "count",
-    );
+        "count",
+      );
+    }
+    const el = h(App as any);
     const container = mount(el);
     const btn = container.querySelector("button")!;
 
     btn.click();
     expect(count).toBe(1);
 
-    disposeOwner(el.owner!);
+    if (el.owner) disposeOwner(el.owner);
     btn.click();
-    expect(count).toBe(1); // 不增长
+    expect(count).toBe(1);
   });
 });
 

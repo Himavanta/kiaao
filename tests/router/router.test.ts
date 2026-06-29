@@ -26,16 +26,19 @@ describe("createRouter", () => {
 
     const { RouterView } = createRouter();
 
-    const el = h(
-      "div",
-      null,
-      h(RouterView, {
-        routes: [
-          { path: "", component: Home },
-          { path: "about", component: About },
-        ],
-      }),
-    );
+    function TestApp() {
+      return h(
+        "div",
+        null,
+        h(RouterView, {
+          routes: [
+            { path: "", component: Home },
+            { path: "about", component: About },
+          ],
+        }),
+      );
+    }
+    const el = h(TestApp);
     if (el.owner) triggerMount(el.owner);
     expect((el.nodes[0] as any).textContent).toBe("Home");
   });
@@ -50,16 +53,19 @@ describe("createRouter", () => {
 
     const { RouterView, navigate } = createRouter();
 
-    const el = h(
-      "div",
-      null,
-      h(RouterView, {
-        routes: [
-          { path: "", component: Home },
-          { path: "about", component: About },
-        ],
-      }),
-    );
+    function TestApp() {
+      return h(
+        "div",
+        null,
+        h(RouterView, {
+          routes: [
+            { path: "", component: Home },
+            { path: "about", component: About },
+          ],
+        }),
+      );
+    }
+    const el = h(TestApp);
     if (el.owner) triggerMount(el.owner);
     expect((el.nodes[0] as any).textContent).toBe("Home");
 
@@ -74,7 +80,10 @@ describe("createRouter", () => {
 
     const { RouterView, navigate } = createRouter({ fallback: () => h("div", null, "Custom 404") });
 
-    const el = h("div", null, h(RouterView, { routes: [{ path: "", component: Home }] }));
+    function TestApp() {
+      return h("div", null, h(RouterView, { routes: [{ path: "", component: Home }] }));
+    }
+    const el = h(TestApp);
     if (el.owner) triggerMount(el.owner);
     expect((el.nodes[0] as any).textContent).toBe("Home");
 
@@ -92,17 +101,20 @@ describe("createRouter", () => {
 
     const { RouterView, Link } = createRouter();
 
-    const el = h(
-      "div",
-      null,
-      h(Link, { to: "/about" }, "Go to About"),
-      h(RouterView, {
-        routes: [
-          { path: "", component: Home },
-          { path: "about", component: About },
-        ],
-      }),
-    );
+    function TestApp() {
+      return h(
+        "div",
+        null,
+        h(Link, { to: "/about" }, "Go to About"),
+        h(RouterView, {
+          routes: [
+            { path: "", component: Home },
+            { path: "about", component: About },
+          ],
+        }),
+      );
+    }
+    const el = h(TestApp);
     if (el.owner) triggerMount(el.owner);
 
     expect((el.nodes[0] as any).textContent).toBe("Go to AboutHome");

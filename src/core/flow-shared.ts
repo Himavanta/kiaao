@@ -3,6 +3,7 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import type { ComponentFunction } from "./component.ts";
+import { adoptResult } from "./component.ts";
 import { h } from "./h.ts";
 import { triggerMount } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
@@ -40,13 +41,11 @@ export function adoptBranch(options: {
       ? { ...componentProps, children: componentProps.children() }
       : componentProps;
   const r = h(Component, props);
-  const childOwner = r.owner!;
-  childOwner.parent = parentOwner;
-  parentOwner.children.push(childOwner);
-  for (const node of r.nodes) {
+  const nodes = adoptResult(parentOwner, r);
+  for (const node of nodes) {
     adapter.before(anchor, node);
   }
-  triggerMount(childOwner);
+  if (r.owner) triggerMount(r.owner);
   return r;
 }
 

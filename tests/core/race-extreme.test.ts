@@ -10,11 +10,15 @@ import { browserAdapter } from "../../src/dom/index.ts";
 setAdapter(browserAdapter);
 
 function mount(result: import("../../src/core/types.ts").HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const c = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(c, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return c;
 }
 
@@ -66,18 +70,24 @@ describe("信号回调 — 时序竞争", () => {
 
 describe("组件 dispose 时序", () => {
   test("dispose 幂等 — 重复调用不崩溃", () => {
-    const result = h("div", null, "text");
+    function App() {
+      return h("div", null, "text");
+    }
+    const result = h(App as any);
     mount(result);
 
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     expect(() => disposeOwner(result.owner!)).not.toThrow();
   });
 
   test("dispose 后再次 dispose 不崩溃（幂等）", () => {
-    const result = h("div", null, "text");
+    function App() {
+      return h("div", null, "text");
+    }
+    const result = h(App as any);
     mount(result);
 
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     expect(() => disposeOwner(result.owner!)).not.toThrow();
   });
 });

@@ -112,7 +112,7 @@ describe("Portal — 极端场景", () => {
     if (el.owner) triggerMount(el.owner);
     expect(target.children.length).toBe(1);
 
-    disposeOwner(el.owner!);
+    if (el.owner) disposeOwner(el.owner);
     expect(target.children.length).toBe(0);
   });
 
@@ -128,7 +128,7 @@ describe("Portal — 极端场景", () => {
     count(1);
     expect(target.querySelector("span")?.textContent).toBe("1");
 
-    disposeOwner(el.owner!);
+    if (el.owner) disposeOwner(el.owner);
     expect(target.children.length).toBe(0);
   });
 

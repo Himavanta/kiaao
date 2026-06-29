@@ -24,11 +24,15 @@ function wrap(children: any): HResult {
 }
 
 function mount(result: HResult): HTMLElement {
+  function Root() {
+    return result;
+  }
+  const rootHr = h(Root as any);
   const container = browserAdapter.el("div") as HTMLElement;
-  for (const node of result.nodes) {
+  for (const node of rootHr.nodes) {
     browserAdapter.append(container, node as any);
   }
-  if (result.owner) triggerMount(result.owner);
+  if (rootHr.owner) triggerMount(rootHr.owner);
   return container;
 }
 
@@ -99,7 +103,7 @@ describe("directive — dispose guard", () => {
     mount(result);
     expect(unmounted).toBe(false);
 
-    disposeOwner(result.owner!);
+    if (result.owner) disposeOwner(result.owner);
     expect(unmounted).toBe(true);
   });
 });

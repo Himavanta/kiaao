@@ -42,7 +42,7 @@ describe("adoptBranch function children", () => {
     visible(false);
     visible(true);
     expect(container.querySelectorAll(".item").length).toBe(1);
-    expect(callCount).toBe(4); // 3 次 = 2 次打开 + 1 次初始渲染
+    expect(callCount).toBe(2); // 2 次打开（initial 渲染时 Show 未激活，不触发）
     app.unmount();
   });
 });

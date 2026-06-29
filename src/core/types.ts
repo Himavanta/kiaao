@@ -31,8 +31,6 @@ export interface HResult {
   nodes: HostNode[];
   pending: Owner[];
   cleanups: CleanupFn[];
-  /** @deprecated 将在 nestBind 移除后删除 */
-  childResults?: any[];
 }
 
 /** 创建 HResult 对象 */
