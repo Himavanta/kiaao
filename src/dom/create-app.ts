@@ -2,6 +2,7 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import { createOwner, disposeOwner, triggerMount, type HResult } from "../core/index.ts";
+import { isString } from "../core/index.ts";
 import { querySelector } from "./dom-utils.ts";
 
 export interface App {
@@ -29,7 +30,7 @@ export function createApp(hr: HResult): App {
   }
 
   function resolveContainer(target: string | Element): Element {
-    if (typeof target === "string") {
+    if (isString(target)) {
       const el = querySelector(target);
       if (!el) {
         throw new Error(`[kiaao] createApp mount: target "${target}" not found`);
