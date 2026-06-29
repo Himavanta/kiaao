@@ -98,7 +98,7 @@ export function createContext(owner: Owner): Context {
  * 将任意类型的子内容统一转换为 HResult。
  * 替代原 nestBindPrimitive 的职责。
  */
-function toHResult(child: any): HResult {
+export function toHResult(child: any): HResult {
   if (isHResult(child)) return child;
 
   if (isUse(child)) {
@@ -149,7 +149,7 @@ function toHResult(child: any): HResult {
  * - 边界 HResult（hr.owner 非空）：仅挂接 Owner，不吸节点
  * - 非边界 HResult：吸收 nodes、pending、cleanups
  */
-function adoptResult(owner: Owner, hr: HResult): HostNode[] {
+export function adoptResult(owner: Owner, hr: HResult): HostNode[] {
   if (hr.owner) {
     // 边界：只挂接组件/指令 Owner
     if (!hr.owner.disposed) {

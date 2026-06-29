@@ -1,7 +1,7 @@
 // kiaao — Core types: Owner, RenderAdapter, signal internals, symbols
 // Platform-agnostic. No DOM dependencies.
 
-import { isObject, isNotNil, isNotEmpty } from "./type-guards.ts";
+import { isObject } from "./type-guards.ts";
 
 // ── Symbols ─────────────────────────────────────────────
 
@@ -41,20 +41,14 @@ export function createHResult(
   nodes: HostNode[],
   pending: Owner[] = [],
   cleanups: CleanupFn[] = [],
-  /** @deprecated 临时保留，nestBind 移除后删除 */
-  childResults?: any[],
 ): HResult {
-  const result: HResult = {
+  return {
     [HRESULT_SYMBOL]: true as const,
     owner,
     nodes,
     pending,
     cleanups,
   };
-  if (isNotNil(childResults) && isNotEmpty(childResults)) {
-    result.childResults = childResults;
-  }
-  return result;
 }
 
 /** 判断一个值是否为 HResult */

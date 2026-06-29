@@ -2,7 +2,7 @@
 // Returns HResult { owner, nodes, cleanups } for explicit lifecycle management.
 
 import { getAdapter } from "../adapter/index.ts";
-import { handleComponent, nestBind, type ComponentFunction } from "./component.ts";
+import { handleComponent, nestBind, toHResult, type ComponentFunction } from "./component.ts";
 import { createDirectiveContext, isDirective, type DirectiveFunction } from "./direct.ts";
 import { createOwner } from "./owner.ts";
 import { setProps } from "./props.ts";
@@ -23,6 +23,7 @@ import {
   type HostNode,
   type HResult,
   type NullableProps,
+  type Owner,
 } from "./types.ts";
 
 // ── Fragment ─────────────────────────────────────────
@@ -36,15 +37,30 @@ export function Fragment(props: { children?: any }): any {
 
 function handleDomMode(tag: string, props: NullableProps = {}, children: any[]): HResult {
   const adapter = getAdapter();
+  const el = adapter.el(tag);
+  const pending: Owner[] = [];
+  const cleanups: CleanupFn[] = [];
+  const allNodes: HostNode[] = [el];
 
-  // 普通元素
-  const el: any = adapter.el(tag);
-  const owner = createOwner({ lightweight: true });
-  owner.elements.add(el);
-  const orphanCleanups: CleanupFn[] = [];
-  setProps(el, isObject(props) ? props : null, orphanCleanups);
-  // 子节点由 nestBind 统一处理，handleDomMode 只创建元素
-  return createHResult(owner, [el], [], [...orphanCleanups], children);
+  const propCleanups: CleanupFn[] = [];
+  setProps(el, isObject(props) ? props : null, propCleanups);
+  cleanups.push(...propCleanups);
+
+  for (const child of children.flat()) {
+    const hr = toHResult(child);
+    if (hr.owner) {
+      pending.push(hr.owner);
+    } else {
+      pending.push(...hr.pending);
+      cleanups.push(...hr.cleanups);
+    }
+    for (const node of hr.nodes) {
+      adapter.append(el, node);
+      allNodes.push(node);
+    }
+  }
+
+  return createHResult(null, allNodes, pending, cleanups);
 }
 
 // ── Directive Mode ────────────────────────────────────
@@ -119,7 +135,5 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
   }
 
   const result = handleDomMode(tag, props, children);
-  // 处理独立 h() 调用的子节点（组件内由 handleComponent 的 nestBind 处理）
-  nestBind(result, result.owner!);
   return result;
 }
