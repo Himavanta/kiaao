@@ -79,7 +79,7 @@ export function definitionMode<T>(initialValue: T): Signal<T> {
     if (isEmpty(args)) return state.value;
     const [updater] = args;
     const oldValue = state.value;
-    state.value = isFunction(updater) ? (updater as (prev: T) => T)(oldValue) : (updater as T);
+    state.value = updater as T;
     if (state.value !== oldValue) {
       triggerDerivations(state);
     }

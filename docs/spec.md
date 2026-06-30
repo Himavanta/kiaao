@@ -55,14 +55,14 @@
 `Signal<T>` 是一个函数对象，通过 `arguments.length` 区分读取和写入：
 
 - 无参调用 `signal()` → 读取，返回当前值 `T`
-- 有参调用 `signal(value)` → 写入，返回 `void`。若 `value` 为函数，视为函数式更新
+- 有参调用 `signal(value)` → 写入，返回 `void`
 
 ```js
 const count = use(0);
 
 count(); // 读取 → 0
 count(5); // 写入 → 5
-count((c) => c + 1); // 函数式更新
+count(count() + 1); // 读取后再写入
 ```
 
 ### 1.3 定义模式：`use(initialValue)`
@@ -153,7 +153,7 @@ interface DerivationState<T> {
 ```ts
 interface Signal<T> {
   (): T;
-  (value: T | ((prev: T) => T)): void;
+  (value: T): void;
 }
 
 function use<T>(signal: Signal<T>): Signal<T>;

@@ -37,7 +37,7 @@ test("type contract — compile check", () => {
   const sig: Signal<number> = use(0);
   void sig();
   sig(42);
-  sig((prev) => prev + 1);
+  sig(sig() + 1);
 
   expect(true).toBe(true);
 });

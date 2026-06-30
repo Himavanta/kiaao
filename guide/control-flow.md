@@ -18,7 +18,7 @@ function App() {
 
   return (
     <div>
-      <button onClick={() => loggedIn((v) => !v)}>Toggle</button>
+      <button onClick={() => loggedIn(!loggedIn())}>Toggle</button>
       <Show value={loggedIn}>
         {() => <Dashboard />}
         {() => <Login />}

@@ -64,7 +64,7 @@ function Display(props, { use }) {
   return (
     <div>
       <p>Value: {value}</p>
-      <button onClick={() => value((v) => v + 1)}>Increment</button>
+      <button onClick={() => value(value() + 1)}>Increment</button>
     </div>
   );
 }

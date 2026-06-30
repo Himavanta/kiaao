@@ -54,7 +54,7 @@ export function isHResult(value: unknown): value is HResult {
 /** 信号接口：无参调用为读取，有参调用为写入 */
 export interface Signal<T> {
   (): T;
-  (value: T | ((prev: T) => T)): void;
+  (value: T): void;
 }
 
 /** 组件/元素的属性对象类型——不可空 */

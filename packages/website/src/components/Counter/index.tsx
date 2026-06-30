@@ -8,10 +8,10 @@ export default function Counter() {
   return (
     <div class={style.counter_card}>
       <p>Count: {count}</p>
-      <button class={style.counter_btn} onClick={() => count((p) => p + 1)}>
+      <button class={style.counter_btn} onClick={() => count(count() + 1)}>
         +1
       </button>
-      <button class={style.counter_btn} onClick={() => count((p) => p - 1)}>
+      <button class={style.counter_btn} onClick={() => count(count() - 1)}>
         -1
       </button>
       <button class={[style.counter_btn, style.reset].join(" ")} onClick={() => count(0)}>

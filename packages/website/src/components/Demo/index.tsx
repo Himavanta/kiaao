@@ -14,7 +14,7 @@ export default function () {
   const color = use(currentStyle, () => currentStyle().color);
 
   return (
-    <div class={currentClass} style={currentStyle} onClick={() => active((v) => !v)}>
+    <div class={currentClass} style={currentStyle} onClick={() => active(!active())}>
       click to change style
       <div>current background: {background}</div>
       <div>current color: {color}</div>

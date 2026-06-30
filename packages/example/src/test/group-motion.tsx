@@ -12,15 +12,15 @@ export default function (_: any, context: Context) {
   let nextId = 4;
 
   const addItem = () => {
-    items((v) => [...v, { id: nextId++, text: `任务${nextId - 1}`, done: false }]);
+    items([...items(), { id: nextId++, text: `任务${nextId - 1}`, done: false }]);
   };
 
   const removeItem = (id: number) => {
-    items((v) => v.filter((i) => i.id !== id));
+    items(items().filter((i) => i.id !== id));
   };
 
   const toggleDone = (id: number) => {
-    items((v) => v.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
+    items(items().map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
   };
 
   return (

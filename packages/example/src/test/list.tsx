@@ -27,15 +27,14 @@ function MenuLink({ item }: { item: Signal<MenuItem> }) {
 }
 
 export default function () {
-  const pop = () => menus((v) => [{ title: "pop", path: `/i/${crypto.randomUUID()}` }, ...v]);
+  const pop = () => menus([{ title: "pop", path: `/i/${crypto.randomUUID()}` }, ...menus()]);
 
-  const insert = () =>
-    menus((v) => {
-      const [a, b, ...c] = v;
-      return [a, b, { title: "insert", path: `/i/${crypto.randomUUID()}` }, ...c];
-    });
+  const insert = () => {
+    const [a, b, ...c] = menus();
+    menus([a, b, { title: "insert", path: `/i/${crypto.randomUUID()}` }, ...c]);
+  };
 
-  const push = () => menus((v) => [...v, { title: "push", path: `/i/${crypto.randomUUID()}` }]);
+  const push = () => menus([...menus(), { title: "push", path: `/i/${crypto.randomUUID()}` }]);
 
   return (
     <nav class="h-14 w-full flex border-b border-gray-200 justify-between items-center px-10">

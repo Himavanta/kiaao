@@ -21,7 +21,7 @@ describe("use — definition mode", () => {
 
   test("supports updater function", () => {
     const count = use(0);
-    count((v) => v + 1);
+    count(count() + 1);
     expect(count()).toBe(1);
   });
 

@@ -20,13 +20,13 @@ console.log(user().name); // 'tom'
 
 // Writing / 写入
 count(42); // direct replacement / 直接替换
-count((prev) => prev + 1); // updater function / 函数式更新
-user((prev) => ({ ...prev, age: 19 }));
+count(count() + 1); // read + write / 读取后再写入
+user({ ...user(), age: 19 });
 ```
 
-**Signal** is a function. Calling it with no arguments returns the current stored value. Calling it with a value replaces the stored value. If the value passed is a function, it is treated as an updater: the current value is passed to the function, and its return value becomes the new stored value.
+**Signal** is a function. Calling it with no arguments returns the current stored value. Calling it with a value replaces the stored value.
 
-**Signal** 是一个函数。无参调用返回当前存储的值。传入值则替换存储的值。如果传入函数，视为更新器：当前值传入函数，返回值成为新值。
+**Signal** 是一个函数。无参调用返回当前存储的值。传入值则替换存储的值。
 
 ## Referencing an Existing Signal / 引用已有信号
 

@@ -23,11 +23,25 @@ export default function () {
       <div>name:{name}</div>
       <div>age:{age}</div>
       <div>
-        <button onClick={() => state((v) => ({ ...v, age: v.age + 1 }))}>age + </button>
-        <button onClick={() => state((v) => ({ ...v, age: v.age - 1 }))}>age - </button>
+        <button
+          onClick={() => {
+            const s = state();
+            state({ ...s, age: s.age + 1 });
+          }}
+        >
+          age +{" "}
+        </button>
+        <button
+          onClick={() => {
+            const s = state();
+            state({ ...s, age: s.age - 1 });
+          }}
+        >
+          age -{" "}
+        </button>
       </div>
       <div>
-        <button onClick={() => state((v) => ({ ...v, name: "ToM" }))}>Name Change to 'ToM'</button>
+        <button onClick={() => state({ ...state(), name: "ToM" })}>Name Change to 'ToM'</button>
       </div>
     </div>
   );
