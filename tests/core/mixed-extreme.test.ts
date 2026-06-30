@@ -6,6 +6,7 @@ import { expect, test, describe } from "vite-plus/test";
 
 import { setAdapter } from "../../src/adapter/index.ts";
 import { h, Show, Each, use, triggerMount, direct } from "../../src/core/index.ts";
+import { Portal } from "../../src/dom/index.ts";
 import { browserAdapter } from "../../src/dom/index.ts";
 
 setAdapter(browserAdapter);
@@ -318,5 +319,181 @@ describe("Each + 指令 + Show", () => {
 
     items([{ id: 1, text: "A", active: false }]);
     expect(container.querySelector(".inactive-text")?.textContent).toBe("A");
+  });
+});
+
+// ── 场景 5：Async + Each + Show ───────────────────────
+
+describe("Async + Each + Show", () => {
+  test("异步组件 resolve 后完整渲染多层嵌套", async () => {
+    const AsyncList = () =>
+      new Promise<import("../../src/core/types.ts").HResult>((r) => {
+        setTimeout(() => {
+          const items = [
+            { id: 1, text: "X", active: true },
+            { id: 2, text: "Y", active: false },
+          ];
+
+          function ItemRow({
+            item,
+          }: {
+            item: () => { id: number; text: string; active: boolean };
+          }) {
+            const show = use(item, () => item().active);
+            return h(
+              "div",
+              null,
+              h(
+                Show as any,
+                { value: show },
+                () => h("span", { class: "a" }, item().text),
+                () => h("span", { class: "b" }, item().text),
+              ),
+            );
+          }
+
+          r(
+            h(
+              "div",
+              { class: "list" },
+              h(Each as any, { value: items, keyed: (i: any) => i.id }, ItemRow),
+            ),
+          );
+        }, 10);
+      });
+
+    const result = h("div", null, h(AsyncList as any));
+    const container = mount(result);
+
+    // Placeholder initially
+    expect(container.querySelector(".list")).toBeFalsy();
+
+    // Wait for resolve
+    await new Promise((r) => setTimeout(r, 20));
+    expect(container.querySelector(".list")).toBeTruthy();
+    expect(container.querySelectorAll(".a").length).toBe(1);
+    expect(container.querySelectorAll(".b").length).toBe(1);
+    expect(container.querySelector(".a")?.textContent).toBe("X");
+  });
+
+  test("异步组件 resolve 后内部信号绑定工作正常", async () => {
+    const items = use([{ id: 1, text: "A", active: true }]);
+
+    function ItemRow({ item }: { item: () => { id: number; text: string; active: boolean } }) {
+      const show = use(item, () => item().active);
+      return h(
+        Show as any,
+        { value: show },
+        () => h("span", { class: "a" }, item().text),
+        () => h("span", { class: "b" }, item().text),
+      );
+    }
+
+    const AsyncList = () =>
+      Promise.resolve(
+        h(
+          "div",
+          { class: "list" },
+          h(Each as any, { value: items, keyed: (i: any) => i.id }, ItemRow),
+        ),
+      );
+
+    const result = h("div", null, h(AsyncList as any));
+    const container = mount(result);
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(container.querySelector(".a")?.textContent).toBe("A");
+
+    // Signal-driven toggle inside async-rendered tree
+    items([{ id: 1, text: "A", active: false }]);
+    expect(container.querySelector(".b")?.textContent).toBe("A");
+  });
+});
+
+// ── 场景 6：Portal + Show ────────────────────────────
+
+describe("Portal + Show", () => {
+  test("Show 在 Portal 内正常渲染", () => {
+    const target = document.createElement("div");
+    target.id = "portal-target";
+    document.body.append(target);
+
+    const visible = use(true);
+
+    const result = h(
+      "div",
+      null,
+      h(
+        Portal as any,
+        { to: "#portal-target" },
+        h(
+          Show as any,
+          { value: visible },
+          () => h("span", { class: "p" }, "portal-content"),
+          () => h("span", { class: "p" }, "fallback"),
+        ),
+      ),
+    );
+    mount(result);
+
+    expect(target.querySelector(".p")?.textContent).toBe("portal-content");
+  });
+
+  test("Portal 内 Show 切换内容更新", () => {
+    const target = document.createElement("div");
+    target.id = "portal-target2";
+    document.body.append(target);
+
+    const visible = use(true);
+
+    const result = h(
+      "div",
+      null,
+      h(
+        Portal as any,
+        { to: "#portal-target2" },
+        h(
+          Show as any,
+          { value: visible },
+          () => h("span", { class: "pc" }, "visible"),
+          () => h("span", { class: "pc" }, "hidden"),
+        ),
+      ),
+    );
+    mount(result);
+
+    expect(target.querySelector(".pc")?.textContent).toBe("visible");
+
+    visible(false);
+    expect(target.querySelector(".pc")?.textContent).toBe("hidden");
+  });
+
+  test("Portal unmount 时 Show 内容清理", () => {
+    const target = document.createElement("div");
+    target.id = "portal-target3";
+    document.body.append(target);
+
+    const visible = use(true);
+    const result = h(
+      "div",
+      null,
+      h(
+        Portal as any,
+        { to: "#portal-target3" },
+        h(
+          Show as any,
+          { value: visible },
+          () => h("span", { class: "temp" }, "visible"),
+          () => h("span", null, "hidden"),
+        ),
+      ),
+    );
+    mount(result);
+
+    expect(target.querySelector(".temp")?.textContent).toBe("visible");
+
+    // Toggle Show inside Portal
+    visible(false);
+    expect(target.querySelector(".temp")).toBeFalsy();
   });
 });
