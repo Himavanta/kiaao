@@ -2,16 +2,18 @@
 // Returns a component that loads asynchronously and renders via the framework's
 // built-in async component mechanism (h() detects Promise return values).
 
-import { getRenderMode } from "../adapter/index.ts";
+import { getAdapter, getRenderMode } from "../adapter/index.ts";
 import type { ComponentFunction } from "../core/index.ts";
-import { h } from "../core/index.ts";
+import { h, createHResult } from "../core/index.ts";
 
 export function lazy<T extends ComponentFunction<any>>(
   loader: () => Promise<{ default: T } | T>,
 ): T {
   const LazyComponent: ComponentFunction<any> = (props) => {
     if (getRenderMode() === "ssr") {
-      throw new Error("[kiaao] Async components are not supported in SSR.");
+      // SSR: 异步组件无法加载，返回占位注释
+      const adapter = getAdapter();
+      return createHResult({ owner: null, nodes: [adapter.comment("lazy-ssr")] });
     }
 
     return loader()

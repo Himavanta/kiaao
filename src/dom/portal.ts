@@ -24,18 +24,15 @@ export function Portal(
     return createHResult({ owner: null, nodes: [adapter.comment("portal-missing-target")] });
   }
 
-  // 处理 children
   const childHr = toHResult(props.children);
   const portalNodes = adoptResult(owner, childHr);
 
-  // 移动到目标容器
   for (const node of portalNodes) {
     if (isNode(node as Node)) {
       target.append(node as Node);
     }
   }
 
-  // 清理
   context.onUnmount?.(() => {
     for (const node of portalNodes) {
       adapter.remove(node);

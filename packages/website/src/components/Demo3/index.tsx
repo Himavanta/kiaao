@@ -13,12 +13,17 @@ function FragmentDemo() {
 
 export default function () {
   return (
-    <Portal to="body">
-      <div>hhhh</div>
-      <>
-        <FragmentDemo />
-        <Demo />
-      </>
-    </Portal>
+    <div>
+      <Demo />
+      <Portal to="body">
+        <div>
+          <div>hhhh</div>
+          <>
+            <FragmentDemo />
+            <Demo />
+          </>
+        </div>
+      </Portal>
+    </div>
   );
 }
