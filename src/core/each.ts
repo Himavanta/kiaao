@@ -71,6 +71,50 @@ function clearAllEntries(state: EachState): HResult | null {
   return null;
 }
 
+/** 构建 diff 后的新条目列表 */
+function buildDiffEntries(
+  state: EachState,
+  items: any[],
+  keyFn: (item: any, i: number) => any,
+): { newKeys: Set<any>; newEntries: Entry[] } {
+  const newKeys = new Set<any>();
+  const newEntries: Entry[] = [];
+  let prevNode: any = null;
+
+  for (const [i, rawValue] of items.entries()) {
+    const identity = keyFn(rawValue, i);
+    newKeys.add(identity);
+
+    const existingIdx = state.entries.findIndex((e) => e.key === identity);
+    if (existingIdx !== -1) {
+      const existing = state.entries[existingIdx];
+      const sig = state.itemSignalMap.get(identity);
+      if (isNotNil(sig)) sig(rawValue);
+      prevNode = repositionEntry(state.anchor, existing, prevNode);
+      newEntries.push(existing);
+      continue;
+    }
+
+    const result = renderEachEntry(state, rawValue, identity, i, false);
+    newEntries.push({ key: identity, result });
+    const itemNodes = result.nodes;
+    if (isNotEmpty(itemNodes)) {
+      prevNode = itemNodes[itemNodes.length - 1];
+    }
+  }
+  return { newKeys, newEntries };
+}
+
+/** dispose 已移除的条目 */
+function disposeRemovedEntries(state: EachState, newKeys: Set<any>): void {
+  for (const entry of state.entries) {
+    if (!newKeys.has(entry.key)) {
+      disposeOwner(entry.result.owner!);
+      state.itemSignalMap.delete(entry.key);
+    }
+  }
+}
+
 function rebuildAllItems(state: EachState, items: any[]): void {
   for (const entry of state.entries) disposeOwner(entry.result.owner!);
   state.itemSignalMap.clear();
@@ -96,43 +140,56 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevNode: any): any {
 }
 
 function diffEntries(state: EachState, items: any[], keyFn: (item: any, i: number) => any): void {
-  const newKeys = new Set<any>();
-  const newEntries: Entry[] = [];
-  let prevNode: any = null;
-
-  for (const [i, rawValue] of items.entries()) {
-    const identity = keyFn(rawValue, i);
-    newKeys.add(identity);
-
-    const existingIdx = state.entries.findIndex((e) => e.key === identity);
-    if (existingIdx !== -1) {
-      const existing = state.entries[existingIdx];
-      const sig = state.itemSignalMap.get(identity);
-      if (isNotNil(sig)) sig(rawValue);
-      prevNode = repositionEntry(state.anchor, existing, prevNode);
-      newEntries.push(existing);
-      continue;
-    }
-
-    // New item
-    const result = renderEachEntry(state, rawValue, identity, i, false);
-    newEntries.push({ key: identity, result });
-    const itemNodes = result.nodes;
-    if (isNotEmpty(itemNodes)) {
-      prevNode = itemNodes[itemNodes.length - 1];
-    }
-  }
-
-  // Dispose removed entries
-  for (const entry of state.entries) {
-    if (!newKeys.has(entry.key)) {
-      disposeOwner(entry.result.owner!);
-      state.itemSignalMap.delete(entry.key);
-    }
-  }
-
+  const { newKeys, newEntries } = buildDiffEntries(state, items, keyFn);
+  disposeRemovedEntries(state, newKeys);
   state.entries.length = 0;
   state.entries.push(...newEntries);
+}
+
+/** 首次渲染：构建条目或 fallback */
+function syncInitial(
+  state: EachState,
+  items: any[],
+  keyed: ((item: any, i: number) => any) | undefined,
+): HResult | null {
+  if (isEmpty(items)) {
+    if (state.fallbackComponent) {
+      return adoptBranch({
+        parentOwner: state.owner,
+        anchor: state.anchor,
+        Component: state.fallbackComponent,
+        skipInsert: true,
+      });
+    }
+    return null;
+  }
+  for (const [i, rawValue] of items.entries()) {
+    const identity = keyed ? keyed(rawValue, i) : i;
+    const result = renderEachEntry(state, rawValue, identity, i, true);
+    state.entries.push({ key: identity, result });
+  }
+  return null;
+}
+
+/** 后续更新：完整 diff/rebuild 路径 */
+function syncUpdate(
+  state: EachState,
+  items: any[],
+  keyed: ((item: any, i: number) => any) | undefined,
+  currentFallback: HResult | null,
+): HResult | null {
+  if (isEmpty(items)) {
+    return clearAllEntries(state);
+  }
+  if (currentFallback) {
+    disposeOwner(currentFallback.owner!);
+  }
+  if (keyed) {
+    diffEntries(state, items, keyed);
+  } else {
+    rebuildAllItems(state, items);
+  }
+  return null;
 }
 
 // ── Each ──────────────────────────────────────────────
@@ -167,44 +224,11 @@ export function Each<T = any>(
 
   const sync = (isInitial: boolean) => {
     const items = isArray(toValue(props.value)) ? toValue(props.value) : [];
-
     if (isInitial) {
-      // First render: build entries or fallback without DOM insertion
-      if (isEmpty(items)) {
-        if (state.fallbackComponent) {
-          fallbackResult = adoptBranch({
-            parentOwner: state.owner,
-            anchor: state.anchor,
-            Component: state.fallbackComponent,
-            skipInsert: true,
-          });
-        }
-        return;
-      }
-      for (const [i, rawValue] of items.entries()) {
-        const identity = props.keyed ? props.keyed(rawValue, i) : i;
-        const result = renderEachEntry(state, rawValue, identity, i, true);
-        state.entries.push({ key: identity, result });
-      }
+      fallbackResult = syncInitial(state, items, props.keyed);
       return;
     }
-
-    // Subsequent updates
-    if (isEmpty(items)) {
-      fallbackResult = clearAllEntries(state);
-      return;
-    }
-
-    if (fallbackResult) {
-      disposeOwner(fallbackResult.owner!);
-      fallbackResult = null;
-    }
-
-    if (props.keyed) {
-      diffEntries(state, items, props.keyed);
-    } else {
-      rebuildAllItems(state, items);
-    }
+    fallbackResult = syncUpdate(state, items, props.keyed, fallbackResult);
   };
 
   // First render: synchronous

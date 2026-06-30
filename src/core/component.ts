@@ -97,16 +97,40 @@ export function createContext(owner: Owner): Context {
  * 将任意类型的子内容统一转换为 HResult。
  * 替代原 nestBindPrimitive 的职责。
  */
+
+/** 信号 → 绑定文本节点 HResult */
+function toHResultSignal(signal: any): HResult {
+  const adapter = getAdapter();
+  const textNode = adapter.text("");
+  const derived = use(signal, () => adapter.setText(textNode, String(signal())));
+  const stop = getSignalState(derived)?.stop;
+  const cleanups = stop ? [stop] : [];
+  return createHResult(null, [textNode], [], cleanups);
+}
+
+/** 数组 → 合并所有子 HResult */
+function toHResultArray(arr: any[]): HResult {
+  const pending: Owner[] = [];
+  const cleanups: CleanupFn[] = [];
+  const nodes: HostNode[] = [];
+  for (const item of arr.flat()) {
+    const hr = toHResult(item);
+    nodes.push(...hr.nodes);
+    if (hr.owner) {
+      pending.push(hr.owner);
+    } else {
+      pending.push(...hr.pending);
+      cleanups.push(...hr.cleanups);
+    }
+  }
+  return createHResult(null, nodes, pending, cleanups);
+}
+
 export function toHResult(child: any): HResult {
   if (isHResult(child)) return child;
 
   if (isUse(child)) {
-    const adapter = getAdapter();
-    const textNode = adapter.text("");
-    const derived = use(child, () => adapter.setText(textNode, String(child())));
-    const stop = getSignalState(derived)?.stop;
-    const cleanups = stop ? [stop] : [];
-    return createHResult(null, [textNode], [], cleanups);
+    return toHResultSignal(child);
   }
 
   if (isFunction(child)) {
@@ -114,20 +138,7 @@ export function toHResult(child: any): HResult {
   }
 
   if (isArray(child)) {
-    const pending: Owner[] = [];
-    const cleanups: CleanupFn[] = [];
-    const nodes: HostNode[] = [];
-    for (const item of child.flat()) {
-      const hr = toHResult(item);
-      nodes.push(...hr.nodes);
-      if (hr.owner) {
-        pending.push(hr.owner);
-      } else {
-        pending.push(...hr.pending);
-        cleanups.push(...hr.cleanups);
-      }
-    }
-    return createHResult(null, nodes, pending, cleanups);
+    return toHResultArray(child);
   }
 
   if (getAdapter().isNode(child)) {
