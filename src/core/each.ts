@@ -37,13 +37,14 @@ interface EachState {
 
 // ── Internal Helpers ──────────────────────────────────
 
-function renderEachEntry(
-  state: EachState,
-  rawValue: any,
-  identity: any,
-  index: number,
-  skipInsert: boolean,
-): HResult {
+function renderEachEntry(options: {
+  state: EachState;
+  rawValue: any;
+  identity: any;
+  index: number;
+  skipInsert: boolean;
+}): HResult {
+  const { state, rawValue, identity, index, skipInsert } = options;
   const itemSignal = definitionMode(rawValue);
   state.itemSignalMap.set(identity, itemSignal);
   return adoptBranch({
@@ -95,7 +96,7 @@ function buildDiffEntries(
       continue;
     }
 
-    const result = renderEachEntry(state, rawValue, identity, i, false);
+    const result = renderEachEntry({ state, rawValue, identity, index: i, skipInsert: false });
     newEntries.push({ key: identity, result });
     const itemNodes = result.nodes;
     if (isNotEmpty(itemNodes)) {
@@ -120,7 +121,7 @@ function rebuildAllItems(state: EachState, items: any[]): void {
   state.itemSignalMap.clear();
   state.entries.length = 0;
   for (const [i, rawValue] of items.entries()) {
-    const result = renderEachEntry(state, rawValue, i, i, false);
+    const result = renderEachEntry({ state, rawValue, identity: i, index: i, skipInsert: false });
     state.entries.push({ key: i, result });
   }
 }
@@ -165,7 +166,7 @@ function syncInitial(
   }
   for (const [i, rawValue] of items.entries()) {
     const identity = keyed ? keyed(rawValue, i) : i;
-    const result = renderEachEntry(state, rawValue, identity, i, true);
+    const result = renderEachEntry({ state, rawValue, identity, index: i, skipInsert: true });
     state.entries.push({ key: identity, result });
   }
   return null;
