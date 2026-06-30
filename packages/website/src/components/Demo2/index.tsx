@@ -18,10 +18,10 @@ export default function () {
 
   return (
     <div>
-      <div>NameUpcaseCache:{NameUpcaseCache()}</div>
-      <div>NameUpcase:{NameUpcase()}</div>
-      <div>name:{name()}</div>
-      <div>age:{age()}</div>
+      <div>NameUpcaseCache:{NameUpcaseCache}</div>
+      <div>NameUpcase:{NameUpcase}</div>
+      <div>name:{name}</div>
+      <div>age:{age}</div>
       <div>
         <button onClick={() => state((v) => ({ ...v, age: v.age + 1 }))}>age + </button>
         <button onClick={() => state((v) => ({ ...v, age: v.age - 1 }))}>age - </button>
