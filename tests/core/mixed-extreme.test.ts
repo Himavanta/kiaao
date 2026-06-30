@@ -497,3 +497,134 @@ describe("Portal + Show", () => {
     expect(target.querySelector(".temp")).toBeFalsy();
   });
 });
+
+// ── 场景 7：综合压力 — Each + Show + Directive + Async ──
+
+describe("综合压力 Each+Show+Directive+Async", () => {
+  const FadeDirective = direct(((el: any, _props: any, ctx: any) => {
+    el.setAttribute("data-fade", "true");
+    ctx.onUnmount(() => el.setAttribute("data-fade-end", "true"));
+  }) as any);
+
+  function AsyncDetail({ item }: { item: () => { id: number; text: string } }) {
+    const loaded = use(false);
+    const data = item();
+    setTimeout(() => loaded(true), 5);
+
+    return h(
+      Show as any,
+      { value: loaded },
+      () => h("span", { class: "detail", "data-id": String(data.id) }, data.text + "-detail"),
+      () => h("span", { class: "placeholder" }, "loading..."),
+    );
+  }
+
+  function SectionRow({ item }: { item: () => { id: number; title: string; expanded: boolean } }) {
+    const expanded = use(item, () => item().expanded);
+    const data = item();
+
+    return h(
+      "div",
+      { class: "section", "data-id": String(data.id) },
+      h("h3", null, data.title),
+      h(
+        FadeDirective as any,
+        { from: {}, to: {} },
+        h(
+          Show as any,
+          { value: expanded },
+          () => {
+            // Each of detail items inside expanded section
+            const items = use([
+              { id: 1, text: data.title + "-A" },
+              { id: 2, text: data.title + "-B" },
+            ]);
+            return h(
+              "div",
+              { class: "details" },
+              h(Each as any, { value: items, keyed: (i: any) => i.id }, AsyncDetail),
+            );
+          },
+          () => h("span", { class: "collapsed" }, "collapsed"),
+        ),
+      ),
+    );
+  }
+
+  test("全链路多层嵌套下整体渲染正确", async () => {
+    const sections = use([
+      { id: 1, title: "S1", expanded: true },
+      { id: 2, title: "S2", expanded: false },
+    ]);
+
+    const result = h(
+      "div",
+      { class: "root" },
+      h(Each as any, { value: sections, keyed: (s: any) => s.id }, SectionRow),
+    );
+    const container = mount(result);
+
+    // Section 1 expanded, Section 2 collapsed
+    expect(container.querySelectorAll(".section").length).toBe(2);
+    expect(container.querySelectorAll(".details").length).toBe(1);
+    expect(container.querySelectorAll(".collapsed").length).toBe(1);
+
+    // Wait for async details to load
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".detail").length).toBe(2);
+    expect(container.querySelectorAll(".placeholder").length).toBe(0);
+  });
+
+  test("展开/折叠不泄漏", async () => {
+    const sections = use([{ id: 1, title: "S1", expanded: true }]);
+
+    const result = h(
+      "div",
+      { class: "root" },
+      h(Each as any, { value: sections, keyed: (s: any) => s.id }, SectionRow),
+    );
+    const container = mount(result);
+
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".detail").length).toBe(2);
+
+    // Collapse
+    sections([{ id: 1, title: "S1", expanded: false }]);
+    expect(container.querySelectorAll(".details").length).toBe(0);
+    expect(container.querySelectorAll(".collapsed").length).toBe(1);
+
+    // Expand again
+    sections([{ id: 1, title: "S1", expanded: true }]);
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".detail").length).toBe(2);
+  });
+
+  test("列表重排时多层状态保持", async () => {
+    const sections = use([
+      { id: 1, title: "S1", expanded: true, order: 1 },
+      { id: 2, title: "S2", expanded: true, order: 2 },
+    ]);
+
+    const result = h(
+      "div",
+      { class: "root" },
+      h(Each as any, { value: sections, keyed: (s: any) => s.id }, SectionRow),
+    );
+    const container = mount(result);
+
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".detail").length).toBe(4);
+
+    // Reorder
+    sections([
+      { id: 2, title: "S2", expanded: true, order: 2 },
+      { id: 1, title: "S1", expanded: true, order: 1 },
+    ]);
+
+    // All details should still be loaded
+    expect(container.querySelectorAll(".detail").length).toBe(4);
+    const details = container.querySelectorAll(".detail");
+    expect(details[0]?.textContent).toContain("S2");
+    expect(details[2]?.textContent).toContain("S1");
+  });
+});
