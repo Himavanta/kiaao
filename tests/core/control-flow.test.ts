@@ -50,12 +50,11 @@ describe("Show", () => {
     const result = _h(Show, { value: true }, Primary, Fallback);
     mount(result);
 
-    // Anchor is the only node in result
-    expect(result.nodes).toHaveLength(1);
-    expect((result.nodes[0] as Node).nodeType).toBe(8);
+    // Content is before anchor in result.nodes
+    expect(result.nodes.length).toBeGreaterThan(0);
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
+    expect(anchor.nodeType).toBe(8);
 
-    // Content is in DOM (rendered via onMount)
-    const anchor = result.nodes[0] as Node;
     const content = getContentBeforeRef(anchor);
     expect(content).toHaveLength(1);
     expect((content[0] as HTMLElement).dataset.test).toBe("primary");
@@ -64,7 +63,7 @@ describe("Show", () => {
   test("renders fallback when value is falsy", () => {
     const result = _h(Show, { value: false }, Primary, Fallback);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
     const content = getContentBeforeRef(anchor);
     expect(content).toHaveLength(1);
     expect((content[0] as HTMLElement).dataset.test).toBe("fallback");
@@ -73,6 +72,7 @@ describe("Show", () => {
   test("renders nothing (only anchor) when falsy and no fallback", () => {
     const result = _h(Show, { value: false }, Primary);
     mount(result);
+    // Only anchor (no match, no fallback)
     expect(result.nodes).toHaveLength(1);
     expect((result.nodes[0] as Node).nodeType).toBe(8);
   });
@@ -81,7 +81,7 @@ describe("Show", () => {
     const visible = use(true);
     const result = _h(Show, { value: visible }, Primary, Fallback);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
 
     expect(getContentBeforeRef(anchor)).toHaveLength(1);
     expect((getContentBeforeRef(anchor)[0] as HTMLElement).dataset.test).toBe("primary");
@@ -119,7 +119,7 @@ describe("Case", () => {
   test("renders matching branch from mapping table", () => {
     const result = _h(Case, { value: "loading" }, map, Fallback);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
     const content = getContentBeforeRef(anchor);
     expect(content).toHaveLength(1);
     expect((content[0] as HTMLElement).dataset.test).toBe("loading");
@@ -128,7 +128,7 @@ describe("Case", () => {
   test("renders fallback when key not matched", () => {
     const result = _h(Case, { value: "unknown" }, map, Fallback);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
     const content = getContentBeforeRef(anchor);
     expect((content[0] as HTMLElement).dataset.test).toBe("fallback");
   });
@@ -144,7 +144,7 @@ describe("Case", () => {
     const status = use("loading");
     const result = _h(Case, { value: status }, map, Fallback);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
 
     expect((getContentBeforeRef(anchor)[0] as HTMLElement).dataset.test).toBe("loading");
 
@@ -189,9 +189,8 @@ describe("Each", () => {
     ];
     const result = _h(Each, { value: items, keyed: (item: any) => item.id }, ItemRow, EmptyState);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
 
-    expect(result.nodes).toHaveLength(1); // anchor only
     expect(getContentBeforeRef(anchor)).toHaveLength(2);
     expect(getContentBeforeRef(anchor)[0].textContent).toBe("A");
     expect(getContentBeforeRef(anchor)[1].textContent).toBe("B");
@@ -201,7 +200,7 @@ describe("Each", () => {
     const items: any[] = [];
     const result = _h(Each, { value: items, keyed: (item: any) => item.id }, ItemRow, EmptyState);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
     const content = getContentBeforeRef(anchor);
     expect(content).toHaveLength(1);
     expect((content[0] as HTMLElement).dataset.test).toBe("empty");
@@ -222,7 +221,7 @@ describe("Each", () => {
     ]);
     const result = _h(Each, { value: items, keyed: (item: any) => item.id }, ItemRow, EmptyState);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
 
     expect(getContentBeforeRef(anchor)).toHaveLength(2);
     expect(getContentBeforeRef(anchor)[0].textContent).toBe("A");

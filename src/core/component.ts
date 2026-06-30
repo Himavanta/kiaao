@@ -150,8 +150,8 @@ export function toHResult(child: any): HResult {
  */
 export function adoptResult(owner: Owner, hr: HResult): HostNode[] {
   if (hr.owner) {
-    // 边界：只挂接组件/指令 Owner
-    if (!hr.owner.disposed) {
+    // 边界：只挂接外部组件/指令 Owner（排除自身防止自引用）
+    if (hr.owner !== owner && !hr.owner.disposed) {
       owner.children.push(hr.owner);
       hr.owner.parent = owner;
     }
@@ -171,8 +171,6 @@ export function adoptResult(owner: Owner, hr: HResult): HostNode[] {
   return hr.nodes;
 }
 
-// 临时引用防止未使用警告，后续阶段接入后删除
-void toHResult;
 void adoptResult;
 
 // ── handleAsyncComponent ──────────────────────────────

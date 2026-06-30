@@ -24,7 +24,8 @@ export function initAnchor(owner: Owner, label: string): HostNode {
 // ── Child Adoption ────────────────────────────────────
 
 /**
- * 渲染一个子组件并将其 Owner 挂载到目标 Owner 下，节点插入在锚点之前。
+ * 渲染一个子组件并将其 Owner 挂载到目标 Owner 下。
+ * skipInsert 为 true 时跳过 DOM 插入和 triggerMount（首次渲染用）。
  * 返回 HResult 供调用方追踪。
  */
 export function adoptBranch(options: {
@@ -32,20 +33,24 @@ export function adoptBranch(options: {
   anchor: HostNode;
   Component: ComponentFunction;
   componentProps?: any;
+  skipInsert?: boolean;
 }): HResult {
-  const { parentOwner, anchor, Component, componentProps } = options;
+  const { parentOwner, anchor, Component, componentProps, skipInsert } = options;
   const adapter = getAdapter();
-  // children 为函数时调用以获取新内容（跨控制流开关重建）
   const props =
     componentProps && isFunction(componentProps.children)
       ? { ...componentProps, children: componentProps.children() }
       : componentProps;
   const r = h(Component, props);
-  const nodes = adoptResult(parentOwner, r);
-  for (const node of nodes) {
-    adapter.before(anchor, node);
+  adoptResult(parentOwner, r);
+
+  if (!skipInsert) {
+    for (const node of r.nodes) {
+      adapter.before(anchor, node);
+    }
+    if (r.owner) triggerMount(r.owner);
   }
-  if (r.owner) triggerMount(r.owner);
+
   return r;
 }
 
