@@ -1,6 +1,7 @@
 // kiaao — SSR RenderAdapter implementation
 // Creates lightweight serializable node trees for string rendering.
 
+import { splitSet } from "../adapter/index.ts";
 import { definitionMode, isNil, isNotNil, isObject, attrToString } from "../core/index.ts";
 import type { RenderAdapter, HostNode, CleanupFn } from "../core/index.ts";
 
@@ -41,22 +42,9 @@ type SSRNode = SSRElement | SSRText | SSRComment;
 
 // ── Serialization ────────────────────────────────────
 
-const VOID_ELEMENTS = new Set([
-  "area",
-  "base",
-  "br",
-  "col",
-  "embed",
-  "hr",
-  "img",
-  "input",
-  "link",
-  "meta",
-  "param",
-  "source",
-  "track",
-  "wbr",
-]);
+const VOID_ELEMENTS = splitSet(
+  "area base br col embed hr img input keygen link meta param source track wbr",
+);
 
 /** 将 SSR 节点树序列化为 HTML 字符串 */
 export function serializeSSRNode(node: SSRNode): string {

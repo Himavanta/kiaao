@@ -6,6 +6,9 @@
 import type { RenderAdapter } from "../core/index.ts";
 import { isNil } from "../core/index.ts";
 
+/** 空格分隔字符串 → Set，用于元素/属性查找表 */
+export const splitSet = (str: string): Set<string> => new Set(str.trim().split(/\s+/));
+
 // ── RenderAdapter ─────────────────────────────────────
 
 let _adapter: RenderAdapter | null = null;

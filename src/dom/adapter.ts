@@ -1,6 +1,7 @@
 // kiaao — Browser RenderAdapter implementation
 // Implements the platform-agnostic RenderAdapter interface for browser DOM.
 
+import { splitSet } from "../adapter/index.ts";
 import { isObject, isFunction, attrToString } from "../core/index.ts";
 import type { RenderAdapter, HostNode, CleanupFn } from "../core/index.ts";
 import {
@@ -15,8 +16,6 @@ import {
 // ── SVG ───────────────────────────────────────────────
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-
-const splitSet = (str: string): Set<string> => new Set(str.trim().split(/\s+/));
 
 const VOID_ELEMENTS = splitSet(
   "area base br col embed hr img input link meta param source track wbr",
