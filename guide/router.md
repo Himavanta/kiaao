@@ -1,8 +1,8 @@
 # Router / 路由
 
-Client-side routing is provided as a standalone package `kiaao/router`. It is built entirely on the core primitives — signals for current path, `when` for route matching, and components for views and links. There is no router-specific reactivity system.
+Client-side routing is provided as a standalone package `kiaao/router`. It is built entirely on the core primitives — signals for current path, `<Case>` for route matching, and components for views and links. There is no router-specific reactivity system.
 
-客户端路由作为独立包 `kiaao/router` 提供。它完全基于核心原语构建——用信号管理当前路径，用 `when` 进行路由匹配，用组件构建视图和链接。没有路由器专属的响应式系统。
+客户端路由作为独立包 `kiaao/router` 提供。它完全基于核心原语构建——用信号管理当前路径，用 `<Case>` 进行路由匹配，用组件构建视图和链接。没有路由器专属的响应式系统。
 
 The router is included in the `kiaao` package. Import it from `kiaao/router`.
 
@@ -41,18 +41,18 @@ const { RouterView, Link, navigate, currentPath, currentParams } = createRouter(
 |                 |                                  | 声明式导航链接。                                    |
 | `navigate`      | `(path: string) => void`         | Programmatic navigation. Receives an absolute path. |
 |                 |                                  | 编程式导航。接收完整绝对路径。                      |
-| `currentPath`   | `Getter<string>`                 | A signal holding the current pathname.              |
+| `currentPath`   | `Signal<string>`                 | A signal holding the current pathname.              |
 |                 |                                  | 保存当前路径名的信号。                              |
-| `currentParams` | `Getter<Record<string, string>>` | A signal holding the current URL query parameters.  |
+| `currentParams` | `Signal<Record<string, string>>` | A signal holding the current URL query parameters.  |
 |                 |                                  | 保存当前 URL 查询参数的信号。                       |
 
 ---
 
 ## `RouterView` / 路由视图
 
-`RouterView` is the component that watches the current path and renders the matched route. It uses a `when` directive internally with map mode — the route path acts as the key, and the route component is the branch.
+`RouterView` is the component that watches the current path and renders the matched route. It uses a `<Case>` component internally — the route path acts as the key, and the route component is the branch.
 
-`RouterView` 是监听当前路径并渲染匹配路由的组件。它内部使用映射表模式的 `when` 指令——路由路径作为 key，路由组件作为分支。
+`RouterView` 是监听当前路径并渲染匹配路由的组件。它内部使用 `<Case>` 组件——路由路径作为 key，路由组件作为分支。
 
 ### Props
 
@@ -80,7 +80,7 @@ interface Route {
 
 ```jsx
 import { createRouter } from "kiaao/router";
-import { mount } from "kiaao";
+import { createApp } from "kiaao";
 
 const { RouterView } = createRouter();
 
@@ -105,7 +105,8 @@ function App() {
   );
 }
 
-mount(<App />, document.getElementById("app"));
+const app = createApp(<App />);
+app.mount("#app");
 ```
 
 Navigating to `/about` renders the `About` component inside the `<main>` element. The rest of the page (the `<nav>`) is unchanged. This is because `RouterView` only re-renders its own children — not the entire application.
@@ -169,17 +170,17 @@ When navigating to `/dashboard/users`:
 
 ## `Link` / 导航链接
 
-`Link` is a declarative navigation component. It renders an `<a>` element that intercepts click events and calls `navigate` internally, preventing full page reloads. The `to` prop accepts an absolute path string or a signal getter.
+`Link` is a declarative navigation component. It renders an `<a>` element that intercepts click events and calls `navigate` internally, preventing full page reloads. The `to` prop accepts an absolute path string or a signal.
 
-`Link` 是声明式导航组件。它渲染一个 `<a>` 元素，拦截点击事件并在内部调用 `navigate`，阻止完整页面重载。`to` 属性接受绝对路径字符串或信号 getter。
+`Link` 是声明式导航组件。它渲染一个 `<a>` 元素，拦截点击事件并在内部调用 `navigate`，阻止完整页面重载。`to` 属性接受绝对路径字符串或信号。
 
 ```jsx
 <Link to="/dashboard/users">Users</Link>;
 
 // Reactive target / 响应式目标
-const [item] = use({ path: "/dashboard", title: "Dashboard" });
-const [to] = use(item, () => item().path);
-const [text] = use(item, () => item().title);
+const item = use({ path: "/dashboard", title: "Dashboard" });
+const to = use(item, () => item().path);
+const text = use(item, () => item().title);
 <Link to={to}>{text}</Link>;
 ```
 
@@ -204,14 +205,14 @@ function handleLogin() {
 
 ## Reading the Current Path / 读取当前路径
 
-`currentPath` is a signal getter. You can use it in any derivation or JSX expression to react to path changes.
+`currentPath` is a signal. You can use it in any derivation or JSX expression to react to path changes.
 
-`currentPath` 是一个信号 getter。可以在任何派生或 JSX 表达式中使用它来响应路径变化。
+`currentPath` 是一个信号。可以在任何派生或 JSX 表达式中使用它来响应路径变化。
 
 ```jsx
 const { currentPath } = createRouter();
 
-const [isActive] = use(currentPath, () => currentPath().startsWith("/admin"));
+const isActive = use(currentPath, () => currentPath().startsWith("/admin"));
 
 return <div class={isActive ? "active" : ""}>Current: {currentPath}</div>;
 ```

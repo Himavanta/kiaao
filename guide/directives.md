@@ -1,8 +1,8 @@
 # Directives / 自定义指令
 
-Custom directives allow reusable DOM behavior to be attached directly to native elements. A directive has its own element-level lifecycle — `onMount`, `onUnmount`, and `use` — independent of any component. Directives do not create component instances and leave no extra nodes in the DOM.
+Custom directives allow reusable DOM behavior to be attached directly to native elements. A directive has its own persistent Owner and element-level lifecycle — `onMount`, `onUnmount`, and `use` — independent of any component. Directives do not create extra wrapper nodes in the DOM.
 
-自定义指令允许将可复用的 DOM 行为直接附加到原生元素上。指令拥有独立于组件的元素级生命周期——`onMount`、`onUnmount` 和 `use`。指令不创建组件实例，也不在 DOM 中留下额外节点。
+自定义指令允许将可复用的 DOM 行为直接附加到原生元素上。指令拥有自己的持久 Owner 和元素级生命周期——`onMount`、`onUnmount` 和 `use`——独立于任何组件。指令不会在 DOM 中创建额外的包裹节点。
 
 ## Creating a Directive / 创建指令
 
@@ -27,11 +27,11 @@ The directive function is called once per child element when the element is crea
 
 指令函数在每个子元素创建时调用一次。props 变化时不会重新执行。如需响应式更新，在指令内部使用 `ctx.use` 订阅信号。
 
-### TypeScript Support / TypeScript 支持
+## TypeScript Support / TypeScript 支持
 
-Directives created with `direct` use an intersection type so they can be used as JSX tags without type errors:
+Directives created with `direct` use an intersection type so they can be used as JSX tags without type errors.
 
-通过 `direct` 创建的指令使用交叉类型，因此可以直接用作 JSX 标签而不会产生类型错误：
+通过 `direct` 创建的指令使用交叉类型，可以直接用作 JSX 标签而不会产生类型错误。
 
 ```ts
 type DirectiveFunction = (
@@ -40,19 +40,9 @@ type DirectiveFunction = (
   context: DirectiveContext,
 ) => void;
 
-// direct() 返回交叉类型：既保留指令函数签名，又提供 JSX 所需的组件签名
-declare function direct<T extends DirectiveFunction>(
-  fn: T,
-): T & ((props: Record<string, any>) => Node);
+// direct() returns a type that satisfies both the directive signature and JSX usage
+// direct() 返回的类型同时满足指令签名和 JSX 使用
 ```
-
-This means `<Motion from={...} to={...}>` type-checks correctly under JSX, while `h()` internally detects the `DIRECT_KEY` symbol and dispatches to the directive path. The extra `(props) => Node` signature is purely for TypeScript — it has no runtime effect.
-
-这意味着 `<Motion from={...} to={...}>` 在 JSX 下可以通过类型检查，而 `h()` 内部通过 `DIRECT_KEY` 符号检测到指令函数并调度到指令路径。额外的 `(props) => Node` 签名仅用于 TypeScript，不影响运行时行为。
-
-This follows the same pattern as React's `forwardRef`, where the component type exposes only the JSX-relevant signature while keeping the internal render function signature hidden.
-
-这与 React 的 `forwardRef` 模式相同——组件类型只暴露与 JSX 相关的签名，同时隐藏内部渲染函数的签名。
 
 ## Element-Level Lifecycle / 元素级生命周期
 
@@ -70,16 +60,16 @@ Runs before the element is removed from the DOM. Use it to clean up event listen
 
 ### `ctx.use(...)`
 
-Creates signals bound to the element's lifetime. Works exactly like the component-level `use` — same syntax, same three forms (definition, signal referencing, derivation). Signals created this way are automatically cleaned up when the element is removed.
+Creates signals bound to the directive's Owner. Works exactly like component-level `use` — same syntax, same three forms (definition, signal referencing, derivation). Signals created this way are automatically cleaned up when the directive's Owner is disposed.
 
-创建绑定到元素生命周期的信号。与组件级 `use` 完全一致——相同的语法、相同的三种形式（定义、信号引用、派生）。这样创建的信号在元素移除时自动清理。
+创建绑定到指令 Owner 的信号。与组件级 `use` 完全一致——相同的语法、相同的三种形式（定义、信号引用、派生）。这样创建的信号在指令 Owner 销毁时自动清理。
 
 ```ts
 const ObserveSize = direct((el, props, ctx) => {
-  const [rect, setRect] = ctx.use({ width: 0, height: 0 });
+  const rect = ctx.use({ width: 0, height: 0 });
 
   const observer = new ResizeObserver(([entry]) => {
-    setRect(entry.contentRect);
+    rect(entry.contentRect);
   });
   observer.observe(el);
 
@@ -89,9 +79,9 @@ const ObserveSize = direct((el, props, ctx) => {
 
 ## Multiple Children / 多子元素
 
-A directive can wrap multiple elements. The directive function is called once for each `Element` child. Non-Element children (text nodes, comments, signals, booleans) are skipped with a dev-mode warning.
+A directive can wrap multiple elements. The directive function is called once for each **Element** child. Non-Element children (text nodes, comments, signals, booleans) are skipped with a dev-mode warning.
 
-一个指令可以包裹多个元素。指令函数会为每个 `Element` 子元素调用一次。非 Element 子元素（文本节点、注释、信号、布尔值）会被跳过，并在开发模式下发出警告。
+一个指令可以包裹多个元素。指令函数会为每个 **Element** 子元素调用一次。非 Element 子元素（文本节点、注释、信号、布尔值）会被跳过，并在开发模式下发出警告。
 
 ```jsx
 <FadeIn>
@@ -150,7 +140,7 @@ Directives only work on native HTML elements. Using a directive on a component h
 
 **Directives are skipped in SSR.** Server-side rendering has no DOM to operate on. `hSSR` ignores directives and renders the children directly.
 
-**SSR 中指令被跳过。** 服务端渲染没有 DOM 可供操作。`hSSR` 忽略指令，直接渲染 children。
+**SSR 中指令被跳过。** 服务端渲染没有 DOM 可供操作。SSR 模式忽略指令，直接渲染 children。
 
 ## Examples / 示例
 
@@ -173,7 +163,7 @@ const FadeIn = direct((el, props, ctx) => {
 function Comp() {
   return (
     <FadeIn duration={0.5}>
-      <div class="content">我会淡入</div>
+      <div class="content">I will fade in</div>
     </FadeIn>
   );
 }
@@ -233,16 +223,6 @@ function Comp() {
 All three directives operate on the same `<input>` element, each managing its own independent lifecycle.
 
 三个指令作用于同一个 `<input>` 元素，各自管理独立生命周期。
-
-## Exit Animation / 退出动画
-
-Exit animation timing is controlled by user-space code. The framework keeps the signal model synchronous and predictable. The recommended pattern is a factory function that collects animation tasks via a directive and triggers them before updating the signal. See the animation exploration guide for the full pattern.
-
-退出动画的时序控制由用户态代码处理。框架保持信号模型的同步和可预测。推荐模式是通过工厂函数，利用指令收集动画任务，在更新信号前触发。完整模式参见动画探索指南。
-
-For simple cases, a directive handles only the enter animation (as shown above), and exit timing is managed externally by the developer.
-
-对于简单场景，指令只处理进入动画（如上所示），退出时序由开发者在外部管理。
 
 Now that you understand directives, learn about control flow or component lifecycle. / 现在你了解了自定义指令，继续了解控制流或组件生命周期。
 

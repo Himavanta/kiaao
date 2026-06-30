@@ -69,20 +69,21 @@ After configuration, you can write JSX directly in `.tsx` or `.jsx` files. The f
 配置完成后，即可在 `.tsx` 或 `.jsx` 文件中直接编写 JSX。以下代码应能正常编译。
 
 ```tsx
-import { use, mount } from "kiaao";
+import { use, createApp } from "kiaao";
 
 function App() {
-  const [count, setCount] = use(0);
+  const count = use(0);
 
   return (
     <div>
       <p>Count: {count}</p>
-      <button onClick={() => setCount((c) => c + 1)}>+1</button>
+      <button onClick={() => count((c) => c + 1)}>+1</button>
     </div>
   );
 }
 
-mount(<App />, document.getElementById("app"));
+const app = createApp(<App />);
+app.mount("#app");
 ```
 
 ---

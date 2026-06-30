@@ -24,11 +24,11 @@ import { createMotion, createGroupMotion } from "kiaao/motion";
 
 ---
 
-## `createMotion` — when mode / when 模式
+## `createMotion` — Show/Case mode / Show/Case 模式
 
-Use `createMotion` for single elements controlled by `when`. It returns a `[visible, Motion]` tuple — `visible` is the animation signal to bind to `when`, and `Motion` is the directive that wraps the animated element.
+Use `createMotion` for single elements controlled by `<Show>` or `<Case>`. It returns a `[visible, Motion]` tuple — `visible` is the animation signal to bind to the control flow component, and `Motion` is the directive that wraps the animated element.
 
-使用 `createMotion` 处理由 `when` 控制的单个元素。它返回 `[visible, Motion]` 元组——`visible` 是绑定到 `when` 的动画信号，`Motion` 是包裹动画元素的指令。
+使用 `createMotion` 处理由 `<Show>` 或 `<Case>` 控制的单个元素。它返回 `[visible, Motion]` 元组——`visible` 是绑定到控制流组件的动画信号，`Motion` 是包裹动画元素的指令。
 
 ### API
 
@@ -38,9 +38,9 @@ function createMotion(signal, context?): [visible, Motion];
 
 - **`signal`**
 
-  A boolean getter. You toggle this to show/hide content. Business UI reads this directly.
+  A boolean signal. You toggle this to show/hide content. Business UI reads this directly.
 
-  布尔值 getter。你通过它控制显隐。业务 UI 直接读取此信号。
+  布尔值信号。你通过它控制显隐。业务 UI 直接读取此信号。
 
 - **`context`** (optional / 可选)
 
@@ -52,9 +52,9 @@ function createMotion(signal, context?): [visible, Motion];
 
 - **`visible`**
 
-  Animation signal. Bind this to `when`. It stays `true` until exit animations finish.
+  Animation signal. Bind this to `<Show value={visible}>`. It stays `true` until exit animations finish.
 
-  动画信号。绑定到 `when`。退出动画完成后才变为 `false`。
+  动画信号。绑定到 `<Show value={visible}>`。退出动画完成后才变为 `false`。
 
 - **`Motion`**
 
@@ -87,24 +87,25 @@ import { use } from "kiaao";
 import { createMotion } from "kiaao/motion";
 
 function Comp(_, context) {
-  const [state, setState] = use(true);
+  const state = use(true);
   const [visible, Motion] = createMotion(state, context);
-  const [text] = use(state, () => (state() ? "开" : "关"));
+  const text = use(state, () => (state() ? "On" : "Off"));
 
   return (
     <div>
-      <button onClick={() => setState(false)}>关闭</button>
-      <span>当前状态：{text}</span> {/* 立刻变化 */}
-      <div when={visible}>
-        {/* 绑定动画信号 */}
-        <Motion
-          from={{ opacity: 0, transform: "translateY(20px)" }}
-          to={{ opacity: 1, transform: "translateY(0)" }}
-          duration={0.5}
-        >
-          <div class="content">动画内容</div>
-        </Motion>
-      </div>
+      <button onClick={() => state(false)}>Close</button>
+      <span>Current state: {text}</span> {/* updates immediately */}
+      <Show value={visible}>
+        {() => (
+          <Motion
+            from={{ opacity: 0, transform: "translateY(20px)" }}
+            to={{ opacity: 1, transform: "translateY(0)" }}
+            duration={0.5}
+          >
+            <div class="content">Animated content</div>
+          </Motion>
+        )}
+      </Show>
     </div>
   );
 }
@@ -112,19 +113,19 @@ function Comp(_, context) {
 
 **What happens**
 
-`state(false)` → business UI updates immediately. Motion detects the exit and plays the exit animation. `visible` stays `true` until the animation finishes, then becomes `false` → `when` removes the DOM.
+`state(false)` → business UI updates immediately. Motion detects the exit and plays the exit animation. `visible` stays `true` until the animation finishes, then becomes `false` → `<Show>` removes the DOM.
 
 **流程**
 
-`state(false)` → 业务 UI 立刻更新。Motion 检测到退出并播放退出动画。`visible` 在动画完成前保持 `true`，完成后变为 `false` → `when` 移除 DOM。
+`state(false)` → 业务 UI 立刻更新。Motion 检测到退出并播放退出动画。`visible` 在动画完成前保持 `true`，完成后变为 `false` → `<Show>` 移除 DOM。
 
 ---
 
-## `createGroupMotion` — each mode / each 模式
+## `createGroupMotion` — Each mode / Each 模式
 
-Use `createGroupMotion` for lists rendered by `each`. It supports precise diffing with a `keyFn` to animate only removed items, or full-exit mode without a key.
+Use `createGroupMotion` for lists rendered by `<Each>`. It supports precise diffing with a `keyFn` to animate only removed items, or full-exit mode without a key.
 
-使用 `createGroupMotion` 处理由 `each` 渲染的列表。支持通过 `keyFn` 进行精确 diff，只对被移除的条目播放动画；也支持无 key 的全量退出模式。
+使用 `createGroupMotion` 处理由 `<Each>` 渲染的列表。支持通过 `keyFn` 进行精确 diff，只对被移除的条目播放动画；也支持无 key 的全量退出模式。
 
 ### API
 
@@ -134,15 +135,15 @@ function createGroupMotion(signal, keyFn?, context?): [visibleItems, GroupMotion
 
 - **`signal`**
 
-  An array getter. You update this directly to add/remove items.
+  An array signal. You update this directly to add/remove items.
 
-  数组 getter。你直接更新它来增删条目。
+  数组信号。你直接更新它来增删条目。
 
 - **`keyFn`** (optional / 可选)
 
-  Identity function, same as `each`'s `key`. Enables precise diff. If omitted, all old elements play exit animation.
+  Identity function, same as `<Each>`'s `keyed`. Enables precise diff. If omitted, all old elements play exit animation.
 
-  身份标识函数，与 `each` 的 `key` 一致。启用精确 diff。若不传，所有旧元素播放退出动画。
+  身份标识函数，与 `<Each>` 的 `keyed` 一致。启用精确 diff。若不传，所有旧元素播放退出动画。
 
 - **`context`** (optional / 可选)
 
@@ -154,9 +155,9 @@ function createGroupMotion(signal, keyFn?, context?): [visibleItems, GroupMotion
 
 - **`visibleItems`**
 
-  Animation signal. Bind this to `each`.
+  Animation signal. Bind this to `<Each value={visibleItems}>`.
 
-  动画信号。绑定到 `each`。
+  动画信号。绑定到 `<Each value={visibleItems}>`。
 
 - **`GroupMotion`**
 
@@ -183,32 +184,34 @@ import { use } from "kiaao";
 import { createGroupMotion } from "kiaao/motion";
 
 function Comp(_, context) {
-  const [items, setItems] = use([
-    { id: 1, text: "任务一" },
-    { id: 2, text: "任务二" },
-    { id: 3, text: "任务三" },
+  const items = use([
+    { id: 1, text: "Task one" },
+    { id: 2, text: "Task two" },
+    { id: 3, text: "Task three" },
   ]);
   const keyFn = (v) => v.id;
   const [visibleItems, GroupMotion] = createGroupMotion(items, keyFn, context);
 
   const removeItem = (id) => {
-    setItems(items().filter((i) => i.id !== id));
+    items(items().filter((i) => i.id !== id));
   };
 
   return (
-    <ul each={visibleItems} key={keyFn}>
-      {(item) => (
-        <GroupMotion
-          key={keyFn(item())}
-          from={{ opacity: 0, transform: "translateX(-20px)" }}
-          to={{ opacity: 1, transform: "translateX(0)" }}
-        >
-          <li>
-            {item().text}
-            <button onClick={() => removeItem(item().id)}>删除</button>
-          </li>
-        </GroupMotion>
-      )}
+    <ul>
+      <Each value={visibleItems} keyed={keyFn}>
+        {(item) => (
+          <GroupMotion
+            key={keyFn(item())}
+            from={{ opacity: 0, transform: "translateX(-20px)" }}
+            to={{ opacity: 1, transform: "translateX(0)" }}
+          >
+            <li>
+              {item().text}
+              <button onClick={() => removeItem(item().id)}>Delete</button>
+            </li>
+          </GroupMotion>
+        )}
+      </Each>
     </ul>
   );
 }
@@ -230,9 +233,9 @@ function Comp(_, context) {
 
   **退出动画必须传 `from`。** 如果只传 `to`，元素会有进入动画，但移除时不会有退出动画。
 
-- **Animation signals (`visible` / `visibleItems`) must be bound to `when` / `each`.** Business signals are for your own UI logic.
+- **Animation signals (`visible` / `visibleItems`) must be bound to control flow components.** Business signals are for your own UI logic.
 
-  **动画信号（`visible` / `visibleItems`）必须绑定到 `when` / `each`。** 业务信号用于你自己的 UI 逻辑。
+  **动画信号（`visible` / `visibleItems`）必须绑定到控制流组件。** 业务信号用于你自己的 UI 逻辑。
 
 - **Mid-flight cancellation is protected by tick-based generation tracking.** If you toggle the signal rapidly, only the latest state takes effect.
 

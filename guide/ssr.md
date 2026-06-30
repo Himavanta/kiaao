@@ -1,8 +1,8 @@
 # SSR / 服务端渲染
 
-kiaao provides `renderToString` for server-side rendering. In SSR mode, the component tree is rendered to an HTML string. Reactive bindings are evaluated once at render time. No client-side hydration is performed — the output is static HTML.
+kiaao provides `renderToString` for server-side rendering. In SSR mode, the component tree is rendered to an HTML string. Reactive bindings are evaluated once at render time. The output is static HTML — no client-side hydration is performed automatically. Hydration support is planned for a future release.
 
-kiaao 提供 `renderToString` 用于服务端渲染。在 SSR 模式下，组件树被渲染为 HTML 字符串。响应式绑定在渲染时执行一次求值。不执行客户端水合——输出为静态 HTML。
+kiaao 提供 `renderToString` 用于服务端渲染。在 SSR 模式下，组件树被渲染为 HTML 字符串。响应式绑定在渲染时执行一次求值。输出为静态 HTML——不会自动执行客户端水合。水合支持计划在未来版本中推出。
 
 ---
 
@@ -36,17 +36,17 @@ SSR 期间，框架的某些行为与客户端执行不同。这是因为没有 
 
 **生命周期**：SSR 期间不触发 `onMount` 和 `onUnmount` 回调。它们仅在客户端的组件挂载或卸载时运行。
 
-**Async components / 异步组件**：Async components are **not supported** in SSR. `renderToString` is synchronous and cannot wait for Promises. If an async component is encountered during SSR, the framework throws an error. For data-fetching scenarios in SSR, fetch the data outside the component and pass it via props to a synchronous component.
+**Async components / 异步组件**：Async components cannot load data during SSR. When an async component is encountered, the framework outputs a placeholder comment node (`<!--async-->` or `<!--lazy-ssr-->` for `lazy` components). The placeholder marks the position where the client-side component will mount.
 
-**异步组件**：异步组件在 SSR 中**不受支持**。`renderToString` 是同步函数，无法等待 Promise。如果在 SSR 期间遇到异步组件，框架会抛出错误。对于 SSR 中的数据获取场景，应在组件外部获取数据，通过 props 传入同步组件。
+**异步组件**：异步组件无法在 SSR 期间加载数据。遇到异步组件时，框架输出一个占位注释节点（`<!--async-->`，或 `lazy` 组件的 `<!--lazy-ssr-->`）。占位符标记了客户端组件将挂载的位置。
 
-**Directives / 自定义指令**：Directives are **not executed** during SSR. `hSSR` skips directive logic entirely and renders the children directly. Directives operate on real DOM elements, which are not available during string rendering.
+**Directives / 自定义指令**：Directives are **not executed** during SSR. The SSR renderer skips directive logic entirely and renders the children directly. Directives operate on real DOM elements, which are not available during string rendering.
 
-**自定义指令**：SSR 期间指令**不执行**。`hSSR` 完全跳过指令逻辑，直接渲染 children。指令操作的是真实 DOM 元素，在字符串渲染期间不可用。
+**自定义指令**：SSR 期间指令**不执行**。SSR 渲染器完全跳过指令逻辑，直接渲染 children。指令操作的是真实 DOM 元素，在字符串渲染期间不可用。
 
-**Control flow / 控制流**：`when` and `each` directives render their initial state into the HTML. `when` outputs the truthy branch (or `else` if falsy, or nothing if no `else`). `each` iterates over the data source and renders each item's node.
+**Control flow / 控制流**：`<Show>`, `<Case>`, and `<Each>` render their initial state into the HTML. `<Show>` outputs the truthy branch (or fallback if falsy). `<Case>` outputs the matching branch (or fallback). `<Each>` iterates over the data source and renders each item. The output includes the actual content, not placeholder comments.
 
-**控制流**：`when` 和 `each` 指令将其初始状态渲染到 HTML 中。`when` 输出 truthy 分支（或 `else` 如果为 falsy，无 `else` 则无输出）。`each` 遍历数据源并渲染每个条目的节点。
+**控制流**：`<Show>`、`<Case>` 和 `<Each>` 将其初始状态渲染到 HTML 中。`<Show>` 输出 truthy 分支（falsy 时输出 fallback）。`<Case>` 输出匹配的分支（或 fallback）。`<Each>` 遍历数据源并渲染每个条目。输出包含实际内容，而非占位注释。
 
 ---
 
@@ -78,14 +78,10 @@ Only attributes that have meaning in static HTML are serialized. The SSR seriali
 
 - **`aria-*` / `data-*`** — Output as-is. / 原样输出。
 
-- **`value` `checked` / `value`**
+- **`value` / `checked`**
 
   Not output by default. Use `attr:value` or `attr:checked` to include initial values in the static HTML.  
   默认不输出。使用 `attr:value` 或 `attr:checked` 在静态 HTML 中包含初始值。
-
-For the full attribute handling specification, see the Attribute Handling document.
-
-完整的属性处理规范参见属性处理文档。
 
 ---
 
@@ -106,13 +102,15 @@ const html = renderToString(App, { items: ["a", "b", "c"] });
 
 ```jsx
 // App.tsx
-function App({ items }, context) {
-  const [count, setCount] = use(0);
+function App({ items }, { use }) {
+  const count = use(0);
 
   return (
     <div>
       <h1>Count: {count}</h1>
-      <ul each={items}>{(item) => <li>{item}</li>}</ul>
+      <ul>
+        <Each value={items}>{(item) => <li>{item}</li>}</Each>
+      </ul>
     </div>
   );
 }
@@ -125,6 +123,10 @@ function App({ items }, context) {
 `renderToString` produces static HTML. There is no built-in hydration mechanism to reconnect client-side reactivity to server-rendered HTML. If you need interactive components, mount a fresh kiaao app on the client alongside the static HTML, or use the Astro integration with `client:only`.
 
 `renderToString` 生成静态 HTML。没有内置的水合机制将客户端响应式重新连接到服务端渲染的 HTML。如果需要交互式组件，可以在客户端静态 HTML 旁边挂载一个全新的 kiaao 应用，或使用 Astro 集成配合 `client:only`。
+
+Hydration support is planned for a future release.
+
+水合支持计划在未来版本中推出。
 
 ---
 

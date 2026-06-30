@@ -1,8 +1,8 @@
 # Attributes / 属性处理
 
-In kiaao, attributes on JSX elements are handled by a unified `setProp` pipeline. This document explains the rules you need to know. For the complete specification including the full FORCE_ATTRIBUTE list, see the Attribute Handling Specification.
+In kiaao, attributes on JSX elements are handled by a unified `setProp` pipeline. This document explains the rules you need to know.
 
-在 kiaao 中，JSX 元素上的属性由统一的 `setProp` 管道处理。本文档解释你需要知道的规则。完整的规范（包括完整的 FORCE_ATTRIBUTE 列表）参见属性处理规范文档。
+在 kiaao 中，JSX 元素上的属性由统一的 `setProp` 管道处理。本文档解释你需要知道的规则。
 
 ---
 
@@ -35,7 +35,7 @@ The rule is simple: if you can write it in plain HTML, it is in FORCE_ATTRIBUTE 
 <a href={link} target="_blank" />
 
 // These are set via property assignment / 以下通过 property 赋值
-<input value={name} onInput={e => setName(e.target.value)} />
+<input value={name} onInput={(e) => name(e.target.value)} />
 <input checked={isChecked} type="checkbox" />
 <div innerHTML={htmlContent} />
 ```
@@ -44,16 +44,18 @@ The rule is simple: if you can write it in plain HTML, it is in FORCE_ATTRIBUTE 
 
 ## Reactive Attributes / 响应式属性
 
-When an attribute value is a signal, kiaao automatically creates a derivation that updates the attribute whenever the signal changes. No manual binding is needed.
+When an attribute value is a signal, kiaao automatically creates a derivation that updates the attribute whenever the signal changes. No manual binding is needed. The cleanup for these anonymous derivations is automatically collected and merged into the nearest persistent Owner.
 
-当属性值是信号时，kiaao 会自动创建一个派生，在信号变化时更新该属性。不需要手动绑定。
+当属性值是信号时，kiaao 会自动创建一个派生，在信号变化时更新该属性。不需要手动绑定。这些匿名派生的清理函数会被自动收集并合并到最近的持久 Owner 中。
 
 ```jsx
-const [isActive, setActive] = use(false);
+function Toggle() {
+  const isActive = use(false);
 
-return <div class={isActive} />;
-// class is automatically updated when isActive changes
-// isActive 变化时 class 自动更新
+  return <div class={isActive} />;
+  // class is automatically updated when isActive changes
+  // isActive 变化时 class 自动更新
+}
 ```
 
 ---
@@ -88,10 +90,12 @@ Only string values are accepted for `class`/`className`. Object and array forms 
 `class`/`className` 仅接受字符串值。不支持对象和数组形式。使用派生来计算 class 字符串。
 
 ```jsx
-const [isActive, setActive] = use(false);
-const [className] = use(isActive, () => (isActive() ? "btn active" : "btn"));
+function Toggle() {
+  const isActive = use(false);
+  const className = use(isActive, () => (isActive() ? "btn active" : "btn"));
 
-return <button class={className}>Click</button>;
+  return <button class={className}>Click</button>;
+}
 ```
 
 ---
@@ -110,20 +114,20 @@ return <button class={className}>Click</button>;
 
 ```jsx
 // String / 字符串
-<div style="color: red; font-size: 16px" />
+<div style="color: red; font-size: 16px" />;
 
 // Object / 对象
-const [styles] = use({ color: 'red', fontSize: '16px' })
-<div style={styles} />
+const styles = use({ color: "red", fontSize: "16px" });
+<div style={styles} />;
 
 // Derivation with mixed static and dynamic values
 // 混合静态和动态值的派生
-const [height, setHeight] = use(100)
-const [boxStyle] = use(height, () => ({
-  color: 'red',
-  height: height() + 'px'
-}))
-<div style={boxStyle} />
+const height = use(100);
+const boxStyle = use(height, () => ({
+  color: "red",
+  height: height() + "px",
+}));
+<div style={boxStyle} />;
 ```
 
 ---
@@ -172,13 +176,13 @@ SVG 元素上的 `style` 与 HTML 元素一致——字符串或对象，通过 
 
 ## Event Handlers / 事件处理器
 
-Attributes matching the pattern `onXxx` (where `Xxx` starts with an uppercase letter) are treated as event listeners. They are bound via `addEventListener` and are not set as DOM attributes or properties. Event bindings are not reactive — the value is read once at initialization and used as the callback.
+Attributes matching the pattern `onXxx` (where `Xxx` starts with an uppercase letter) are treated as event listeners. They are bound via `addEventListener` and are not set as DOM attributes or properties. Cleanup functions for event listeners are collected and merged into the nearest persistent Owner, so they are automatically removed when the owning component unmounts.
 
-匹配 `onXxx` 模式（`Xxx` 以大写字母开头）的属性被视为事件监听器。它们通过 `addEventListener` 绑定，不会设置为 DOM 属性或 property。事件绑定不是响应式的——值在初始化时读取一次并用作回调。
+匹配 `onXxx` 模式（`Xxx` 以大写字母开头）的属性被视为事件监听器。它们通过 `addEventListener` 绑定，不会设置为 DOM 属性或 property。事件监听器的清理函数被收集并合并到最近的持久 Owner 中，因此在所属组件卸载时自动移除。
 
 ```jsx
-<button onClick={() => setCount(c => c + 1)}>+1</button>
-<input onInput={e => setName(e.target.value)} />
+<button onClick={() => count(c => c + 1)}>+1</button>
+<input onInput={(e) => name(e.target.value)} />
 ```
 
 ---
@@ -216,6 +220,8 @@ SSR 期间，只有对静态 HTML 有意义的属性会被序列化：
 - `aria-*` / `data-*` → 原样输出
 - FORCE_ATTRIBUTE 成员 → 作为 HTML 属性输出
 - 其他 → 忽略
+
+---
 
 Now that you understand attributes, learn about SSR and component lifecycle. / 现在你了解了属性处理，继续学习服务端渲染和组件生命周期。
 

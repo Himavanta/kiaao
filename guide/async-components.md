@@ -30,22 +30,18 @@ This is distinct from `lazy`, which is for code splitting — loading the compon
 
 ## How It Works / 工作原理
 
-When `h()` encounters a component function that returns a Promise, it creates a wrapper element — a `<div style="display: contents">` — and returns it immediately. The wrapper is inserted into the DOM right away during `mount()`. When the Promise resolves, the real DOM is appended as a child of the wrapper, and `onMount` callbacks are triggered.
+When `h()` encounters a component function that returns a Promise, it creates a placeholder comment node and returns it immediately. The placeholder is inserted into the DOM right away during mounting. When the Promise resolves, the real DOM nodes are created, the placeholder is replaced, and `onMount` callbacks are triggered.
 
-当 `h()` 遇到返回 Promise 的组件函数时，它创建一个 wrapper 元素——`<div style="display: contents">`——并立即返回。该 wrapper 在 `mount()` 期间立即插入 DOM。当 Promise resolve 时，真实 DOM 作为 wrapper 的子节点追加，然后触发 `onMount` 回调。
+当 `h()` 遇到返回 Promise 的组件函数时，它创建一个占位注释节点并立即返回。该占位符在挂载期间立即插入 DOM。当 Promise resolve 时，真实 DOM 节点被创建，占位符被替换，然后 `onMount` 回调被触发。
 
 ```
-Time: ─── mount() ─── wrapper in DOM ─── ... await ... ─── real DOM appended ─── onMount fires
-时间: ─── mount() ─── wrapper 在 DOM 中 ─── ... await ... ─── 真实 DOM 追加 ─── onMount 触发
+Time: ─── mount() ─── placeholder in DOM ─── ... await ... ─── real DOM replaces placeholder ─── onMount fires
+时间: ─── mount() ─── 占位符在 DOM 中 ─── ... await ... ─── 真实 DOM 替换占位符 ─── onMount 触发
 ```
 
-The wrapper is the component's root node for its entire lifetime. It holds the `DISPOSE_KEY` for cleanup. The real DOM is just a child — it does not carry any component-level metadata. This means the wrapper is always the target for `disposeNode` during unmount, regardless of when the component is destroyed.
+The placeholder is a comment node that marks the position. When the real content arrives, the comment is replaced with the actual DOM nodes. No extra wrapper element is added to the DOM.
 
-wrapper 在其整个生命周期中都是组件的根节点。它持有 `DISPOSE_KEY` 用于清理。真实 DOM 只是一个子节点——不携带任何组件级别的元数据。这意味着在卸载期间，`disposeNode` 始终以 wrapper 为目标，无论组件何时被销毁。
-
-The wrapper has `display: contents`, so it is invisible in layout. Its children behave as if they were direct children of the wrapper's parent. The cost is one extra node in the DOM tree, which affects CSS selectors like `:nth-child` and `>` direct child combinators.
-
-wrapper 具有 `display: contents`，因此在布局中不可见。其子节点在布局上表现得如同 wrapper 父元素的直接子节点。代价是 DOM 树中多了一个节点，这会影响 CSS 选择器，如 `:nth-child` 和 `>` 直接子代选择器。
+占位符是一个注释节点，用于标记位置。当真实内容到达时，注释被替换为实际的 DOM 节点。DOM 中不会添加额外的包裹元素。
 
 ---
 
@@ -53,20 +49,20 @@ wrapper 具有 `display: contents`，因此在布局中不可见。其子节点�
 
 ### `onMount`
 
-`onMount` callbacks in an async component are deferred until the Promise resolves and the real DOM is appended. This is different from sync components, where `onMount` fires immediately during `mount()`'s recursive traversal.
+`onMount` callbacks in an async component are deferred until the Promise resolves and the real DOM is inserted. This is different from sync components, where `onMount` fires immediately during `app.mount()`'s recursive traversal.
 
-异步组件中的 `onMount` 回调延迟到 Promise resolve 且真实 DOM 追加后才触发。这与同步组件不同——同步组件的 `onMount` 在 `mount()` 递归遍历期间立即触发。
+异步组件中的 `onMount` 回调延迟到 Promise resolve 且真实 DOM 插入后才触发。这与同步组件不同——同步组件的 `onMount` 在 `app.mount()` 递归遍历期间立即触发。
 
 ```jsx
-async function DelayedGreeting(props, { onMount }) {
-  const [message, setMessage] = use("Loading...");
+async function DelayedGreeting(props, { onMount, use }) {
+  const message = use("Loading...");
 
   onMount(() => {
     console.log("Ready!");
   });
 
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  setMessage("Hello, world!");
+  message("Hello, world!");
 
   return <h1>{message}</h1>;
 }
@@ -78,9 +74,9 @@ If `onMount` is called after mount has already completed (e.g., inside another `
 
 ### `onUnmount`
 
-`onUnmount` works exactly the same as in sync components. It can be called anywhere — including inside `onMount` callbacks and async functions — as long as the component has not been disposed. If the component unmounts before the Promise resolves, the registered `onUnmount` callbacks still fire during `disposeNode(wrapper)`.
+`onUnmount` works exactly the same as in sync components. It can be called anywhere — including inside `onMount` callbacks and async functions — as long as the component has not been disposed. If the component unmounts before the Promise resolves, the registered `onUnmount` callbacks still fire during disposal.
 
-`onUnmount` 与同步组件中的行为完全一致。它可以在任何地方调用——包括 `onMount` 回调和异步函数内部——只要组件尚未被销毁。如果组件在 Promise resolve 之前卸载，已注册的 `onUnmount` 回调仍会在 `disposeNode(wrapper)` 期间触发。
+`onUnmount` 与同步组件中的行为完全一致。它可以在任何地方调用——包括 `onMount` 回调和异步函数内部——只要组件尚未被销毁。如果组件在 Promise resolve 之前卸载，已注册的 `onUnmount` 回调仍会在销毁期间触发。
 
 ```jsx
 async function DataStream(props, { onMount, onUnmount }) {
@@ -141,9 +137,9 @@ In both cases, the framework receives a resolved Promise. The error never reache
 
 ### Framework-Caught Errors / 框架捕获
 
-If a Promise rejects and there is no `.catch()` attached by the developer, the framework catches it. It logs the error to the console and leaves the wrapper empty. The rest of the application continues to work — no crash, no white screen.
+If a Promise rejects and there is no `.catch()` attached by the developer, the framework catches it. It logs the error to the console and leaves the placeholder comment in the DOM. The rest of the application continues to work — no crash, no white screen.
 
-如果 Promise 被拒绝且开发者没有附加 `.catch()`，框架会捕获它。框架将错误打印到控制台，并保留空的 wrapper。应用程序的其余部分继续工作——不会崩溃，不会白屏。
+如果 Promise 被拒绝且开发者没有附加 `.catch()`，框架会捕获它。框架将错误打印到控制台，并在 DOM 中保留占位注释。应用程序的其余部分继续工作——不会崩溃，不会白屏。
 
 ```jsx
 async function BrokenComponent() {
@@ -151,22 +147,14 @@ async function BrokenComponent() {
   return <div>Never rendered</div>;
 }
 // Console: [kiaao] async component error: Error: Something went wrong
-// DOM: <div style="display: contents"></div>
+// DOM: <!--async-->
 ```
 
 ### Non-Node Resolution / 非 Node 值
 
-If the Promise resolves with a non-Node value, it is downgraded to a comment node with a warning in development mode.
+If the Promise resolves with a non-Node value, the placeholder stays in the DOM and a warning is emitted in development mode.
 
-如果 Promise resolve 为非 Node 值，则在开发模式下发出警告并降级为注释节点。
-
-```jsx
-async function WrongReturn() {
-  return "not a node";
-}
-// Dev console: [kiaao] async component resolved with non-Node value: "not a node"
-// DOM: <div style="display: contents"><!-- async component resolved with invalid value --></div>
-```
+如果 Promise resolve 为非 Node 值，占位符保留在 DOM 中，开发模式下发出警告。
 
 ---
 
@@ -176,13 +164,13 @@ Async components have a different `onMount` firing order compared to sync compon
 
 异步组件的 `onMount` 触发顺序与同步组件不同。这是有意为之，源自异步渲染的本质。
 
-**Sync components:** During `triggerMount`, the DOM tree is traversed depth-first, pre-order. Parent `onMount` fires before children.
+**Sync components:** During `triggerMount`, the Owner tree is traversed depth-first. Parent `onMount` fires before children.
 
-**同步组件：** 在 `triggerMount` 期间，DOM 树以深度优先、前序方式遍历。父组件的 `onMount` 先于子组件触发。
+**同步组件：** 在 `triggerMount` 期间，Owner 树以深度优先方式遍历。父组件的 `onMount` 先于子组件触发。
 
-**Async components:** When the Promise resolves, the framework first appends the real DOM, then calls `triggerMount(realDOM)` to recursively mount all sync children in the subtree. Only after that does it fire the async component's own `onMount` callbacks. Children fire before the async parent.
+**Async components:** When the Promise resolves, the framework first replaces the placeholder with the real DOM, then calls `triggerMount` on the component's Owner to recursively mount all sync children in the subtree. Only after that does it fire the async component's own `onMount` callbacks. Children fire before the async parent.
 
-**异步组件：** 当 Promise resolve 时，框架首先追加真实 DOM，然后调用 `triggerMount(realDOM)` 递归挂载子树中的所有同步子组件。之后才触发异步组件自身的 `onMount` 回调。子组件先于异步父组件触发。
+**异步组件：** 当 Promise resolve 时，框架首先用真实 DOM 替换占位符，然后对组件 Owner 调用 `triggerMount` 递归挂载子树中的所有同步子组件。之后才触发异步组件自身的 `onMount` 回调。子组件先于异步父组件触发。
 
 The invariant that matters: **when a parent's `onMount` runs, all _ready_ children in its subtree have already mounted.** For an async parent, children that haven't resolved yet are not "ready", so the parent does not wait for them.
 
@@ -215,32 +203,34 @@ An async component can be unmounted at any point in its lifecycle. The framework
 
 ### Before Promise resolves / Promise resolve 之前
 
-The wrapper is already in the DOM. `disposeNode(wrapper)` triggers the `DISPOSE_KEY`, which runs all registered `onUnmount` callbacks and stops all effects. A `disposed` flag prevents the Promise's `.then()` from doing anything when it eventually resolves.
+The placeholder is already in the DOM. When the component is disposed, `disposeOwner` runs all registered `onUnmount` callbacks and stops all signals. A `disposed` flag on the Owner prevents the Promise's `.then()` from doing anything when it eventually resolves.
 
-wrapper 已在 DOM 中。`disposeNode(wrapper)` 触发 `DISPOSE_KEY`，执行所有已注册的 `onUnmount` 回调并停止所有 effect。`disposed` 标志位阻止 Promise 的 `.then()` 在最终 resolve 时执行任何操作。
+占位符已在 DOM 中。当组件被销毁时，`disposeOwner` 执行所有已注册的 `onUnmount` 回调并停止所有信号。Owner 上的 `disposed` 标志位阻止 Promise 的 `.then()` 在最终 resolve 时执行任何操作。
 
 ### After Promise resolves / Promise resolve 之后
 
-The real DOM is a child of the wrapper. `disposeNode(wrapper)` recursively cleans up the real DOM's subtree (stopping `LOCAL_EFFECTS`), then fires the `DISPOSE_KEY` on the wrapper to clean up the component instance.
+The real DOM has already replaced the placeholder. `disposeOwner` removes the real DOM nodes and cleans up the component's resources.
 
-真实 DOM 是 wrapper 的子节点。`disposeNode(wrapper)` 递归清理真实 DOM 的子树（停止 `LOCAL_EFFECTS`），然后触发 wrapper 上的 `DISPOSE_KEY` 清理组件实例。
+真实 DOM 已替换占位符。`disposeOwner` 移除真实 DOM 节点并清理组件的资源。
 
 ### Parent unmount / 父组件卸载
 
-The parent's `disposeNode` recursion naturally reaches the wrapper and handles it as above.
+The parent's `disposeOwner` recursion naturally reaches the async component's Owner and handles it as above.
 
-父组件的 `disposeNode` 递归自然到达 wrapper，并按上述方式处理。
+父组件的 `disposeOwner` 递归自然到达异步组件的 Owner，并按上述方式处理。
 
 ---
 
 ## SSR / 服务端渲染
 
-Async components are **not supported in SSR**. `renderToString` is synchronous and cannot wait for Promises. If an async component is encountered during SSR, the framework throws an error.
+Async components cannot load data during SSR. When an async component is encountered during server-side rendering, the framework outputs a placeholder comment node instead of throwing an error. The placeholder marks the position where the client-side component will mount when hydrated.
 
-异步组件**不支持 SSR**。`renderToString` 是同步的，无法等待 Promise。如果在 SSR 期间遇到异步组件，框架会抛出错误。
+异步组件无法在 SSR 期间加载数据。在服务端渲染期间遇到异步组件时，框架会输出一个占位注释节点，而不是抛出错误。占位符标记了客户端组件水合时将挂载的位置。
 
-```
-[kiaao] Async components are not supported in SSR.
+```jsx
+// SSR output for an async component:
+// <!--lazy-ssr--> (for lazy-loaded components)
+// <!--async--> (for other async components)
 ```
 
 For data-fetching scenarios in SSR, fetch the data outside the component and pass it via props to a synchronous component.
@@ -251,15 +241,15 @@ For data-fetching scenarios in SSR, fetch the data outside the component and pas
 
 ## Comparison with `lazy` / 与 lazy 的对比
 
-|                                 | `lazy`                                                                    | Async Component / 异步组件                                                           |
-| ------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Purpose / 用途                  | Code splitting shortcut / 代码拆分快捷方式                                | Data fetching, code splitting, any async work / 数据获取、代码拆分、任何异步工作     |
-| Mechanism / 机制                | Returns an async component internally / 内部返回异步组件                  | Returns a Promise directly / 直接返回 Promise                                        |
-| Component function / 组件函数   | Synchronous wrapper (returns Promise) / 同步包装函数（返回 Promise）      | `async function` or returns Promise / `async function` 或返回 Promise                |
-| During loading / 加载期间       | Transparent wrapper `<div style="display: contents">` / 透明 wrapper      | Transparent wrapper `<div style="display: contents">` / 透明 wrapper                 |
-| Error handling / 错误处理       | Shows error text / 显示错误文本                                           | Developer `.catch()` or framework catch / 开发者 `.catch()` 或框架捕获               |
-| `onMount` timing / onMount 时机 | Fires when the real component mounts / 真实组件挂载时触发                 | Fires after Promise resolves and DOM is appended / Promise resolve 且 DOM 追加后触发 |
-| SSR                             | Not supported (async component under the hood) / 不支持（底层为异步组件） | Not supported / 不支持                                                               |
+|                                 | `lazy`                                                               | Async Component / 异步组件                                                           |
+| ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Purpose / 用途                  | Code splitting shortcut / 代码拆分快捷方式                           | Data fetching, code splitting, any async work / 数据获取、代码拆分、任何异步工作     |
+| Mechanism / 机制                | Returns an async component internally / 内部返回异步组件             | Returns a Promise directly / 直接返回 Promise                                        |
+| Component function / 组件函数   | Synchronous wrapper (returns Promise) / 同步包装函数（返回 Promise） | `async function` or returns Promise / `async function` 或返回 Promise                |
+| During loading / 加载期间       | Placeholder comment node / 占位注释节点                              | Placeholder comment node / 占位注释节点                                              |
+| Error handling / 错误处理       | Shows error text / 显示错误文本                                      | Developer `.catch()` or framework catch / 开发者 `.catch()` 或框架捕获               |
+| `onMount` timing / onMount 时机 | Fires when the real component mounts / 真实组件挂载时触发            | Fires after Promise resolves and DOM is inserted / Promise resolve 且 DOM 插入后触发 |
+| SSR                             | Outputs placeholder comment / 输出占位注释                           | Outputs placeholder comment / 输出占位注释                                           |
 
 `lazy` is syntax sugar. Internally, it creates an async component that loads the module and renders it. Use `lazy` for simple code splitting, or write an async component directly when you need more control. There is no functional difference — `lazy` is just less typing.
 
