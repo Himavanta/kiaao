@@ -14,7 +14,7 @@ describe("HResult", () => {
   test("createHResult returns object with HRESULT_SYMBOL", () => {
     const owner = createOwner();
     const nodes = [document.createElement("div")];
-    const result = createHResult(owner, nodes);
+    const result = createHResult({ owner, nodes });
     expect(result[HRESULT_SYMBOL]).toBe(true);
     expect(result.owner).toBe(owner);
     expect(result.nodes).toBe(nodes);
@@ -25,23 +25,23 @@ describe("HResult", () => {
     const owner = createOwner();
     const nodes = [document.createElement("span")];
     const cleanups = [() => {}];
-    const result = createHResult(owner, nodes, [], cleanups);
+    const result = createHResult({ owner, nodes, cleanups });
     expect(result.cleanups).toBe(cleanups);
     expect(result.cleanups!.length).toBe(1);
   });
 
   test("createHResult with empty cleanups defaults to empty array", () => {
-    const result = createHResult(null, [document.createElement("div")]);
+    const result = createHResult({ owner: null, nodes: [document.createElement("div")] });
     expect(result.cleanups).toEqual([]);
   });
 
   test("createHResult with null owner", () => {
-    const result = createHResult(null, [document.createElement("p")]);
+    const result = createHResult({ owner: null, nodes: [document.createElement("p")] });
     expect(result.owner).toBeNull();
   });
 
   test("isHResult returns true for HResult", () => {
-    const result = createHResult(null, []);
+    const result = createHResult({ owner: null, nodes: [] });
     expect(isHResult(result)).toBe(true);
   });
 

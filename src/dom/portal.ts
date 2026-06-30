@@ -15,13 +15,13 @@ export function Portal(
   const owner = context?.owner;
 
   if (!owner) {
-    return createHResult(null, [adapter.comment("portal-no-ctx")], [], []);
+    return createHResult({ owner: null, nodes: [adapter.comment("portal-no-ctx")] });
   }
 
   const target = isString(props.to) ? (querySelector(props.to) as HTMLElement | null) : props.to;
 
   if (!target) {
-    return createHResult(null, [adapter.comment("portal-missing-target")], [], []);
+    return createHResult({ owner: null, nodes: [adapter.comment("portal-missing-target")] });
   }
 
   // 处理 children
@@ -42,5 +42,5 @@ export function Portal(
     }
   });
 
-  return createHResult(null, [adapter.comment("portal")], [], []);
+  return createHResult({ owner: null, nodes: [adapter.comment("portal")] });
 }

@@ -241,5 +241,5 @@ export function Each<T = any>(
     ? (fallbackResult as HResult).nodes
     : state.entries.flatMap((e) => e.result.nodes);
 
-  return createHResult(context.owner, [...allNodes, anchor], [], []);
+  return createHResult({ owner: context.owner, nodes: [...allNodes, anchor] });
 }

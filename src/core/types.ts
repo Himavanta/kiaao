@@ -31,18 +31,18 @@ export interface HResult {
 }
 
 /** 创建 HResult 对象 */
-export function createHResult(
-  owner: Owner | null,
-  nodes: HostNode[],
-  pending: Owner[] = [],
-  cleanups: CleanupFn[] = [],
-): HResult {
+export function createHResult(options: {
+  owner: Owner | null;
+  nodes: HostNode[];
+  pending?: Owner[];
+  cleanups?: CleanupFn[];
+}): HResult {
   return {
     [HRESULT_SYMBOL]: true as const,
-    owner,
-    nodes,
-    pending,
-    cleanups,
+    owner: options.owner,
+    nodes: options.nodes,
+    pending: options.pending ?? [],
+    cleanups: options.cleanups ?? [],
   };
 }
 

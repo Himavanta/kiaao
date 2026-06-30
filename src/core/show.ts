@@ -52,5 +52,5 @@ export function Show(
   subscribeSignal(context.owner, props.value, () => renderBranch(false));
 
   const nodes = currentResult ? [...(currentResult as HResult).nodes, anchor] : [anchor];
-  return createHResult(context.owner, nodes, [], []);
+  return createHResult({ owner: context.owner, nodes });
 }

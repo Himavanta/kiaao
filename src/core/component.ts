@@ -105,7 +105,7 @@ function toHResultSignal(signal: any): HResult {
   const derived = use(signal, () => adapter.setText(textNode, String(signal())));
   const stop = getSignalState(derived)?.stop;
   const cleanups = stop ? [stop] : [];
-  return createHResult(null, [textNode], [], cleanups);
+  return createHResult({ owner: null, nodes: [textNode], cleanups });
 }
 
 /** 数组 → 合并所有子 HResult */
@@ -123,7 +123,7 @@ function toHResultArray(arr: any[]): HResult {
       cleanups.push(...hr.cleanups);
     }
   }
-  return createHResult(null, nodes, pending, cleanups);
+  return createHResult({ owner: null, nodes, pending, cleanups });
 }
 
 export function toHResult(child: any): HResult {
@@ -142,14 +142,14 @@ export function toHResult(child: any): HResult {
   }
 
   if (getAdapter().isNode(child)) {
-    return createHResult(null, [child], [], []);
+    return createHResult({ owner: null, nodes: [child] });
   }
 
   if (isNil(child)) {
-    return createHResult(null, [], [], []);
+    return createHResult({ owner: null, nodes: [] });
   }
 
-  return createHResult(null, [getAdapter().text(String(child))], [], []);
+  return createHResult({ owner: null, nodes: [getAdapter().text(String(child))] });
 }
 
 // ── adoptResult — 内部吸收函数 ─────────────────────────
@@ -212,7 +212,7 @@ export function handleAsyncComponent(promise: Promise<MergeableResult>, owner: O
       console.error("[kiaao] async component error:", err);
     });
 
-  return createHResult(owner, [placeholder], [], []);
+  return createHResult({ owner, nodes: [placeholder] });
 }
 
 // ── Helper: 信号绑定 ─────────────────────────────
@@ -255,7 +255,7 @@ export function handleComponent(
     console.error("[kiaao] component error:", e);
     disposeOwner(owner);
     const comment = getAdapter().comment("component error");
-    return createHResult(owner, [comment], [], []);
+    return createHResult({ owner, nodes: [comment] });
   }
 
   if (isPromise(result)) {
@@ -264,5 +264,5 @@ export function handleComponent(
 
   const childHr = toHResult(result);
   adoptResult(owner, childHr);
-  return createHResult(owner, childHr.nodes, [], []);
+  return createHResult({ owner, nodes: childHr.nodes });
 }

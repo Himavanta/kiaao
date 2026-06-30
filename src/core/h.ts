@@ -57,7 +57,7 @@ function handleDomMode(tag: string, props: NullableProps = {}, children: any[]):
     }
   }
 
-  return createHResult(null, [el], pending, cleanups);
+  return createHResult({ owner: null, nodes: [el], pending, cleanups });
 }
 
 // ── Directive Mode ────────────────────────────────────
@@ -101,7 +101,7 @@ function handleDirectiveMode(
     }
   }
 
-  return createHResult(owner, allNodes, [], []);
+  return createHResult({ owner, nodes: allNodes });
 }
 
 // ── h() ────────────────────────────────────────────────
@@ -115,14 +115,14 @@ export function h(tag: any, props?: NullableProps, ...children: any[]): HResult 
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[kiaao] invalid tag: ${String(tag)}. Expected a string or function.`);
     }
-    return createHResult(null, [getAdapter().comment("")], [], []);
+    return createHResult({ owner: null, nodes: [getAdapter().comment("")] });
   }
 
   if (isString(tag) && isEmpty(tag)) {
     if (process.env.NODE_ENV !== "production") {
       console.warn("[kiaao] empty string tag, falling back to comment node");
     }
-    return createHResult(null, [getAdapter().comment("")], [], []);
+    return createHResult({ owner: null, nodes: [getAdapter().comment("")] });
   }
 
   if (isFunction(tag)) {
