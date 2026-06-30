@@ -5,7 +5,7 @@
 import { expect, test, describe } from "vite-plus/test";
 
 import { setAdapter } from "../../src/adapter/index.ts";
-import { h, Show, Each, use, triggerMount } from "../../src/core/index.ts";
+import { h, Show, Each, use, triggerMount, direct } from "../../src/core/index.ts";
 import { browserAdapter } from "../../src/dom/index.ts";
 
 setAdapter(browserAdapter);
@@ -43,10 +43,7 @@ describe("Show + Async", () => {
     );
     const container = mount(result);
 
-    // Initial: async not resolved → placeholder (comment anchor)
     expect(container.querySelector("span")).toBeFalsy();
-
-    // Wait for resolve
     await new Promise((r) => setTimeout(r, 20));
     expect(container.querySelector(".loaded")?.textContent).toBe("done");
   });
@@ -71,12 +68,10 @@ describe("Show + Async", () => {
     );
     const container = mount(result);
 
-    // Switch to fallback before async resolves
     visible(false);
     await new Promise((r) => setTimeout(r, 5));
     expect(container.querySelector(".fb")?.textContent).toBe("fallback");
 
-    // Async resolves later — should be no-op (Owner already disposed)
     resolveAsync?.(h("span", null, "late"));
     await new Promise((r) => setTimeout(r, 5));
     expect(container.querySelector(".fb")?.textContent).toBe("fallback");
@@ -107,7 +102,6 @@ describe("Show + Async", () => {
     await new Promise((r) => setTimeout(r, 15));
     expect(container.querySelector(".a")?.textContent).toBe("call-1");
 
-    // Toggle off then on again
     visible(false);
     await new Promise((r) => setTimeout(r, 5));
     visible(true);
@@ -122,10 +116,14 @@ describe("Each + Show", () => {
   function ItemRow({ item }: { item: () => { id: number; text: string; active: boolean } }) {
     const show = use(item, () => item().active);
     return h(
-      Show as any,
-      { value: show },
-      () => h("span", { class: "active", "data-id": String(item().id) }, item().text),
-      () => h("span", { class: "inactive", "data-id": String(item().id) }, item().text),
+      "div",
+      null,
+      h(
+        Show as any,
+        { value: show },
+        () => h("span", { class: "active", "data-id": String(item().id) }, item().text),
+        () => h("span", { class: "inactive", "data-id": String(item().id) }, item().text),
+      ),
     );
   }
 
@@ -142,12 +140,10 @@ describe("Each + Show", () => {
     );
     const container = mount(result);
 
-    const actives = container.querySelectorAll(".active");
-    const inactives = container.querySelectorAll(".inactive");
-    expect(actives.length).toBe(1);
-    expect(inactives.length).toBe(1);
-    expect(actives[0]?.textContent).toBe("A");
-    expect(inactives[0]?.textContent).toBe("B");
+    expect(container.querySelectorAll(".active").length).toBe(1);
+    expect(container.querySelectorAll(".inactive").length).toBe(1);
+    expect(container.querySelector(".active")?.textContent).toBe("A");
+    expect(container.querySelector(".inactive")?.textContent).toBe("B");
   });
 
   test("信号驱动每项切换", () => {
@@ -163,18 +159,15 @@ describe("Each + Show", () => {
     );
     const container = mount(result);
 
-    // Toggle both
     items([
       { id: 1, text: "A", active: false },
       { id: 2, text: "B", active: true },
     ]);
 
-    const actives = container.querySelectorAll(".active");
-    const inactives = container.querySelectorAll(".inactive");
-    expect(actives.length).toBe(1);
-    expect(inactives.length).toBe(1);
-    expect(actives[0]?.textContent).toBe("B");
-    expect(inactives[0]?.textContent).toBe("A");
+    expect(container.querySelectorAll(".active").length).toBe(1);
+    expect(container.querySelectorAll(".inactive").length).toBe(1);
+    expect(container.querySelector(".active")?.textContent).toBe("B");
+    expect(container.querySelector(".inactive")?.textContent).toBe("A");
   });
 
   test("列表重排时条件状态保持", () => {
@@ -193,7 +186,6 @@ describe("Each + Show", () => {
 
     expect(container.querySelectorAll(".active").length).toBe(2);
 
-    // Reorder
     items([
       { id: 3, text: "C", active: true },
       { id: 1, text: "A", active: true },
@@ -202,5 +194,129 @@ describe("Each + Show", () => {
 
     expect(container.querySelectorAll(".active").length).toBe(2);
     expect(container.querySelectorAll(".inactive").length).toBe(1);
+  });
+});
+
+// ── 场景 3：Each + Show + Async ───────────────────────
+
+describe("Each + Show + Async", () => {
+  function AsyncRow({ item }: { item: () => { id: number; text: string } }) {
+    const loaded = use(false);
+    const data = item();
+
+    setTimeout(() => loaded(true), 5);
+
+    return h(
+      "div",
+      { class: "row", "data-id": String(data.id) },
+      h(
+        Show as any,
+        { value: loaded },
+        () => h("span", { class: "content" }, data.text + "-loaded"),
+        () => h("span", { class: "loading" }, "loading..."),
+      ),
+    );
+  }
+
+  test("每项独立异步加载后显示内容", async () => {
+    const items = use([
+      { id: 1, text: "A" },
+      { id: 2, text: "B" },
+    ]);
+
+    const result = h(
+      "div",
+      null,
+      h(Each as any, { value: items, keyed: (i: any) => i.id }, AsyncRow),
+    );
+    const container = mount(result);
+
+    expect(container.querySelectorAll(".loading").length).toBe(2);
+    expect(container.querySelectorAll(".content").length).toBe(0);
+
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".loading").length).toBe(0);
+    expect(container.querySelectorAll(".content").length).toBe(2);
+  });
+
+  test("列表重排时内部加载状态保持", async () => {
+    const items = use([
+      { id: 1, text: "A" },
+      { id: 2, text: "B" },
+    ]);
+
+    const result = h(
+      "div",
+      null,
+      h(Each as any, { value: items, keyed: (i: any) => i.id }, AsyncRow),
+    );
+    const container = mount(result);
+
+    await new Promise((r) => setTimeout(r, 15));
+    expect(container.querySelectorAll(".content").length).toBe(2);
+
+    items([
+      { id: 2, text: "B" },
+      { id: 1, text: "A" },
+    ]);
+
+    expect(container.querySelectorAll(".content").length).toBe(2);
+    const rows = container.querySelectorAll(".row");
+    expect(rows[0]?.textContent).toContain("B-loaded");
+    expect(rows[1]?.textContent).toContain("A-loaded");
+  });
+});
+
+// ── 场景 4：Each + 指令 + Show ───────────────────────
+
+describe("Each + 指令 + Show", () => {
+  const TestDirective = direct(((el: any, _props: any, ctx: any) => {
+    el.setAttribute("data-mounted", "true");
+    ctx.onUnmount(() => el.setAttribute("data-cleaned", "true"));
+  }) as any);
+
+  function ItemRow({ item }: { item: () => { id: number; active: boolean; text: string } }) {
+    const show = use(item, () => item().active);
+    return h(
+      "div",
+      { class: "item" },
+      h(TestDirective as any, { from: {}, to: {} }, () =>
+        h(
+          Show as any,
+          { value: show },
+          () => h("span", { class: "active-text" }, item().text),
+          () => h("span", { class: "inactive-text" }, item().text),
+        ),
+      ),
+    );
+  }
+
+  test("指令在 Each 条目内正常挂载并操作 Show 内容", () => {
+    const items = use([{ id: 1, text: "A", active: true }]);
+
+    const result = h(
+      "div",
+      null,
+      h(Each as any, { value: items, keyed: (i: any) => i.id }, ItemRow),
+    );
+    const container = mount(result);
+
+    expect(container.querySelector(".active-text")?.textContent).toBe("A");
+  });
+
+  test("Show 切换时 Show 内容切换", () => {
+    const items = use([{ id: 1, text: "A", active: true }]);
+
+    const result = h(
+      "div",
+      null,
+      h(Each as any, { value: items, keyed: (i: any) => i.id }, ItemRow),
+    );
+    const container = mount(result);
+
+    expect(container.querySelector(".active-text")?.textContent).toBe("A");
+
+    items([{ id: 1, text: "A", active: false }]);
+    expect(container.querySelector(".inactive-text")?.textContent).toBe("A");
   });
 });
