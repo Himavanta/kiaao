@@ -76,7 +76,6 @@ export type {
 export {
   REACTIVE,
   DIRECT_KEY,
-  SSR_COMPONENT,
   HRESULT_SYMBOL,
   createHResult,
   isHResult,

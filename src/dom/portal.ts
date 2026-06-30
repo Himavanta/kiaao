@@ -3,7 +3,7 @@
 
 import { getAdapter } from "../adapter/index.ts";
 import type { Context, HResult } from "../core/index.ts";
-import { adoptResult, createHResult, isString, SSR_COMPONENT, toHResult } from "../core/index.ts";
+import { adoptResult, createHResult, isString, toHResult } from "../core/index.ts";
 import { querySelector } from "./dom-utils.ts";
 import { isNode } from "./type-guards.ts";
 
@@ -44,7 +44,3 @@ export function Portal(
 
   return createHResult(null, [adapter.comment("portal")], [], []);
 }
-
-(Portal as any)[SSR_COMPONENT] = () => {
-  return { html: "<!-- portal placeholder -->" };
-};

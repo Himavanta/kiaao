@@ -11,9 +11,6 @@ export const REACTIVE = Symbol("reactive");
 /** DIRECT_KEY Symbol — 标记指令函数 */
 export const DIRECT_KEY = Symbol("direct");
 
-/** SSR_COMPONENT Symbol — 标记 SSR 变体组件 */
-export const SSR_COMPONENT = Symbol("kiaao.ssr");
-
 // ── Host Node Type ─────────────────────────────────────
 
 /** 宿主节点类型——由各平台 adapter 定义具体是什么（DOM 平台是 Node，SSR 是 SSRNode） */
