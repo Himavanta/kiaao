@@ -1,183 +1,169 @@
 # Control Flow / 控制流
 
-In kiaao, conditional rendering and list rendering are achieved through `when` and `each` attributes on native DOM elements. There are no `<Show>` or `<For>` wrapper components. The host element always exists in the DOM — only its children are dynamically managed.
+In kiaao, conditional rendering and list rendering are achieved through the built-in components `<Show>`, `<Case>`, and `<Each>`. They are framework primitives that integrate with the Owner tree for automatic lifecycle management — no wrapper elements, no manual cleanup. Branches are **lazy**: component functions are only called when their branch becomes active.
 
-在 kiaao 中，条件渲染和列表渲染通过原生 DOM 元素上的 `when` 和 `each` 属性实现。没有 `<Show>` 或 `<For>` 这样的包装组件。宿主元素始终存在于 DOM 中——只有其子节点被动态管理。
-
-`when` and `each` work only on native HTML elements (string tags). They cannot be used on component functions. If you need conditional or list rendering inside a component, apply the attribute to an element returned by that component.
-
-`when` 和 `each` 仅对原生 HTML 元素（字符串标签）生效，不能在组件函数上使用。如果需要在组件内部进行条件或列表渲染，请将指令应用在组件返回的元素上。
+在 kiaao 中，条件渲染和列表渲染通过内置组件 `<Show>`、`<Case>` 和 `<Each>` 实现。它们是框架原语，与 Owner 树集成以实现自动生命周期管理——无需包裹元素，无需手动清理。分支是**惰性的**：只有当分支变为活动状态时，组件函数才会被调用。
 
 ---
 
-## `when` — Conditional Rendering / 条件渲染
+## `<Show>` — Conditional Rendering / 条件渲染
 
-The `when` attribute controls whether the host element's children are rendered. The host element itself stays in the DOM regardless of the condition. `when` accepts a signal (a getter created by `use`) or a plain function. If a signal is passed, changes to that signal automatically update the rendered children. If a plain function is passed, it is evaluated once at initialization and will not be reactive.
+`<Show>` conditionally renders one of two branches based on a signal value. Children must be functions that return components — the function is only called when that branch is active.
 
-`when` 属性控制宿主元素的子节点是否渲染。宿主元素本身始终存在于 DOM 中，不受条件影响。`when` 接受一个信号（由 `use` 创建的 getter）或一个普通函数。如果传入信号，该信号的变化会自动更新渲染的子节点。如果传入普通函数，它只在初始化时执行一次，不会产生响应式更新。
-
-### Boolean Mode / 布尔模式
-
-When the children are anything other than a plain object, `when` operates in boolean mode. If the value of `when` is truthy, the children are rendered. If falsy and an `else` attribute is provided, its result is rendered instead. Otherwise, the children are cleared.
-
-当 children 不是纯对象时，`when` 以布尔模式运行。`when` 的值为 truthy 时渲染子节点；为 falsy 时，如果提供了 `else` 属性则渲染其返回内容，否则清空子节点。
+`<Show>` 根据一个信号值来条件渲染两个分支中的一个。子元素必须是返回组件的函数——只有当该分支处于活动状态时，函数才会被调用。
 
 ```jsx
-const [visible, setVisible] = use(true);
+function App() {
+  const loggedIn = use(false);
 
-return (
-  <div>
-    <button onClick={() => setVisible((v) => !v)}>Toggle</button>
-
-    <section when={visible} style="display: contents">
-      <span>This appears when visible is true.</span>
-    </section>
-  </div>
-);
+  return (
+    <div>
+      <button onClick={() => loggedIn((v) => !v)}>Toggle</button>
+      <Show value={loggedIn}>
+        {() => <Dashboard />}
+        {() => <Login />}
+      </Show>
+    </div>
+  );
+}
 ```
 
-Children can be a lazy function that returns nodes. The function is only called when `when` becomes truthy.
+- The first child function renders when `value` is truthy.
+- The second child function (optional) renders when `value` is falsy.
 
-子节点可以是一个返回节点的惰性函数。该函数仅在 `when` 变为 truthy 时被调用。
+- 第一个子函数在 `value` 为 truthy 时渲染。
+- 第二个子函数（可选）在 `value` 为 falsy 时渲染。
 
-```jsx
-<section when={visible}>
-  {() => {
-    // This runs only when visible becomes true / 仅在 visible 变为 true 时执行
-    return <span>Dynamic content</span>;
-  }}
-</section>
-```
+**How it works / 工作原理**：On first render, the active branch's function is called immediately, and its DOM nodes are placed before an internal anchor comment. When the signal changes, the old branch is unmounted (`onUnmount` fires, DOM is removed) and the new branch's function is called and inserted at the same position.
 
-### Map Mode / 映射表模式
-
-When the children are a plain object `{ [key]: () => VNode }`, `when` treats its value as a key. It looks up the key in the map and calls the matched function to render. If no key matches and an `else` is provided, `else` is rendered. Otherwise, children are cleared.
-
-当 children 是一个纯对象 `{ [key]: () => VNode }` 时，`when` 将其值作为 key 在映射表中查找，调用匹配的函数进行渲染。如果无匹配 key 且提供了 `else`，则渲染 `else`；否则清空。
-
-```jsx
-const [status, setStatus] = use("loading");
-
-return (
-  <div when={status} else={() => <div>Unknown state</div>}>
-    {{
-      loading: () => <Spinner />,
-      error: () => <ErrorMessage />,
-      success: () => <Content />,
-    }}
-  </div>
-);
-```
-
-Each branch function is called lazily — only when its key is matched for the first time or when the key changes. If the key remains the same across updates, the already-rendered DOM is reused without re-executing the branch function.
-
-每个分支函数都是惰性调用的——仅在其 key 首次匹配或发生切换时执行。如果 key 在更新前后保持不变，已渲染的 DOM 会被复用，不会重新执行分支函数。
+\*\*首次渲染时，活动分支的函数立即被调用，其 DOM 节点被放置在内部锚点注释之前。当信号变化时，旧分支被卸载（`onUnmount` 触发，DOM 被移除），新分支的函数被调用并插入到相同位置。
 
 ---
 
-## `else` — Fallback / 后备内容
+## `<Case>` — Multi-Branch Matching / 多分支匹配
 
-The `else` attribute is an optional function that returns fallback content. It works in both boolean mode and map mode. In boolean mode, `else` renders when `when` is falsy. In map mode, `else` renders when the key is not found in the map.
+`<Case>` renders one of several branches based on a key. The first child is a mapping table (object), where each value is a **function that returns a component**. The second child (optional) is a fallback function.
 
-`else` 属性是一个可选函数，返回后备内容。它在布尔模式和映射表模式下均有效。布尔模式下，`when` 为 falsy 时渲染 `else`。映射表模式下，key 在映射表中未找到时渲染 `else`。
+`<Case>` 基于一个 key 来渲染多个分支中的一个。第一个子元素是一个映射表（对象），其中每个值是一个**返回组件的函数**。第二个子元素（可选）是 fallback 函数。
 
 ```jsx
-// Boolean mode with else / 布尔模式带 else
-const [isLoggedIn, setLoggedIn] = use(false)
+function App() {
+  const tab = use("overview");
 
-<div when={isLoggedIn} else={() => <LoginButton />}>
-  <Dashboard />
-</div>
+  return (
+    <div>
+      <nav>
+        <button onClick={() => tab("overview")}>Overview</button>
+        <button onClick={() => tab("settings")}>Settings</button>
+        <button onClick={() => tab("billing")}>Billing</button>
+      </nav>
 
-// Map mode with else / 映射表模式带 else
-const [status, setStatus] = use('idle')
-
-<div when={status} else={() => <div>Unknown</div>}>
-  {{
-    idle: () => <Idle />,
-    busy: () => <Busy />,
-  }}
-</div>
+      <Case value={tab}>
+        {{
+          overview: () => <OverviewTab />,
+          settings: () => <SettingsTab />,
+          billing: () => <BillingTab />,
+        }}
+        {() => <NotFound />}
+      </Case>
+    </div>
+  );
+}
 ```
+
+Keys must be strings. The value is converted to a string and looked up in the table. If no key matches, the fallback function is called (if provided). Each branch function is called only when its key is matched.
+
+键必须是字符串。值被转换为字符串并在表中查找。如果没有匹配的键，则调用 fallback 函数（如果提供）。每个分支函数仅在其 key 匹配时被调用。
 
 ---
 
-## `each` — List Rendering / 列表渲染
+## `<Each>` — List Rendering / 列表渲染
 
-The `each` attribute renders a list of items inside its host element. It accepts an array (either as a plain value or wrapped in a signal).
+`<Each>` renders a list of items from an array signal. The first child is a render function `(item: Signal, index: number) => HResult`. The second child (optional) is an empty-state fallback **function**.
 
-`each` 属性在其宿主元素内部渲染列表。它接受一个数组（可以是普通数组或信号包裹的数组）。
-
-The `children` of an `each` element must be a render function with the signature `(item, index) => Node`.
-
-- **`item`**
-
-  A signal getter for the current item. You can call `item()` to read the value, or pass it to another `use` derivation.
-
-  当前条目的信号 getter。可以调用 `item()` 读取值，或将其传入另一个 `use` 派生。
-
-- **`index`**
-
-  The numeric position.
-
-  数字序号。
+`<Each>` 从数组信号渲染一个列表。第一个子元素是渲染函数 `(item: Signal, index: number) => HResult`。第二个子元素（可选）是空状态 fallback **函数**。
 
 ```jsx
-const [items, setItems] = use(["a", "b", "c"]);
+function App() {
+  const items = use(["apple", "banana", "cherry"]);
 
-return (
-  <ul each={items}>
-    {(item, index) => (
-      <li>
-        {index}: {item}
-      </li>
-    )}
-  </ul>
-);
+  return (
+    <ul>
+      <Each value={items}>
+        {(item, index) => (
+          <li>
+            {index}: {item}
+          </li>
+        )}
+      </Each>
+    </ul>
+  );
+}
 ```
 
-When the data changes, the framework performs incremental updates based on identity. Items with the same identity reuse their DOM nodes (only moved if the position changed). New items create nodes, removed items destroy nodes. This preserves input focus, scroll position, and other DOM state.
+For empty state, provide a fallback function:
 
-数据变化时，框架根据身份标识进行增量更新。同 identity 的条目复用 DOM 节点（仅在位置变化时移动）。新增条目创建节点，消失条目销毁节点。这保证了输入焦点、滚动位置等 DOM 状态的保持。
-
----
-
-## `key` — Identity / 身份标识
-
-An optional `key` function `(item, index, entryKey) => any` can be provided to customize the identity of each list item. If not specified, the key defaults to the entry's key in the data source (array index, object property name, etc.).
-
-可选的 `key` 函数 `(item, index, entryKey) => any` 用于自定义每个列表项的身份标识。若不指定，则默认为条目在数据源中的键（数组索引、对象属性名等）。
+对于空状态，提供一个 fallback 函数：
 
 ```jsx
-const [users, setUsers] = use([
+<Each value={items}>
+  {(item) => <TodoItem data={item} />}
+  {() => <EmptyList />}
+</Each>
+```
+
+### `keyed` — Stable Identity / 稳定身份标识
+
+An optional `keyed` function `(item, index) => any` provides stable identity for each item. When the array changes, `<Each>` diffs by key, preserving existing DOM nodes for matching keys and only creating/removing nodes for additions/removals.
+
+可选的 `keyed` 函数 `(item, index) => any` 为每个条目提供稳定标识。当数组变化时，`<Each>` 通过 key 进行 diff，保留匹配 key 的现有 DOM 节点，只对增删条目创建/移除节点。
+
+```jsx
+const users = use([
   { id: 1, name: "Alice" },
   { id: 2, name: "Bob" },
 ]);
 
-return (
-  <ul each={users} key={(user) => user.id}>
-    {(user) => <li>{user().name}</li>}
-  </ul>
-);
+<Each value={users} keyed={(user) => user.id}>
+  {(user) => <UserCard data={user} />}
+</Each>;
 ```
 
-Using a stable key (like a database ID) ensures that DOM nodes are correctly reused even when the array is reordered or filtered. This minimizes DOM operations and preserves element state.
+**Note / 注意**：The `keyed` function receives the raw item value, not a signal. Use `toValue` if you need to read a signal inside it.
 
-使用稳定的 key（如数据库 ID）可以确保即使在数组重排序或过滤后，DOM 节点也能被正确复用。这最大程度减少了 DOM 操作并保持了元素状态。
+**`keyed` 函数接收原始条目值，不是信号。如需读取信号，使用 `toValue`。**
 
 ---
 
-## Notes / 注意事项
+## Why Functions? / 为什么需要函数？
 
-- `when` and `each` cannot be used on void elements (`<br>`, `<input>`, `<hr>`, etc.). An error is thrown in development mode.
-- Both attributes only work on native HTML elements. Using them on a component function has no effect.
-- If both `when` and `each` are present on the same element, `when` takes priority. In map mode, `each` is ignored with a warning. In boolean mode, `when` acts as a guard — the list is only rendered when the condition is truthy.
-- To avoid leaving a wrapper element in the DOM, apply `style="display: contents"` on the host element. This makes the element invisible in layout while preserving lifecycle management.
+Control flow children must be functions so that component code is only executed when the branch becomes active. This means:
 
-- `when` 和 `each` 不能在 void 元素（`<br>`、`<input>`、`<hr>` 等）上使用。开发模式下会抛出错误。
-- 这两个属性仅对原生 HTML 元素生效。在组件函数上使用无效。
-- 如果同一元素上同时存在 `when` 和 `each`，`when` 优先。映射表模式下，`each` 会被忽略并发出警告。布尔模式下，`when` 作为守卫——列表仅在条件为 truthy 时渲染。
-- 为避免在 DOM 中留下包裹元素，可在宿主元素上设置 `style="display: contents"`。这使得该元素在布局中不可见，同时保留生命周期管理。
+- Signals and lifecycle hooks inside a branch are only created when the branch is first rendered.
+- When switching away from a branch, the branch's Owner is disposed, cleaning up all its resources.
+- When switching back, the function is called again, creating a fresh instance.
+
+控制流子元素必须是函数，这样组件代码只会在分支变为活动状态时执行。这意味着：
+
+- 分支内的信号和生命周期钩子只在分支首次渲染时创建。
+- 当切换离开某个分支时，该分支的 Owner 被销毁，清理所有资源。
+- 当切换回来时，函数再次被调用，创建全新实例。
+
+---
+
+## Comparison / 对比
+
+control flow was achieved through `when` and `each` attributes on native HTML elements. These have been replaced by `<Show>`, `<Case>`, and `<Each>` components. The new components:
+
+控制流通过原生 HTML 元素上的 `when` 和 `each` 属性实现。这些已被 `<Show>`、`<Case>` 和 `<Each>` 组件取代。新组件：
+
+- Have their own persistent Owner for self-contained lifecycle management.
+- Work correctly in SSR without special handling.
+- Produce no extra DOM wrapper nodes.
+
+- 拥有自己的持久 Owner，实现自包含的生命周期管理。
+- 在 SSR 中正确输出，无需特殊处理。
+- 不产生额外的 DOM 包裹节点。
 
 ---
 
