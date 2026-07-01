@@ -1,6 +1,6 @@
 import { use } from "kiaao";
 
-import Model from "./Model.ts";
+import Model from "../../ui/Model.ts";
 
 export default function () {
   // ── 各种表单信号 ─────────────────────────────────
