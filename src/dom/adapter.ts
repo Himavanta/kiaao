@@ -87,8 +87,8 @@ export const browserAdapter: RenderAdapter = {
     return value instanceof Element;
   },
 
-  prevSibling(node: HostNode): HostNode {
-    return (node as Node).previousSibling ?? null;
+  prev(node: HostNode): HostNode {
+    return (node as Node).previousSibling;
   },
 
   setProp(el: any, key: string, value: unknown, cleanups?: CleanupFn[]): void {

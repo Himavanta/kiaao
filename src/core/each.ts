@@ -8,7 +8,7 @@ import type { ComponentFunction, Context } from "./component.ts";
 import { adoptBranch, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
 import { disposeOwner } from "./owner.ts";
 import { definitionMode, toValue } from "./signal.ts";
-import { isArray, isEmpty, isNotEmpty, isNotNil } from "./type-guards.ts";
+import { isArray, isEmpty, isNotNil } from "./type-guards.ts";
 import type {
   ControlFlowChildren,
   HostNode,
@@ -80,7 +80,7 @@ function buildDiffEntries(
 ): { newKeys: Set<any>; newEntries: Entry[] } {
   const newKeys = new Set<any>();
   const newEntries: Entry[] = [];
-  let prevNode: any = null;
+  let prevEntry: Entry | null = null;
 
   for (const [i, rawValue] of items.entries()) {
     const identity = keyFn(rawValue, i);
@@ -91,17 +91,16 @@ function buildDiffEntries(
       const existing = state.entries[existingIdx];
       const sig = state.itemSignalMap.get(identity);
       if (isNotNil(sig)) sig(rawValue);
-      prevNode = repositionEntry(state.anchor, existing, prevNode);
+      repositionEntry(state.anchor, existing, prevEntry);
       newEntries.push(existing);
+      prevEntry = existing;
       continue;
     }
 
     const result = renderEachEntry({ state, rawValue, identity, index: i, skipInsert: false });
-    newEntries.push({ key: identity, result });
-    const itemNodes = result.nodes;
-    if (isNotEmpty(itemNodes)) {
-      prevNode = itemNodes[itemNodes.length - 1];
-    }
+    const entry: Entry = { key: identity, result };
+    newEntries.push(entry);
+    prevEntry = entry;
   }
   return { newKeys, newEntries };
 }
@@ -126,18 +125,32 @@ function rebuildAllItems(state: EachState, items: any[]): void {
   }
 }
 
-function repositionEntry(anchor: HostNode, entry: Entry, prevNode: any): any {
+function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null): void {
   const existingNodes = [...entry.result.owner!.elements];
-  if (isEmpty(existingNodes)) return prevNode;
+  if (isEmpty(existingNodes)) return;
 
   const [firstExisting] = existingNodes;
-  const needsMove = isNotNil(prevNode) && getAdapter().prevSibling(firstExisting) !== prevNode;
-  if (needsMove) {
-    for (const n of [...existingNodes].reverse()) {
-      getAdapter().before(anchor, n);
+  const adapter = getAdapter();
+
+  let needsMove = true;
+  if (!prevEntry) {
+    // 无前驱——应为第一条。检查第一个节点是否已在父容器开头。
+    if (adapter.prev) {
+      needsMove = isNotNil(adapter.prev(firstExisting));
+    }
+  } else {
+    const prevNodes = [...prevEntry.result.owner!.elements];
+    const lastPrevNode = prevNodes[prevNodes.length - 1];
+    if (adapter.prev) {
+      needsMove = adapter.prev(firstExisting) !== lastPrevNode;
     }
   }
-  return existingNodes[existingNodes.length - 1];
+
+  if (needsMove) {
+    for (const n of [...existingNodes].reverse()) {
+      adapter.before(anchor, n);
+    }
+  }
 }
 
 function diffEntries(state: EachState, items: any[], keyFn: (item: any, i: number) => any): void {

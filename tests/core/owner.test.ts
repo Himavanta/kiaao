@@ -389,7 +389,7 @@ describe("RenderAdapter type compatibility", () => {
       isElement(value: unknown): value is unknown {
         return false;
       },
-      prevSibling() {
+      prev() {
         return null;
       },
     };

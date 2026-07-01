@@ -3,7 +3,7 @@
 
 import { splitSet } from "../adapter/index.ts";
 import { definitionMode, isNil, isNotNil, isObject, attrToString } from "../core/index.ts";
-import type { RenderAdapter, HostNode, CleanupFn } from "../core/index.ts";
+import type { RenderAdapter, CleanupFn } from "../core/index.ts";
 
 // ── HTML Escaping (SSR) ───────────────────────────────
 
@@ -126,10 +126,6 @@ export const ssrAdapter: RenderAdapter = {
 
   isElement(value: unknown): value is SSRElement {
     return isObject(value) && (value as any).type === "element";
-  },
-
-  prevSibling(): HostNode {
-    return null;
   },
 
   createStaticDerived(fn, _deps) {

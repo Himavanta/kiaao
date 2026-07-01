@@ -156,10 +156,12 @@ export interface RenderAdapter {
   /** 判断值是否为 Element（用于指令过滤非 Element 节点） */
   isElement(value: unknown): value is HostNode;
   /**
-   * 获取宿主节点的前一个兄弟节点。用于 each 指令的位置判断。
-   * DOM：返回 previousSibling；SSR：返回 null。
+   * 获取节点的前一个兄弟节点（物理紧邻）。
+   * 可选方法——用于 Each 的 repositionEntry 判断是否需要移动节点。
+   * 不实现时 Each 退化为保守策略（始终认为需要移动），正确性不受影响，仅失去优化。
+   * DOM：返回 previousSibling；其他平台若无需此优化可不实现。
    */
-  prevSibling(node: HostNode): HostNode;
+  prev?(node: HostNode): HostNode;
   /**
    * 可选：创建静态派生信号。SSR adapter 用于跳过响应式依赖追踪，直接求值。
    * DOM adapter 不实现此方法，core 走默认完整派生路径。

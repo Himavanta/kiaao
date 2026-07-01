@@ -52,8 +52,8 @@ describe("SSR adapter — direct API", () => {
     expect(ssrAdapter.isNode(42)).toBe(false);
   });
 
-  test("prevSibling returns null", () => {
-    expect(ssrAdapter.prevSibling({} as any)).toBeNull();
+  test("prev is not implemented in SSR", () => {
+    expect((ssrAdapter as any).prev).toBeUndefined();
   });
 });
 
