@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiaao/lynx",
+
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"]
+}

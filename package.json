@@ -34,6 +34,7 @@
     "./jsx-dev-runtime": "./dist/jsx-dev-runtime/index.js",
     "./jsx-runtime": "./dist/jsx-runtime/index.js",
     "./lynx": "./dist/lynx/index.js",
+    "./lynx/jsx-runtime": "./dist/lynx/jsx-runtime.js",
     "./motion": "./dist/motion/index.js",
     "./router": "./dist/router/index.js",
     "./server": "./dist/server/index.js",
