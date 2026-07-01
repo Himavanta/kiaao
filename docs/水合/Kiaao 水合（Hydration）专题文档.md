@@ -41,7 +41,7 @@
 
 ### 3.2 事件恢复
 
-SSR 输出的 HTML 不包含事件处理器。水合时需重新执行 `setProps` 中的事件绑定逻辑，`adapter.on` 应正常工作。
+SSR 输出的 HTML 不包含事件处理器。水合时需重新执行 `setProps` 中的事件绑定逻辑（`addEventListener`），使交互恢复正常。
 
 ### 3.3 状态同步
 
