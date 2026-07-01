@@ -18,7 +18,7 @@ export default function () {
   const multiselect = use(["a", "c"]);
 
   return (
-    <div class="max-w-lg mx-auto p-6 flex flex-col gap-6">
+    <form autocomplete="off" class="max-w-lg mx-auto p-6 flex flex-col gap-6">
       <h1 class="text-xl font-bold">Model 指令演示</h1>
 
       {/* ── 文本 / 密码 / 邮箱 ─────────────── */}
@@ -36,7 +36,7 @@ export default function () {
         <label class="flex items-center gap-3">
           <span class="w-16 text-sm shrink-0">password</span>
           <Model value={password}>
-            <input type="password" class="border rounded px-2 py-1 flex-1" />
+            <input type="password" autocomplete="off" class="border rounded px-2 py-1 flex-1" />
           </Model>
         </label>
 
@@ -158,6 +158,6 @@ export default function () {
           </span>
         </label>
       </section>
-    </div>
+    </form>
   );
 }
