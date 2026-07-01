@@ -1,13 +1,14 @@
 import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
+import { cns } from "/src/ui/cns";
 import Icon from "/src/ui/icon";
 import { use, Each, type Signal } from "kiaao";
 
 import { UserCard } from "./user";
 
+const cn = cns.bind(use);
+
 const menus = use<MainNavItem[]>(mainNavs);
 const navPlugin = use(mainNavPlugin);
-
-const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");
 
 function Logo() {
   return (
@@ -19,21 +20,21 @@ function Logo() {
 }
 
 function MenuItem({ item }: { item: Signal<MainNavItem> }) {
-  const itemPath = use(item, () => `/i/${item().path}`);
-  const linkClass = use(currentPath, item, () =>
-    cn(
-      "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
-      currentPath() === `/i/${item().path}` && "bg-white shadow-md text-blue-700 hover:bg-white",
-    ),
-  );
-  const iconClass = use(currentPath, item, () =>
-    cn("h-4 w-4", currentPath() === `/i/${item().path}` && " text-blue-700"),
-  );
-  const itemIcon = use(item, () => item().icon);
-  const spanClass = use(currentPath, item, () =>
-    cn(currentPath() === `/i/${item().path}` && " text-blue-700"),
-  );
   const itemTitle = use(item, () => item().title);
+  const itemIcon = use(item, () => item().icon);
+  const itemPath = use(item, () => `/i/${item().path}`);
+
+  const linkClass = cn(currentPath, item, () => [
+    "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
+    { "bg-white shadow-md text-blue-700 hover:bg-white": currentPath() === `/i/${item().path}` },
+  ]);
+  const iconClass = cn(currentPath, item, () => [
+    "h-4 w-4",
+    { "text-blue-700": currentPath() === `/i/${item().path}` },
+  ]);
+  const spanClass = cn(currentPath, item, () => ({
+    "text-blue-700": currentPath() === `/i/${item().path}`,
+  }));
 
   return (
     <Link to={itemPath} class={linkClass}>

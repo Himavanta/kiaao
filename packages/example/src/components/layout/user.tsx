@@ -1,10 +1,10 @@
 import { Link } from "/src/router";
+import { cns } from "/src/ui/cns";
 import Dropdown from "/src/ui/dropdown";
 import Icon from "/src/ui/icon";
 import { use, Each, type Signal } from "kiaao";
 
-// ── 通用 ──────────────────────────────────────────
-const cn = (...ns: any[]) => ns.filter((e) => typeof e === "string").join(" ");
+const cn = cns.bind(use);
 
 function MenuRow({
   icon,
@@ -73,12 +73,10 @@ const themeOptions = use<ThemeItem[]>([
 const currentTheme = use("light");
 
 function ThemeItemRow({ item }: { item: Signal<ThemeItem> }) {
-  const rowClass = use(currentTheme, item, () =>
-    cn(
-      "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
-      currentTheme() === item().value && "text-blue-600 hover:text-blue-600",
-    ),
-  );
+  const rowClass = cn(currentTheme, item, () => [
+    "flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-100",
+    { "text-blue-600 hover:text-blue-600": currentTheme() === item().value },
+  ]);
 
   return (
     <div class={rowClass} onClick={() => currentTheme(item().value)}>
