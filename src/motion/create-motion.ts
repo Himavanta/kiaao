@@ -11,6 +11,7 @@ import {
   parseMotionProps,
   playEnterAnimation,
   applyFromStyle,
+  getMotionState,
 } from "./shared.ts";
 
 // ── Signal Change Handler ─────────────────────────────
@@ -42,11 +43,15 @@ async function handleSignalChange(options: HandleSignalChangeOptions): Promise<v
 
   const anims = collectExitAnimations(elements, propsMap);
 
-  if (isEmpty(anims) && isNotEmpty(Array.from(elements)) && process.env.NODE_ENV !== "production") {
-    console.warn(
-      "[kiaao] createMotion: no exit animations to await. " +
-        "Did you forget to pass `from` prop to <Motion>?",
-    );
+  if (process.env.NODE_ENV !== "production" && isEmpty(anims)) {
+    const elList = Array.from(elements);
+    const allExiting = elList.every((el) => getMotionState(el) === "exiting");
+    if (isNotEmpty(elList) && !allExiting) {
+      console.warn(
+        "[kiaao] createMotion: no exit animations to await. " +
+          "Did you forget to pass `from` prop to <Motion>?",
+      );
+    }
   }
 
   await Promise.allSettled(anims);

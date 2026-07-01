@@ -53,7 +53,12 @@ export function collectExitAnimations(
     if (isNil(config) || isNil(config.from) || getMotionState(el) === "exiting") continue;
 
     setMotionState(el, "exiting");
-    anims.push(animate(el, config.from, config.options).finished);
+    try {
+      anims.push(animate(el, config.from, config.options).finished);
+    } catch {
+      // animate 可能因环境不支持（如 SSR、happy-dom）或元素已断开而失败
+      setMotionState(el, "idle");
+    }
   }
 
   return anims;

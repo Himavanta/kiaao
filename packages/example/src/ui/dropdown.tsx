@@ -30,7 +30,7 @@ export default function Dropdown(
   const open = useFn<boolean>(false);
   const [visible, Motion] = createMotion(open, context);
 
-  const toggle = () => open((v: boolean) => !v);
+  const toggle = () => open(!open());
   const close = () => open(false);
 
   // ── 事件监听 ─────────────────────────────────────────
