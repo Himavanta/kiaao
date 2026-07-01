@@ -383,8 +383,6 @@ describe("RenderAdapter type compatibility", () => {
       clear() {},
       setText() {},
       setProp() {},
-      on() {},
-      off() {},
       isNode(value: unknown): value is unknown {
         return value != null;
       },

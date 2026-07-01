@@ -120,14 +120,6 @@ export const ssrAdapter: RenderAdapter = {
     if (p.type === "element") p.children.length = 0;
   },
 
-  on(): void {
-    // SSR: 事件绑定不输出
-  },
-
-  off(): void {
-    // SSR: 事件绑定不输出
-  },
-
   isNode(value: unknown): value is SSRNode {
     return isObject(value) && "type" in value;
   },

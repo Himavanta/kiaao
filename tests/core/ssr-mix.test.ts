@@ -38,11 +38,6 @@ describe("SSR adapter — direct API", () => {
     expect(() => ssrAdapter.clear(null as any)).not.toThrow();
   });
 
-  test("on/off is no-op", () => {
-    expect(() => ssrAdapter.on({} as any, "click", () => {})).not.toThrow();
-    expect(() => ssrAdapter.off({} as any, "click", () => {})).not.toThrow();
-  });
-
   test("replace is no-op", () => {
     expect(() => ssrAdapter.replace(ssrAdapter.el("span"), ssrAdapter.el("em"))).not.toThrow();
   });

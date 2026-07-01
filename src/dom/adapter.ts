@@ -79,14 +79,6 @@ export const browserAdapter: RenderAdapter = {
     (oldNode as ChildNode).replaceWith(...newNodes);
   },
 
-  off(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
-    removeEventListener(el, type, handler as any);
-  },
-
-  on(el: EventTarget, type: string, handler: (...args: any[]) => void): void {
-    addEventListener(el, type, handler as any);
-  },
-
   isNode(value: unknown): value is Node {
     return value instanceof Node;
   },
