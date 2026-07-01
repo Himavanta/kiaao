@@ -1,7 +1,7 @@
 # Each 位置判断：`prev` 可选方法方案
 
-**状态**：设计定稿
-**版本**：5.0
+**状态**：设计定稿  
+**版本**：5.1  
 **日期**：2026-07-01
 
 ---
@@ -223,6 +223,7 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null
   let needsMove = true;
   if (!prevEntry) {
     // 无前驱，应为第一个条目。adapter.prev 存在时检查是否已在正确位置。
+    // 与旧行为不同：旧代码第一项永远不移动，新代码会检查第一项是否确实在开头。
     if (adapter.prev) {
       needsMove = adapter.prev(firstExisting) !== null;
     }
@@ -244,9 +245,48 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null
 }
 ```
 
-- `prevEntry` 替代原来的 `prevNode`，用于获取前驱条目的最后一个节点。
-- `adapter.prev` 存在时，精确判断是否需要移动。
-- `adapter.prev` 不存在时，`needsMove` 恒为 `true`，执行移动——保守策略，保证正确性，仅放弃优化。
+### 4.5 调用处调整：`buildDiffEntries` 中从 `prevNode` 改为 `prevEntry`
+
+旧代码中，`buildDiffEntries` 需要维护一个 `prevNode` 变量，并在每次处理完一个条目后更新它：
+
+```ts
+let prevNode: any = null;
+for (...) {
+  // ...
+  prevNode = repositionEntry(anchor, existing, prevNode);
+  // 或者对于新条目：
+  prevNode = itemNodes[itemNodes.length - 1];
+}
+```
+
+新代码中，改用 `prevEntry` 变量，直接传递给 `repositionEntry`。因为 `repositionEntry` 现在接收 `prevEntry` 对象，内部可以自行提取最后一个节点，调用处不再需要关心 `prevNode`。
+
+```ts
+let prevEntry: Entry | null = null;
+for (const [i, rawValue] of items.entries()) {
+  // ...
+  if (existingIdx !== -1) {
+    // 已有条目
+    const existing = state.entries[existingIdx];
+    repositionEntry(state.anchor, existing, prevEntry);
+    newEntries.push(existing);
+  } else {
+    // 新条目
+    const result = renderEachEntry({ ... });
+    const entry: Entry = { key: identity, result };
+    newEntries.push(entry);
+  }
+  prevEntry = newEntries[newEntries.length - 1];
+}
+```
+
+注意：`repositionEntry` 现在没有返回值（或者说返回 `void`），不再需要用它来更新 `prevNode`。`prevEntry` 直接从新条目列表的最后一项获取。
+
+### 4.6 行为变化：首个条目移动检查
+
+旧代码中，第一个条目（`prevNode` 为 `null`）永远不触发移动。新代码会检查第一个条目的第一个节点是否在父容器开头。如果该节点前面有其他节点（例如前一个条目被删除但 DOM 尚未更新），新代码会正确触发移动。
+
+这是一个**行为改进**，提高了 `Each` 的健壮性。它不会对正常流程产生负面影响，因为正常情况下第一个条目前面确实没有兄弟节点。
 
 ---
 
@@ -254,19 +294,20 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null
 
 ### 5.1 需修改的文件
 
-| 文件                | 变更                                                                              |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `core/each.ts`      | `repositionEntry` 使用 `adapter.prev` 判断移动；使用 `prevEntry` 参数获取前驱节点 |
-| `core/types.ts`     | `RenderAdapter` 接口中 `prevSibling` 重命名为 `prev`，改为可选方法                |
-| `dom/adapter.ts`    | `prevSibling` 重命名为 `prev`，实现不变                                           |
-| `server/adapter.ts` | 删除 `prevSibling` 实现（SSR 不需要此优化）                                       |
+| 文件                | 变更                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/each.ts`      | `repositionEntry` 使用 `adapter.prev` 判断移动；使用 `prevEntry` 参数获取前驱节点；`buildDiffEntries` 中从 `prevNode` 改为 `prevEntry` |
+| `core/types.ts`     | `RenderAdapter` 接口中 `prevSibling` 重命名为 `prev`，改为可选方法                                                                     |
+| `dom/adapter.ts`    | `prevSibling` 重命名为 `prev`，实现不变                                                                                                |
+| `server/adapter.ts` | 删除 `prevSibling` 实现（SSR 不需要此优化）                                                                                            |
 
 ### 5.2 收益
 
 - **跨平台友好**：`prev` 是可选的，不强求非 DOM 平台实现。SSR 适配器更干净。
 - **命名通用**：不再绑定 DOM 术语。
 - **正确性保证**：`prev` 直接查看物理顺序，不会漏掉间接位置变化（与 `prevSibling` 一致）。
-- **向后兼容**：DOM 平台行为完全不变。
+- **首个条目移动改进**：修复了第一项永远不移动的旧行为，提高了健壮性。
+- **调用处简化**：`buildDiffEntries` 从跟踪 `prevNode` 改为跟踪 `prevEntry`，不再需要混合处理 DOM 节点和条目引用。
 
 ---
 
@@ -285,3 +326,5 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null
 ## 7. 总结
 
 通过将 `prevSibling` 重命名为 `prev` 并改为可选方法，我们解决了命名冗长和强平台耦合的问题，同时避免了缓存方案的正确性 bug 和其他替代方案的语义缺陷。该方案保留了"查看物理顺序"的核心能力，确保了 `Each` diff 的正确性和移动优化，同时为非 DOM 平台提供了灵活的适配空间。
+
+此外，新方案带来了两项改进：首个条目的移动检查更加健壮，调用处 `buildDiffEntries` 的代码也更简洁一致。
