@@ -1,7 +1,7 @@
-# Each 位置判断：`prevSibling` 替代方案
+# Each 位置判断：`prev` 可选方法方案
 
-**状态**：设计定稿  
-**版本**：3.0  
+**状态**：设计定稿
+**版本**：5.0
 **日期**：2026-07-01
 
 ---
@@ -25,64 +25,34 @@ function repositionEntry(anchor: HostNode, entry: Entry, prevNode: any): any {
 }
 ```
 
-它通过查询 DOM 中条目的第一个节点的前驱兄弟节点，判断该条目是否已在正确位置，从而避免不必要的 `adapter.before` 移动。然而，这一方法存在以下问题：
+它通过查询 DOM 中条目的第一个节点的前驱兄弟节点，判断该条目是否已在正确位置，从而避免不必要的 `adapter.before` 移动。
 
-1. **平台耦合**：`previousSibling` 是 DOM 概念，Canvas、终端、Native 等平台不存在此 API，非 DOM 适配器只能返回 `null` 硬凑。
-2. **接口污染**：`prevSibling` 是 `RenderAdapter` 中唯一一个“查询 DOM 结构”的方法，其余皆为“操作”。这破坏了接口的纯粹性。
-3. **查询开销**：每次 diff 更新都要调用 DOM API，虽单次开销极小，但在大列表频繁更新时可累积为可观成本。
+该方法存在以下问题：
 
-为此，我们提出**位置缓存比较**方案，用内存中的逻辑关系替代 DOM 查询，移除 `prevSibling`。
+1. **平台耦合**：`previousSibling` 是 DOM 概念，非 DOM 平台只能返回 `null` 硬凑。
+2. **接口污染**：`prevSibling` 是 `RenderAdapter` 中唯一一个“查询 DOM 结构”的方法，破坏了接口的纯粹性。
+3. **命名冗长且 DOM 化**：`prevSibling` 过于 DOM 化，与 Kiaao 的平台无关设计理念不符。
 
 ---
 
-## 2. `needsMove` 优化的性质：不是正确性保障
+## 2. `needsMove` 优化的性质
 
 首先需要明确：`needsMove` 是一个**性能优化**，不是正确性保障。
 
 - 如果 `needsMove` 是 `true`（需要移动）但实际已在正确位置 → 执行一次多余的 `before` 操作，视觉上无变化。
-- 如果 `needsMove` 是 `false`（认为不需要移动）但实际位置不对 → 本次 diff 不移动，DOM 位置暂时偏差。但下一次 diff 会纠正（因为缓存将被更新并发现不一致）。
+- 如果 `needsMove` 是 `false`（认为不需要移动）但实际位置不对 → 本次 diff 不移动，DOM 位置暂时偏差。但下一次 diff 会纠正。
 
-即使判断错误，也不会导致崩溃、数据丢失或永久错位。最坏情况是**一次多余的移动**或**临时的 DOM 位置偏差**。
-
-这意味着：`needsMove` 的准确性不是系统的正确性要求，而是一个可降级的优化。`prevSibling` 方案提供 100% 的准确性，缓存方案提供接近 100% 的准确性（正常流程中完全同步），而两者的最坏后果相同——一次多余的 DOM 操作。
+即使判断错误，也不会导致崩溃或数据丢失。最坏情况是**一次多余的移动**或**临时的 DOM 位置偏差**。因此，`needsMove` 的正确性不是系统的硬性要求，而是一个可降级的优化。
 
 ---
 
-## 3. 核心差异：物理检查 vs 逻辑推断
+## 3. 方案探索
 
-这是两种方案最本质的差异。
+### 3.1 方向一：位置缓存比较（已否决）
 
-`prevSibling` 是**测量**——直接查看 DOM 的实际状态，结果不可能错。  
-缓存比较是**推断**——假设 DOM 顺序与 entry 数组顺序一致，结果在假设成立时正确。
+#### 3.1.1 核心思路
 
-| 场景                            | prevSibling（物理检查）                      | 缓存比较（逻辑推断）                                          |
-| ------------------------------- | -------------------------------------------- | ------------------------------------------------------------- |
-| 无干扰的正常流程                | ✅ 正确                                      | ✅ 正确                                                       |
-| `onMount` 回调中修改了 DOM 顺序 | ✅ 检测到偏差，触发移动                      | ❌ 认为没变，跳过移动（直到下次 diff 纠正）                   |
-| 用户代码/第三方库直接操作 DOM   | ✅ 检测到偏差                                | ❌ 同上                                                       |
-| 首次渲染                        | ✅ 所有条目均需要插入，`needsMove` 必为 true | ✅ 所有条目 `prevKey` 均为 `undefined`，`needsMove` 必为 true |
-
-**不同步的原因**：缓存依赖于 `Each` 是 DOM 节点的唯一操作者。如果外部代码（`onMount` 回调、直接 DOM 操作、第三方库）移动了 `Each` 管理的列表节点，`Each` 不知道这些操作，因此不会更新缓存的 `prevKey`。下次 diff 时，缓存与实际 DOM 脱节。
-
-**不同步时的影响**：
-
-- `needsMove` 为 `false`（认为不需要移动）但实际 DOM 位置已变 → 本次跳过移动，DOM 暂时错位。
-- 下一次 diff 时，缓存将被更新（因为新 `prevKey` 与实际不符，将触发移动），错位得到纠正。
-- 最坏情况是**一次临时的视觉抖动**，且在下一次 diff 中自动修复。
-
-**为什么这是可接受的**：
-
-- `Each` 的边界内，DOM 顺序由 `Each` 全权管理，缓存与 DOM 永远同步。
-- 外部代码修改 `Each` 管理的 DOM 是**越界行为**。Kiaao 的设计哲学是“不为开发者的越界行为买单”——如同 React 假设 key 对应的 DOM 节点未被外部篡改。
-- 退一步说，即使外部篡改发生，后果也只是临时错位而非崩溃，且下次 diff 自动修复。
-
----
-
-## 4. 替代方案：位置缓存比较
-
-### 4.1 核心思路
-
-`Each` 的 diff 算法在构建新顺序时，已经知道每个条目应该跟在谁后面。我们只需在每个 `Entry` 上缓存其前一个条目的标识（`prevKey`），diff 完成后比较新旧 `prevKey` 是否一致：
+在每个 `Entry` 上缓存其前一个条目的标识（`prevKey`），diff 完成后比较新旧 `prevKey` 是否一致：
 
 - 一致 → 条目位置未变，跳过 `before` 移动
 - 不一致 → 条目位置已变，执行 `before` 移动
@@ -97,159 +67,221 @@ diff 后： entryA → entryC → entryB
 
 该方案完全依赖 `Each` 自身维护的顺序信息，不查询 DOM。
 
-### 4.2 数据结构变更
+#### 3.1.2 正确性 Bug
+
+考虑一个重排场景：
+
+```
+旧顺序: [A, B, C, D]
+新顺序: [A, D, B, C]
+```
+
+缓存方案逐条处理：
+
+| 步骤 | Entry | 旧 prev | 新 prev | 变化？  | 动作              |
+| ---- | ----- | ------- | ------- | ------- | ----------------- |
+| 1    | A     | null    | null    | ❌ 不变 | 跳过              |
+| 2    | D     | (新)    | —       | —       | 插入              |
+| 3    | B     | A       | D       | ✅ 变了 | 移动 B            |
+| 4    | C     | B       | B       | ❌ 不变 | 跳过 ← **错误！** |
+
+**问题所在**：B 被移动后，C 在 DOM 中的物理位置已经变了（B 被插到了尾部，C 还在原位），但 C 的逻辑前驱仍然是 B。缓存认为"不用动"，但 DOM 里 C 已经不在正确位置了。
+
+```
+DOM after step 3 (cache): [A, C, D_new, B, anchor]  ← B 被移到最后
+DOM after step 4 (cache): [A, C, D_new, B, anchor]  ← C 没动，位置错了！
+正确 DOM:                    [A, D_new, B, C, anchor]
+```
+
+而 `prevSibling` 在步骤 4 会检测到：C 的第一个节点的 `previousSibling` 是 A 的最后一个节点，不等于 `prevNode`（B 的最后一个节点）→ `needsMove = true` → 移动 C，结果正确。
+
+#### 3.1.3 根因分析
+
+这是两种方案回答的问题不同所导致的根本性差异。
+
+|                        | `prevSibling`（物理检查）                               | 缓存比较（逻辑推断）                     |
+| ---------------------- | ------------------------------------------------------- | ---------------------------------------- |
+| **问题**               | 该条目的第一个 DOM 节点是否物理上紧跟在 prev 节点之后？ | 该条目的逻辑前驱在重排后是否发生了变化？ |
+| **数据源**             | 真实 DOM 结构                                           | 内存中的 Entry 数组关系                  |
+| **确定性**             | ✅ 100% 反映当前 DOM 状态                               | ❌ 假设 DOM 顺序与内存逻辑一致           |
+| **对外部篡改的敏感性** | 能检测到外部 DOM 操作导致的位置变化                     | 不能；外部操作会破坏缓存有效性           |
+| **对间接影响的敏感性** | ✅ 能检测（DOM 物理位置已变）                           | ❌ 不能（逻辑前驱未变）                  |
+
+缓存方案检查的是"逻辑前驱变没变"，无法感知间接影响——一个条目被移动后，它后面所有条目的 DOM 位置事实上都变了，即使它们的逻辑前驱没变。而 `prevSibling` 检查的是"DOM 前驱是不是预期值"，直接查看 DOM 实际状态，永远不会漏。
+
+#### 3.1.4 否决理由
+
+缓存方案存在不可修复的正确性 bug：当某个条目被移动时，后续条目的 DOM 位置会间接改变，但缓存方案无法感知。这是一个致命缺陷，该方案被否决。
+
+---
+
+### 3.2 方向二：`compareOrder` 通用顺序比较
+
+#### 3.2.1 核心思路
+
+将"查询前驱兄弟"替换为更通用的"比较两个节点在父容器中的相对顺序"：
 
 ```ts
-interface Entry {
-  key: any;
-  result: HResult;
-  prevKey: any; // 前一个条目的 key，首次渲染时为 undefined
+interface RenderAdapter {
+  compareOrder(a: HostNode, b: HostNode): number;
+  // 返回负数：a 在 b 之前
+  // 返回 0：a 和 b 是同一节点，或无法比较
+  // 返回正数：a 在 b 之后
 }
 ```
 
-### 4.3 `repositionEntry` 改造
+#### 3.2.2 问题
+
+`compareOrder` 能判断"A 是否在 B 之前"，但**不能判断"A 是否紧跟在 B 之后"**。而 `repositionEntry` 需要的正是"紧邻"判断——不仅仅是 A 在 B 之前，还要确保它们之间没有其他条目节点。
+
+如果要实现完整的"紧邻"判断，需要组合多个 API 调用或引入更复杂的逻辑，得不偿失。
+
+#### 3.2.3 否决理由
+
+`compareOrder` 无法直接表达"紧邻"语义，而这是 `repositionEntry` 的核心需求。引入它并不能简化代码，反而增加了复杂度。
+
+---
+
+### 3.3 方向三：`needsMove` 抽象方法
+
+#### 3.3.1 核心思路
+
+将"是否需要移动"的判断逻辑整个抽象为 adapter 方法，让各平台自行定义：
+
+```ts
+interface RenderAdapter {
+  needsMove(
+    entryFirstNode: HostNode,
+    prevEntryLastNode: HostNode | null,
+    anchor: HostNode,
+  ): boolean;
+}
+```
+
+#### 3.3.2 问题
+
+- 接口过于高层，失去了细粒度的原子性。`needsMove` 是一个"判断 + 逻辑"的混合体，不适合作为 adapter 的基础方法。
+- 各平台实现差异较大，测试和验证成本高。
+- 与 `before`、`append` 等原子操作方法风格不一致。
+
+#### 3.3.3 否决理由
+
+过于高层，不够原子化，与 `RenderAdapter` 中其他原子操作方法的设计风格不一致。
+
+---
+
+## 4. 最终方案：保留查询方法，改为可选的 `prev`
+
+### 4.1 决策理由
+
+经过三轮方案探索，我们得出结论：
+
+- **缓存方案（方向一）**：有正确性 bug，否决。
+- **`compareOrder`（方向二）**：无法表达"紧邻"语义，否决。
+- **`needsMove` 抽象（方向三）**：过于高层，不够原子化，否决。
+
+最终方案选择**保留查询方法**，但做以下改进：
+
+1. **重命名为 `prev`**：简短通用，不绑定 DOM 术语。
+2. **改为可选方法**：不强求非 DOM 平台实现。不实现时退化为保守策略（始终认为需要移动），正确性不受影响，仅失去优化。
+
+这个方案保留了"查看物理顺序"的核心能力——这是经过验证的、确保 diff 正确性的唯一方式。同时，通过简短的命名和可选的设计，最大程度降低了平台耦合。
+
+### 4.2 API 定义
+
+```ts
+interface RenderAdapter {
+  // ... 其他方法 ...
+
+  /**
+   * 获取节点的前一个兄弟节点（物理紧邻）。
+   * 可选方法——若平台不支持或不需要移动优化，可不实现。
+   * 不实现时（返回 undefined/null），Each 退化为保守策略（始终认为需要移动），
+   * 正确性不受影响，仅失去跳过不必要移动的优化。
+   */
+  prev?(node: HostNode): HostNode | null;
+}
+```
+
+### 4.3 各平台实现
+
+- **DOM**：`prev: (node) => node.previousSibling`
+- **SSR**：不实现（或返回 `null`），SSR 无 DOM 移动需求，`before` 为空操作，即使 `needsMove` 恒为 `true` 也无影响
+- **Canvas/终端/Native**：自行实现，若无物理兄弟概念则返回 `null`
+
+### 4.4 `repositionEntry` 改造
 
 ```ts
 function repositionEntry(anchor: HostNode, entry: Entry, prevEntry: Entry | null): void {
   const existingNodes = [...entry.result.owner!.elements];
   if (isEmpty(existingNodes)) return;
 
-  const needsMove = entry.prevKey !== prevEntry?.key;
+  const [firstExisting] = existingNodes;
+  const adapter = getAdapter();
+
+  // 判断是否需要移动
+  let needsMove = true;
+  if (!prevEntry) {
+    // 无前驱，应为第一个条目。adapter.prev 存在时检查是否已在正确位置。
+    if (adapter.prev) {
+      needsMove = adapter.prev(firstExisting) !== null;
+    }
+  } else {
+    const prevNodes = [...prevEntry.result.owner!.elements];
+    const lastPrevNode = prevNodes[prevNodes.length - 1];
+    // 检查当前条目的第一个节点是否紧跟在 prevEntry 的最后一个节点之后
+    if (adapter.prev) {
+      needsMove = adapter.prev(firstExisting) !== lastPrevNode;
+    }
+    // 无 adapter.prev → 保守策略，needsMove 保持 true
+  }
+
   if (needsMove) {
     for (const n of [...existingNodes].reverse()) {
-      getAdapter().before(anchor, n);
+      adapter.before(anchor, n);
     }
-    entry.prevKey = prevEntry?.key; // 移动后立即同步缓存
   }
 }
 ```
 
-- 不再需要 `prevNode` DOM 节点引用，改由 `prevEntry?.key` 提供逻辑前驱。
-- 使用 `key` 而非 `Entry` 对象引用进行比较，避免因条目被销毁重建导致的对象引用失效。
-- 移动成功后立即更新 `entry.prevKey`，确保缓存与 DOM 同步。
-
-### 4.4 `buildDiffEntries` 中的集成
-
-```ts
-function buildDiffEntries(state, items, keyFn) {
-  const newKeys = new Set<any>();
-  const newEntries: Entry[] = [];
-  let prevEntry: Entry | null = null;
-
-  for (const [i, rawValue] of items.entries()) {
-    const identity = keyFn(rawValue, i);
-    newKeys.add(identity);
-
-    const existingIdx = state.entries.findIndex((e) => e.key === identity);
-    if (existingIdx !== -1) {
-      // 已存在条目
-      const existing = state.entries[existingIdx];
-      const sig = state.itemSignalMap.get(identity);
-      if (isNotNil(sig)) sig(rawValue);
-      repositionEntry(state.anchor, existing, prevEntry);
-      newEntries.push(existing);
-    } else {
-      // 新条目（含被销毁后重建的相同 key 条目）
-      const result = renderEachEntry({ state, rawValue, identity, index: i, skipInsert: false });
-      const entry: Entry = { key: identity, result, prevKey: prevEntry?.key };
-      newEntries.push(entry);
-    }
-    prevEntry = newEntries[newEntries.length - 1];
-  }
-  return { newKeys, newEntries };
-}
-```
-
-- `prevEntry` 变量取代原来的 `prevNode`，用于获取前驱条目的 key。
-- 新条目（包括被销毁后重建的相同 key 条目）通过 `prevEntry?.key` 直接初始化 `prevKey`。旧对象的任何缓存引用均不存在，因为新条目是新创建的。
-- 已存在条目的 `prevKey` 由 `repositionEntry` 在判断移动后更新。
-
-### 4.5 `prevKey` 的清理时机
-
-`prevKey` 存储的是前一条目的 `key`（标量值），而非 `Entry` 对象引用。因此：
-
-- 当某个条目被 `disposeOwner` 删除时，其他条目中缓存的 `prevKey` 如果指向它，不会变成悬空引用——`prevKey` 是一个值，不是一个指针。
-- 下次 diff 时，`prevKey` 的比较是基于值的。如果指向的条目已不存在，新数组的前驱自然不同，比较结果会触发 `needsMove = true`，执行正确的移动。
-- 不需要额外的清理逻辑。
-
-使用 `key` 值而非对象引用的设计，天然避免了悬空引用问题。
-
-### 4.6 条目被销毁又重建（key 相同但 Entry 对象不同）
-
-当父组件重建（如 `Show` 切换），`Each` 的所有条目被销毁。父组件重新渲染后，`Each` 重新创建所有条目。此时：
-
-- `state.entries` 为空（因为旧的条目已被销毁）。
-- `buildDiffEntries` 中 `findIndex` 找不到任何旧条目。
-- 所有条目都走“新条目”路径：`renderEachEntry` 创建新 `Entry`，`prevKey` 初始化为 `prevEntry?.key`。
-- 旧 Entry 对象的缓存引用不存在，因为新 Entry 是全新创建的。
-
-这意味着：**条目销毁后重建不会产生过期的缓存引用。** 每次重建都是全新的 Entry，`prevKey` 根据新数组的相邻关系初始化。
+- `prevEntry` 替代原来的 `prevNode`，用于获取前驱条目的最后一个节点。
+- `adapter.prev` 存在时，精确判断是否需要移动。
+- `adapter.prev` 不存在时，`needsMove` 恒为 `true`，执行移动——保守策略，保证正确性，仅放弃优化。
 
 ---
 
-## 5. Fragment 兼容性分析
+## 5. 影响范围
 
-### 5.1 Fragment 渲染链路
+### 5.1 需修改的文件
 
-当条目渲染函数返回 Fragment 时：
+| 文件                | 变更                                                                              |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `core/each.ts`      | `repositionEntry` 使用 `adapter.prev` 判断移动；使用 `prevEntry` 参数获取前驱节点 |
+| `core/types.ts`     | `RenderAdapter` 接口中 `prevSibling` 重命名为 `prev`，改为可选方法                |
+| `dom/adapter.ts`    | `prevSibling` 重命名为 `prev`，实现不变                                           |
+| `server/adapter.ts` | 删除 `prevSibling` 实现（SSR 不需要此优化）                                       |
 
-```tsx
-<Each value={list}>
-  {(item) => (
-    <>
-      <span>A</span>
-      <span>B</span>
-    </>
-  )}
-</Each>
-```
+### 5.2 收益
 
-JSX 编译后变为 `h(Fragment, null, h("span", ...), h("span", ...))`。`Fragment` 作为组件被 `handleComponent` 执行，其内部直接返回 `children` 数组。该数组被 `toHResult` 的数组合并逻辑处理，最终生成一个 `HResult`，`nodes` 为 `[spanA, spanB]`，`owner` 为 Fragment 的 Owner。
-
-在 `Each` 中，`adoptBranch` 拿到这个 HResult，通过 `adoptResult` 将 Fragment 的 Owner 挂接到 `Each` 的 Owner 下。此时，**该条目的 `owner.elements` 包含 `spanA` 和 `spanB`**（因为 `adoptResult` 将 HResult 的所有 nodes 都注册进了 owner.elements）。Set 保持插入顺序，因此 `elements` 遍历顺序与 DOM 顺序一致。
-
-### 5.2 对位置缓存的影响
-
-位置缓存比较的是**条目之间的相对顺序**，不关心条目内部结构。条目的 `prevKey` 缓存的是前一条目的身份标识，而非前一个 DOM 节点。
-
-移动操作通过 `entry.result.owner.elements` 获取该条目的所有 DOM 节点，`[...existingNodes].reverse()` 后逐个 `before(anchor, ...)` 保持内部顺序。**缓存方案只决定“要不要移”，不改变“怎么移”——这两个逻辑完全独立。**
-
-因此，无论条目内部是单个节点、多个节点还是 Fragment，缓存方案的判断逻辑完全不受影响。
+- **跨平台友好**：`prev` 是可选的，不强求非 DOM 平台实现。SSR 适配器更干净。
+- **命名通用**：不再绑定 DOM 术语。
+- **正确性保证**：`prev` 直接查看物理顺序，不会漏掉间接位置变化（与 `prevSibling` 一致）。
+- **向后兼容**：DOM 平台行为完全不变。
 
 ---
 
-## 6. SSR 中的行为
+## 6. 方案对比总结
 
-SSR 序列化按数组顺序输出节点，节点天然在正确位置，不需要任何 `needsMove` 检查。
-
-- 当前 SSR 适配器的 `prevSibling` 返回 `null`，`needsMove` 判断为 `true`，所有条目均执行 `before`。但 SSR 适配器的 `before` 是空操作，所以“移动”不会出错，只是浪费了一次内存判断。
-- 缓存方案在 SSR 下：所有条目的 `prevKey` 初始化为 `prevEntry?.key`（新条目），首次渲染后 `prevKey` 与相邻关系一致。若 SSR 不做 diff（因为不需要），则缓存不被使用。若 SSR 需要 diff（未来场景），缓存比较工作正常——节点顺序天然正确，`needsMove` 为 `false`，不触发操作。
-- 与 DOM 平台相比：SSR 适配器的 `before` 为空操作，即使 `needsMove` 错误触发也无后果。因此缓存方案对 SSR 至少与当前方案等价，且更干净（不依赖一个意义不明的 `null` 返回值）。
-
----
-
-## 7. 影响范围与收益
-
-### 7.1 需修改的文件
-
-| 文件                | 变更                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `core/each.ts`      | `Entry` 接口增加 `prevKey`；`repositionEntry` 改用位置缓存；`buildDiffEntries` 使用 `prevEntry`；删除 `prevNode` 相关逻辑 |
-| `core/types.ts`     | `RenderAdapter` 接口移除 `prevSibling` 方法                                                                               |
-| `dom/adapter.ts`    | 移除 `prevSibling` 实现                                                                                                   |
-| `server/adapter.ts` | 移除 `prevSibling` 实现                                                                                                   |
-
-### 7.2 收益
-
-- **跨平台一致性**：所有平台统一使用内存比较，行为一致。SSR 适配器不再需要返回 `null` 硬凑。
-- **接口纯粹性**：`RenderAdapter` 仅保留操作方法，不再包含查询方法，降低适配者学习成本。
-- **性能提升**：用纯 JS 引用比较替代 DOM API 调用，尤其在大型列表 diff 时累积收益明显。
-- **可测试性**：位置判断逻辑不依赖 DOM，单元测试更容易编写。
+| 方案                       | 正确性          | 跨平台          | 接口纯粹性    | 采纳     |
+| -------------------------- | --------------- | --------------- | ------------- | -------- |
+| `prevSibling`（当前）      | ✅              | ❌ 需各平台硬凑 | ❌ DOM 概念   | —        |
+| 位置缓存（方向一）         | ❌ 间接影响 bug | ✅              | ✅            | 否决     |
+| `compareOrder`（方向二）   | ❌ 无法判断紧邻 | ✅              | ✅            | 否决     |
+| `needsMove` 抽象（方向三） | ✅              | ✅              | ❌ 不够原子化 | 否决     |
+| **`prev` 可选（最终）**    | ✅              | ✅              | ✅            | **采纳** |
 
 ---
 
-## 8. 总结
+## 7. 总结
 
-位置缓存方案用纯内存的、基于逻辑关系的位置判断，替代了平台特定的 DOM 查询。两者的核心差异在于“物理检查”与“逻辑推断”——前者 100% 反映 DOM 状态，后者假设 DOM 与逻辑一致。这一假设在 `Each` 独占其所管理 DOM 节点的前提下成立。外部篡改可能导致缓存脱节，但后果仅为临时 DOM 错位（下次 diff 自动修复），非崩溃性错误。这一权衡与框架“不为越界行为兜底”的设计哲学一致。
-
-该方案消除了 `RenderAdapter` 接口中的平台耦合，为 Kiaao 向非 DOM 平台的扩展铺平了道路，且在不改变“怎么移”的前提下保留了“要不要移”的性能优化。
+通过将 `prevSibling` 重命名为 `prev` 并改为可选方法，我们解决了命名冗长和强平台耦合的问题，同时避免了缓存方案的正确性 bug 和其他替代方案的语义缺陷。该方案保留了"查看物理顺序"的核心能力，确保了 `Each` diff 的正确性和移动优化，同时为非 DOM 平台提供了灵活的适配空间。
