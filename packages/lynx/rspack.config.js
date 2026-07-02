@@ -77,8 +77,7 @@ export default defineConfig({
         });
 
         compiler.hooks.done.tap(PLUGIN_NAME, () => {
-          console.log("Lynx Bundle: /main.lynx.bundle");
-          // console.log("Lynx Bundle: /main.lynx.bundle?fullscreen=true");
+          console.log("Lynx Bundle: /main.lynx.bundle Or /main.lynx.bundle?fullscreen=true");
         });
       },
     },
