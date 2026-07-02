@@ -18,6 +18,9 @@ importers:
 
   .:
     devDependencies:
+      '@rsbuild/core':
+        specifier: ^2.1.2
+        version: 2.1.2
       '@types/node':
         specifier: ^25.6.2
         version: 25.9.1
@@ -1338,6 +1341,16 @@ packages:
 
   '@rsbuild/core@2.0.11':
     resolution: {integrity: sha512-Mpp/viUSkVdSWJkFipdZxM2nUztrBwSnMm6Q86bPzLHtHnXqQ3VFpSMlA4wWRyySNddP6s6efKiVpx0ZOCf7Gg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      core-js: '>= 3.0.0'
+    peerDependenciesMeta:
+      core-js:
+        optional: true
+
+  '@rsbuild/core@2.1.2':
+    resolution: {integrity: sha512-EP24Oj01bdwtw/Xl3LiaLe/WG6PBQV2yWbbCh+2TkMDc9dNHiyBTnR+/JZvGxI8RdO5qU0rH4YgMOJ6nVXIQSA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -5423,6 +5436,13 @@ snapshots:
   '@rsbuild/core@2.0.11':
     dependencies:
       '@rspack/core': 2.0.8(@swc/helpers@0.5.23)
+      '@swc/helpers': 0.5.23
+    transitivePeerDependencies:
+      - '@module-federation/runtime-tools'
+
+  '@rsbuild/core@2.1.2':
+    dependencies:
+      '@rspack/core': 2.1.2(@swc/helpers@0.5.23)
       '@swc/helpers': 0.5.23
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'

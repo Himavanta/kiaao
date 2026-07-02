@@ -36,6 +36,8 @@
     "./lynx": "./dist/lynx/index.js",
     "./lynx/jsx-dev-runtime": "./dist/lynx/jsx-dev-runtime.js",
     "./lynx/jsx-runtime": "./dist/lynx/jsx-runtime.js",
+    "./lynx/plugin": "./dist/lynx/plugin/index.js",
+    "./lynx/plugin/entry-main": "./dist/lynx/plugin/entry-main.js",
     "./motion": "./dist/motion/index.js",
     "./router": "./dist/router/index.js",
     "./server": "./dist/server/index.js",
@@ -53,6 +55,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@rsbuild/core": "^2.1.2",
     "@types/node": "^25.6.2",
     "@typescript/native-preview": "7.0.0-dev.20260509.2",
     "bumpp": "^11.1.0",
