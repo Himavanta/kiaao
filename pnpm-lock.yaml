@@ -70,9 +70,15 @@ importers:
 
   packages/lynx:
     dependencies:
+      '@lynx-js/runtime-wrapper-webpack-plugin':
+        specifier: ^0.2.0
+        version: 0.2.0
       '@lynx-js/template-webpack-plugin':
         specifier: ^0.12.1
         version: 0.12.1(tslib@2.8.1)
+      '@rspack/cli':
+        specifier: ^2.1.2
+        version: 2.1.2(@rspack/core@2.1.2(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.2(@swc/helpers@0.5.23)))
       kiaao:
         specifier: workspace:*
         version: link:../..
@@ -92,6 +98,9 @@ importers:
       '@rspack/core':
         specifier: ^2.1.2
         version: 2.1.2(@swc/helpers@0.5.23)
+      '@rspack/dev-server':
+        specifier: ^2.1.0
+        version: 2.1.0(@rspack/core@2.1.2(@swc/helpers@0.5.23))
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
@@ -789,6 +798,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  '@lynx-js/runtime-wrapper-webpack-plugin@0.2.0':
+    resolution: {integrity: sha512-/SdXXcHKyHiDdrA2zNWlyL21wik1WNx5udtCPiag+1oD550KXcVn6CiSXgkIjSdVIiDzhckmUaOmzfHQQ5NkJA==}
+    engines: {node: '>=18'}
 
   '@lynx-js/tasm@0.0.39':
     resolution: {integrity: sha512-FNIV6Cc2K0wCKOHVMfpr3M6kpIZqHHNI02GpVl+h0ClyyK44jxEO+lf58gLFD5E3o0hJ1cp3H2OBIxSUJGkPDw==}
@@ -1541,6 +1554,16 @@ packages:
   '@rspack/binding@2.1.2':
     resolution: {integrity: sha512-/mFcRSUW7Pl19KeaBIujJvZYNJQu0wD5D3aa5h+Qcph26v7nmLYlX7eajIHGi8tt2qTZX1lXifw2KLIXKwYaRQ==}
 
+  '@rspack/cli@2.1.2':
+    resolution: {integrity: sha512-GTBsKuaeqDii6NaGPkQwvycMSjqMUMMRGiAwH0sXsFIn8X7sFa4xpoL7pIhbebVBDGzYhUBqWzNQFuL5u2FeoQ==}
+    hasBin: true
+    peerDependencies:
+      '@rspack/core': ^2.0.0-0
+      '@rspack/dev-server': ^2.0.0-0
+    peerDependenciesMeta:
+      '@rspack/dev-server':
+        optional: true
+
   '@rspack/core@2.0.8':
     resolution: {integrity: sha512-+NLGJf8gZxihDmMFzjlly3toc2SMjeDmuvz0/Cai9AMdV4F+Pqcnt2BA9V4e3SY2jmhJQtPwgyyLtR1RiJO77g==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1563,6 +1586,25 @@ packages:
       '@module-federation/runtime-tools':
         optional: true
       '@swc/helpers':
+        optional: true
+
+  '@rspack/dev-middleware@2.0.3':
+    resolution: {integrity: sha512-GxnGj9jy76G3eCPyZei81fwKLAMLZaPEEqFz1/QDYquhwi/qYZX5fekFJ1XVpuwxGEK9KSX3hxZylfwrs4cmLA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@rspack/core': ^2.0.0
+    peerDependenciesMeta:
+      '@rspack/core':
+        optional: true
+
+  '@rspack/dev-server@2.1.0':
+    resolution: {integrity: sha512-WkCi6bWThVX5Ziv04srPaRoCoUY5FJolO4gqzE7xPO0XbXShsGnwn0vGD0DFfnYFcw9VSsxlmeCDV799lNYclA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@rspack/core': ^2.0.0
+      selfsigned: ^5.0.0
+    peerDependenciesMeta:
+      selfsigned:
         optional: true
 
   '@rspack/lite-tapable@1.1.0':
@@ -5100,6 +5142,10 @@ snapshots:
       - utf-8-validate
       - webpack
 
+  '@lynx-js/runtime-wrapper-webpack-plugin@0.2.0':
+    dependencies:
+      '@lynx-js/webpack-runtime-globals': 0.0.6
+
   '@lynx-js/tasm@0.0.39': {}
 
   '@lynx-js/template-webpack-plugin@0.12.1(tslib@2.8.1)':
@@ -5691,6 +5737,12 @@ snapshots:
       '@rspack/binding-win32-ia32-msvc': 2.1.2
       '@rspack/binding-win32-x64-msvc': 2.1.2
 
+  '@rspack/cli@2.1.2(@rspack/core@2.1.2(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.2(@swc/helpers@0.5.23)))':
+    dependencies:
+      '@rspack/core': 2.1.2(@swc/helpers@0.5.23)
+    optionalDependencies:
+      '@rspack/dev-server': 2.1.0(@rspack/core@2.1.2(@swc/helpers@0.5.23))
+
   '@rspack/core@2.0.8(@swc/helpers@0.5.23)':
     dependencies:
       '@rspack/binding': 2.0.8
@@ -5702,6 +5754,15 @@ snapshots:
       '@rspack/binding': 2.1.2
     optionalDependencies:
       '@swc/helpers': 0.5.23
+
+  '@rspack/dev-middleware@2.0.3(@rspack/core@2.1.2(@swc/helpers@0.5.23))':
+    optionalDependencies:
+      '@rspack/core': 2.1.2(@swc/helpers@0.5.23)
+
+  '@rspack/dev-server@2.1.0(@rspack/core@2.1.2(@swc/helpers@0.5.23))':
+    dependencies:
+      '@rspack/core': 2.1.2(@swc/helpers@0.5.23)
+      '@rspack/dev-middleware': 2.0.3(@rspack/core@2.1.2(@swc/helpers@0.5.23))
 
   '@rspack/lite-tapable@1.1.0': {}
 

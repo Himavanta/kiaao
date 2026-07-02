@@ -10,15 +10,15 @@ import "./types.ts";
 let _pageId: number | undefined;
 
 function pageId(): number {
-  if (_pageId === undefined) {
-    _pageId = __GetElementUniqueID(__CreatePage("0", 0));
-  }
-  return _pageId;
+  // 主线程 renderPage 已创建页面，后台线程直接用 pageId=1
+  return _pageId ?? 1;
 }
 
 export function initLynxPage(page?: FiberElement): number {
-  _pageId = __GetElementUniqueID(page ?? __CreatePage("0", 0));
-  return _pageId;
+  if (page) {
+    _pageId = __GetElementUniqueID(page);
+  }
+  return _pageId ?? 1;
 }
 
 // ── 类型转换 ─────────────────────────────────────────
@@ -50,7 +50,7 @@ export const lynxAdapter: RenderAdapter = {
   },
 
   append(parent: HostNode, child: HostNode): void {
-    __InsertElementBefore(asF(parent), asF(child));
+    __InsertElementBefore(asF(parent), asF(child), null as any);
     __FlushElementTree(asF(parent));
   },
 
