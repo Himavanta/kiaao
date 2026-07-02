@@ -16,6 +16,11 @@ Object.assign(globalThis, {
   renderPage(): void {
     // 由 render() 处理
   },
+  runWorklet(value: unknown, params: unknown[]): void {
+    if (typeof value === "function") {
+      (value as (...args: unknown[]) => unknown)(...params);
+    }
+  },
 });
 
 // ── render ────────────────────────────────────────────

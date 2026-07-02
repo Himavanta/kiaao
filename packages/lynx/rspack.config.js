@@ -26,6 +26,7 @@ export default defineConfig({
                 react: {
                   runtime: "automatic",
                   importSource: "kiaao/lynx",
+                  throwIfNamespace: false,
                 },
               },
             },

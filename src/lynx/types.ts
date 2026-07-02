@@ -35,4 +35,5 @@ declare global {
   function __NextElement(node: FiberElement): FiberElement;
   function __GetTag(e: FiberElement): string;
   function __GetElementUniqueID(e: FiberElement): number;
+  function runWorklet(value: unknown, params: unknown[]): void;
 }
