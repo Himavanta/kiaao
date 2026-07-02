@@ -1,4 +1,4 @@
-import { use } from "kiaao/lynx";
+import { use, Show } from "kiaao/lynx";
 
 import "./App.css";
 import arrow from "./assets/arrow.png";
@@ -37,11 +37,10 @@ export function App() {
       <view className="App">
         <view className="Banner">
           <view className="Logo" style={{ transform: `translateY(${logoY()}px)` }} bindtap={onTap}>
-            {alterLogo() ? (
-              <image src={reactLynxLogo} className="Logo--react" />
-            ) : (
-              <image src={lynxLogo} className="Logo--lynx" />
-            )}
+            <Show value={alterLogo}>
+              {() => <image src={reactLynxLogo} className="Logo--react" />}
+              {() => <image src={lynxLogo} className="Logo--lynx" />}
+            </Show>
           </view>
           <text className="Title">Kiaao</text>
           <text className="Subtitle">on Lynx</text>

@@ -37,6 +37,10 @@ export default defineConfig({
         test: /\.css$/,
         type: "css",
       },
+      {
+        test: /\.(png|jpg|jpeg|gif|svg)$/,
+        type: "asset/inline",
+      },
     ],
   },
   plugins: [
