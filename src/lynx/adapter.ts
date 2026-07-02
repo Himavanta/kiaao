@@ -91,12 +91,6 @@ export const lynxAdapter: RenderAdapter = {
   setProp(el: HostNode, key: string, value: unknown, _cleanups?: CleanupFn[]): void {
     const node = asF(el);
     let k = key;
-    let mt = false;
-    if (k.startsWith("main-thread:")) {
-      mt = true;
-      k = k.slice(12);
-    }
-
     if (k === "style") {
       if (typeof value === "string") __SetInlineStyles(node, value);
     } else if (k === "class" || k === "className") {
@@ -105,7 +99,7 @@ export const lynxAdapter: RenderAdapter = {
       __SetID(node, value as string);
     } else if (k.startsWith("data-")) {
       __AddDataset(node, k.slice(5), value);
-    } else if (!tryBindEvent(node, k, value, mt)) {
+    } else if (!tryBindEvent(node, k, value)) {
       __SetAttribute(node, k, value);
     }
     __FlushElementTree(node);

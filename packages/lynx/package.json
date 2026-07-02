@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "rspack build --watch",
+    "dev": "rspack preview & rspack build --watch",
     "build": "rspack build",
     "preview": "rspack preview"
   },
