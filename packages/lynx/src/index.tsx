@@ -1,5 +1,7 @@
 import { render } from "kiaao/lynx";
 
-import { App } from "./App.js";
+function App() {
+  return <view>hello world</view>;
+}
 
-render(<App />);
+render(App);

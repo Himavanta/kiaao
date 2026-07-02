@@ -11,6 +11,7 @@ export default defineConfig({
       "src/astro/client.ts",
       "src/astro/server.ts",
       "src/lynx/jsx-runtime.ts",
+      "src/lynx/jsx-dev-runtime.ts",
     ],
     dts: true,
     platform: "neutral",
