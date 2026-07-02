@@ -7,6 +7,9 @@ export default defineConfig({
   output: {
     publicPath: "/",
   },
+  devServer: {
+    client: false,
+  },
   resolve: {
     extensions: ["...", ".ts", ".tsx", ".jsx"],
   },
