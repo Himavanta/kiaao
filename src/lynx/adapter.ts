@@ -25,6 +25,28 @@ export function initLynxPage(page?: FiberElement): number {
 
 const asF = (el: HostNode): FiberElement => el as unknown as FiberElement;
 
+// ── Style 序列化 ─────────────────────────────────────
+
+/**
+ * camelCase → kebab-case。
+ * 例：`backgroundColor` → `background-color`
+ */
+function camelToKebab(str: string): string {
+  return str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * 对象 style 序列化为 CSS 字符串。
+ * 例：`{ display: "none", backgroundColor: "red" }`
+ *   → `"display:none;background-color:red"`
+ */
+function styleObjectToString(style: object): string {
+  return Object.entries(style)
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${camelToKebab(k)}:${v}`)
+    .join(";");
+}
+
 // ── Lynx Adapter ─────────────────────────────────────
 
 export const lynxAdapter: RenderAdapter = {
@@ -92,7 +114,12 @@ export const lynxAdapter: RenderAdapter = {
     const node = asF(el);
     let k = key;
     if (k === "style") {
-      if (typeof value === "string") __SetInlineStyles(node, value);
+      if (typeof value === "string") {
+        __SetInlineStyles(node, value);
+      } else if (value && typeof value === "object") {
+        // 对象 style → 序列化为 CSS 字符串（camelCase 转 kebab-case）
+        __SetInlineStyles(node, styleObjectToString(value));
+      }
     } else if (k === "class" || k === "className") {
       if (typeof value === "string") __SetClasses(node, value);
     } else if (k === "id") {
