@@ -70,6 +70,11 @@ export default defineConfig({
             }
           });
         });
+
+        compiler.hooks.done.tap(PLUGIN_NAME, () => {
+          console.log("Lynx Bundle: /main.lynx.bundle");
+          // console.log("Lynx Bundle: /main.lynx.bundle?fullscreen=true");
+        });
       },
     },
   ],
