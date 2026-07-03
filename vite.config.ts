@@ -16,6 +16,10 @@ export default defineConfig({
     dts: true,
     platform: "neutral",
     exports: true,
+    outputOptions: {
+      assetFileNames: "assets/[hash][extname]",
+      chunkFileNames: "assets/[hash].js",
+    },
     deps: { skipNodeModulesBundle: true },
     // minify: true,
   },
