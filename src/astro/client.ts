@@ -22,12 +22,6 @@ export default (rootElement: HTMLElement) => {
     const app = createApp(h(Component, mergedProps));
     app.mount(rootElement);
 
-    rootElement.addEventListener(
-      "astro:unmount",
-      () => {
-        app.unmount();
-      },
-      { once: true },
-    );
+    rootElement.addEventListener("astro:unmount", () => app.unmount(), { once: true });
   };
 };
