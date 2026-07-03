@@ -35,7 +35,7 @@ export const server = {
     accept: "form",
     input: z.object({
       name: z.string().min(1, "请输入名字"),
-      email: z.string().email("邮箱格式不正确"),
+      email: z.email("邮箱格式不正确"),
       message: z.string().min(5, "消息至少 5 个字符"),
     }),
     handler: async (input) => {
