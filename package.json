@@ -53,13 +53,12 @@
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.1.2",
-    "@types/node": "^25.6.2",
-    "@typescript/native-preview": "7.0.0-dev.20260509.2",
+    "@rsbuild/core": "^2.1.6",
+    "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
-    "happy-dom": "^20.10.1",
-    "motion": "^12.40.0",
-    "typescript": "^6.0.3",
+    "happy-dom": "^20.10.6",
+    "motion": "^12.42.2",
+    "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@11.5.2"

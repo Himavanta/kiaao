@@ -9,15 +9,15 @@
     "preview": "rspack preview"
   },
   "dependencies": {
-    "@lynx-js/template-webpack-plugin": "^0.12.1",
-    "@rspack/cli": "^2.1.2",
+    "@lynx-js/template-webpack-plugin": "^0.13.0",
+    "@rspack/cli": "^2.1.4",
     "kiaao": "workspace:*"
   },
   "devDependencies": {
     "@lynx-js/types": "4.0.0",
-    "@rspack/core": "^2.1.2",
+    "@rspack/core": "^2.1.4",
     "@rspack/dev-server": "^2.1.0",
-    "typescript": "~5.9.3"
+    "typescript": "~7.0.2"
   },
   "engines": {
     "node": ">=22.12.0"
