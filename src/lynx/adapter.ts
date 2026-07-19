@@ -102,6 +102,16 @@ export const lynxAdapter: RenderAdapter = {
   replace(oldNode: HostNode, ...newNodes: HostNode[]): void {
     const p = __GetParent(asF(oldNode));
     if (!p) return;
+    // 单对单：使用 __ReplaceElement（delegate 到原生原子替换，语义正确）
+    // ⚠️ 参数顺序: __ReplaceElement(newElement, oldElement)
+    // 注：此 API 不能解决 Lynx 上 destroy+create 闪退问题（native 层 bug），
+    // 闪退的解决见 docs/lynx/元素 destroy-create 闪退问题.md
+    if (newNodes.length === 1) {
+      __ReplaceElement(asF(newNodes[0]!), asF(oldNode));
+      __FlushElementTree(p);
+      return;
+    }
+    // 多节点：回退到 insert + remove 模式
     for (const n of newNodes) {
       __InsertElementBefore(p, asF(n), asF(oldNode));
     }
