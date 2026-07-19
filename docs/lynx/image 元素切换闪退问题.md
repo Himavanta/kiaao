@@ -1,5 +1,8 @@
 # Kiaao Lynx `<image>` 元素 remove+insert 闪退问题
 
+> ⚠️ **本文档已过时**。问题已确认不是 image 特有的，且 SDK 3.9.0 仍然存在。
+> 完整、正确的调查结论见：**[`元素 destroy-create 闪退问题.md`](./元素%20destroy-create%20闪退问题.md)**
+
 ## 问题描述
 
 在 Lynx 主线程模式下，使用 `<Show>` 组件切换 `<image>` 元素时，LynxExplorer 进程会闪退。
@@ -115,12 +118,13 @@ if (typeof globalThis.queueMicrotask !== "function") {
 - Lynx 设备：**仍然闪退**
 
 **尝试过的延迟时长**：
-| 延迟 | 结果 |
-|------|------|
+
+| 延迟                                                  | 结果 |
+| ----------------------------------------------------- | ---- |
 | 微任务（`queueMicrotask` / `Promise.resolve().then`） | 闪退 |
-| 宏任务（`setTimeout(fn, 0)`） | 闪退 |
-| 50ms | 闪退 |
-| 1000ms | 闪退 |
+| 宏任务（`setTimeout(fn, 0)`）                         | 闪退 |
+| 50ms                                                  | 闪退 |
+| 1000ms                                                | 闪退 |
 
 **结论**：❌ **不是时序问题**。即使给 native 层 1 秒的清理时间，remove+insert 仍然闪退。
 

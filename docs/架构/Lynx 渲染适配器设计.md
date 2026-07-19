@@ -199,25 +199,17 @@ export * from "solid-js";
 
 ### 3.1 Comment 替代方案
 
-**问题**：Lynx 没有 HTML comment 节点，但 kiaao 的 Show/Case/Each 依赖 `adapter.comment()` 创建锚点。
-
-**方案**：使用 `__CreateWrapperElement(pageId)` 创建不可见的包装器元素作为 anchor。
+**结论**：`__CreateWrapperElement` 在 SDK 1.4.0 不可用（`ReferenceError`），改用 `__CreateElement("view", pageId)` + 零尺寸样式。
 
 ```ts
 comment(text: string): HostNode {
-  // Lynx 无 comment 节点，用零尺寸 wrapper 替代
-  const el = __CreateWrapperElement(pageId);
-  // 设零尺寸使其不影响布局（需验证）
-  __SetInlineStyles(el, "width: 0; height: 0; opacity: 0;");
-  return el;
+  const w = __CreateElement("view", pageId());
+  __SetInlineStyles(w, "width:0;height:0;opacity:0;pointer-events:none");
+  return w;
 }
 ```
 
-**不确定点**：
-
-- `__CreateWrapperElement` 创建的元素是否真正零尺寸/透明？
-- 多个 wrapper 元素是否影响布局性能？
-- 是否需要特殊属性来确保它不参与布局？
+已验证在 1.4.0 和 3.9.0 上可用。
 
 ### 3.2 `remove` 需要 parent
 
@@ -254,53 +246,21 @@ prev(node: HostNode): HostNode | null {
 
 见 [`docs/架构/Each 位置判断：\`prev\` 可选方法方案.md`](../架构/Each%20位置判断：%60prevSibling%60%20替代方案.md)
 
-### 3.4 事件名前缀映射
+### 3.4 事件前缀
 
-**问题**：Lynx 使用 `bind`/`catch` 前缀，kiaao 使用 `on` 前缀。
+**结论**：kiaao 使用 Lynx 原生事件前缀（`bindtap`/`catchtap` 等），adapter 的 `tryBindEvent` 通过正则匹配自动包装为 worklet。**不需要** `main-thread:` 前缀。
 
-**方案**：在 `setProp` 中做映射：
-
-| kiaao 事件          | Lynx 事件属性      | Lynx 事件类型 |
-| ------------------- | ------------------ | ------------- |
-| `onClick` / `onTap` | `bindtap`          | `bindEvent`   |
-| `onInput`           | `bindinput`        | `bindEvent`   |
-| `onFocus`           | `bindfocus`        | `bindEvent`   |
-| `onBlur`            | `bindblur`         | `bindEvent`   |
-| `onTouchStart`      | `bindtouchstart`   | `bindEvent`   |
-| `onTouchMove`       | `bindtouchmove`    | `bindEvent`   |
-| `onTouchEnd`        | `bindtouchend`     | `bindEvent`   |
-| `onScroll`          | `bindscroll`       | `bindEvent`   |
-| `onLayoutChange`    | `bindlayoutchange` | `bindEvent`   |
-
-```ts
-const EVENT_MAP: Record<string, string> = {
-  onClick: "bindtap",
-  onTap: "bindtap",
-  onInput: "bindinput",
-  onFocus: "bindfocus",
-  onBlur: "bindblur",
-  onTouchStart: "bindtouchstart",
-  onTouchMove: "bindtouchmove",
-  onTouchEnd: "bindtouchend",
-  onChange: "bindchange",
-  onSubmit: "bindsubmit",
-  onScroll: "bindscroll",
-  onLayoutChange: "bindlayoutchange",
-};
+```tsx
+<view bindtap={onTap}>...</view> // ✅ 正确
 ```
 
 ### 3.5 `__FlushElementTree` 管理
 
-**问题**：Lynx 每次修改节点后需要调用 `__FlushElementTree` 才能反映到 UI。
+**结论**：主线程模式下，`__FlushElementTree` 需要在每次修改后调用。但**这不是闪退的根因**——即使只在最后 flush 一次仍然崩溃。
 
-**方案**：直接在每个 adapter 操作后立即 flush（简单期），后续可优化为 batch。
+真正的解决方案是避 destroy+create（用 `display:none` 切换），或者采用后台线程架构（类似 vue-lynx）。
 
-```ts
-setProp(el, key, value, cleanups) {
-  // ... 处理属性/事件 ...
-  __FlushElementTree(el);
-}
-```
+新 SDK 支持 `__FlushElementTree(element, options)` 的 `FlushOptions` 参数，其中 `pipelineOptions` 可能提供操作分组能力，待验证。
 
 ### 3.6 Each 与 Lynx `<list>` 的关系
 
@@ -326,11 +286,20 @@ setProp(el, key, value, cleanups) {
 
 ---
 
-## 5. 未解决问题（待讨论）
+## 5. 当前状态
 
-1. **`__CreateWrapperElement` 的行为验证** — 是否真正零尺寸、透明、不参与布局？需要在 Lynx 环境中实验。
-2. **`pageId` 的获取** — 当前 SolidJS 适配器在 `renderPage` 时获取 pageId，kiaao 的启动流程是否需要类似机制？
-3. **双线程模型的影响** — Lynx 有主线程和后台线程之分。kiaao 的响应式系统在哪个线程运行？
-4. **`__FlushElementTree` 的粒度和性能** — 每次操作都 flush 是否可接受？是否需要批处理优化？
-5. **`list` 元素的集成策略** — Each 的 diff 逻辑 vs Lynx 原生的高性能列表？
-6. **`__ReplaceElement` 的语义** — 是否只支持单节点替换？与 kiaao 的 `replace` 方法语义是否一致？
+### 已解决
+
+1. ✅ Comment 替代方案 — `__CreateElement("view")` 替代 `__CreateWrapperElement`
+2. ✅ 事件前缀 — `bindtap` 直接使用，无需 `main-thread:` 前缀或 `on`→`bind` 映射
+3. ✅ `pageId` 获取 — `__CreatePage` 后通过 `__GetElementUniqueID` 保存
+4. ✅ `__ReplaceElement` 参数顺序 — `(newElement, oldElement)`，非 `(oldElement, newElement)`
+5. ✅ API 可用性 — `__CreateImage`、`__CreateView`、`__CreateText`、`__AppendElement`、`__SetCSSId` 均在 3.9.0 上确认可用
+
+### 未解决
+
+1. 🔴 **元素 destroy+create 闪退** — SDK 3.9.0 仍存在。详见 `docs/lynx/元素 destroy-create 闪退问题.md`
+2. 🟡 **后台线程 vs 主线程架构** — 当前为主线程模式，vue-lynx 的后台线程模式能避免闪退，是否值得迁移？
+3. 🟡 **`display:none` 方案落地** — 为 Lynx 平台写专用 Show 组件，用 display:none 切换替代 dispose+insert
+4. 🟢 **`FlushOptions.pipelineOptions` 可行性** — 新 SDK 的 pipeline 机制是否能实现操作原子化？
+5. 🟢 **Each 与 Lynx `<list>` 的集成** — 后续考虑
