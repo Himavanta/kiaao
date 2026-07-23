@@ -132,7 +132,7 @@ describe("Portal — 极端场景", () => {
     expect(target.children.length).toBe(0);
   });
 
-  // Portal 在函数子 + 信号 toggle 下清理（当前已知限制：轻量 Owner 的 onUnmount 在 dispose 级联中不触发）
+  // Portal 在 Show 内切换时，分支卸载应清理 Portal 内容
   test("Portal 在 Show 内切换不泄漏", () => {
     const target = document.createElement("div");
     document.body.append(target);

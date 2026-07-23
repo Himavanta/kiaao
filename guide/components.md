@@ -244,9 +244,9 @@ function Modal(_, { use }) {
 }
 ```
 
-The `to` prop accepts a CSS selector string or a DOM element. If the target does not exist at mount time, `Portal` renders a placeholder comment node. The content is moved when the target becomes available, or cleaned up when the component unmounts.
+The `to` prop accepts a CSS selector string or a DOM element. If the target does not exist when `Portal` is rendered, it returns a placeholder comment and does not render its children. It does not retry automatically; render the `Portal` again after the target becomes available.
 
-`to` 属性接受 CSS 选择器字符串或 DOM 元素。如果挂载时目标不存在，`Portal` 会渲染一个占位注释节点。当目标可用时内容被移入，或当组件卸载时被清理。
+`to` 属性接受 CSS 选择器字符串或 DOM 元素。如果 `Portal` 渲染时目标容器不存在，它会返回一个占位注释节点，且不会渲染子内容。框架不会自动重试；目标容器准备好后，需要重新渲染 `Portal`。
 
 ## `lazy` / 代码拆分
 
