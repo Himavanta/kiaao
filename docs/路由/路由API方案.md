@@ -520,4 +520,5 @@ function define(defOptions: DefineOptions): ComponentFunction {
 以下文档已废弃,保留用于历史追溯:
 
 - [嵌套 RouterView 方案讨论与设计](./嵌套RouterView方案讨论与设计.md) — 旧 RouterView 嵌套设计
+- [ ] 动态路由方案(单独任务,见 [动态路由方案](./动态路由方案.md))
 - [when 指令扩展与 RouterView 重构方案](./when指令扩展与RouterView重构方案.md) — 旧 RouterView 重构(when 扩展部分仍可参考)
