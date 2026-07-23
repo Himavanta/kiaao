@@ -181,7 +181,7 @@ Attributes matching the pattern `onXxx` (where `Xxx` starts with an uppercase le
 匹配 `onXxx` 模式（`Xxx` 以大写字母开头）的属性被视为事件监听器。它们通过 `addEventListener` 绑定，不会设置为 DOM 属性或 property。事件监听器的清理函数被收集并合并到最近的持久 Owner 中，因此在所属组件卸载时自动移除。
 
 ```jsx
-<button onClick={() => count(c => c + 1)}>+1</button>
+<button onClick={() => count(count() + 1)}>+1</button>
 <input onInput={(e) => name(e.target.value)} />
 ```
 

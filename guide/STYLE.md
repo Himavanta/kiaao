@@ -102,8 +102,8 @@ The compute function runs immediately when the derivation is created, and re-run
 计算函数在派生创建时立即执行，并在任何声明的依赖发生变化时重新执行。结果会被缓存。
 
 \`\`\`js
-const [count, setCount] = use(1);
-const [double, setDouble] = use(count, () => count() \* 2);
+const count = use(1);
+const double = use(count, () => count() \* 2);
 \`\`\`
 ```
 
@@ -205,7 +205,7 @@ function Comp() { ... }
 \`\`\`
 
 \`\`\`ts
-function use<T>(initialValue: T): [Getter<T>, Setter<T>];
+function use<T>(initialValue: T): Signal<T>;
 \`\`\`
 
 \`\`\`bash
@@ -220,7 +220,7 @@ npm install kiaao
 如果注释需要同时向中英文读者解释，使用简短的中英文并列：
 
 ```js
-setCount(42); // direct replacement / 直接替换
+count(42); // direct replacement / 直接替换
 ```
 
 ### 3.3 伪代码声明

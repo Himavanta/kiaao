@@ -28,6 +28,18 @@ user({ ...user(), age: 19 });
 
 **Signal** 是一个函数。无参调用返回当前存储的值。传入值则替换存储的值。
 
+For a definition signal, the value passed to the setter is stored as-is. The setter never treats a function as an updater. `state(() => null)` stores the function itself; it does not call it. If you want to store the return value, invoke the function explicitly.
+
+对于定义信号，setter 接收的参数会原样存储。setter 不会把函数当作更新器执行。`state(() => null)` 会将函数本身写入信号值，而不会调用它。如果要写入函数返回值，必须显式调用函数。
+
+```js
+const state = use(null);
+
+state(() => null); // stores the function itself / 将函数本身写入信号
+state()(); // invokes the stored function / 调用信号中存储的函数
+state((() => null)()); // stores null / 写入 null
+```
+
 ## Referencing an Existing Signal / 引用已有信号
 
 When called with a single argument that is already a signal (created by `use`), `use` returns that exact same signal. No new signal is created. This is useful for normalizing component props that might be either a plain value or an existing signal — just pass it through `use` and you always get back a `Signal<T>`.

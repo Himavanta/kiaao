@@ -56,7 +56,7 @@ function Counter() {
     <div>
       <p>Count: {count}</p>
       <p>Double: {double}</p>
-      <button onClick={() => count((c) => c + 1)}>+1</button>
+      <button onClick={() => count(count() + 1)}>+1</button>
     </div>
   );
 }
@@ -70,6 +70,18 @@ app.mount("#app");
 A signal can be written regardless of how it was created. For a definition signal, the setter replaces the value. For a derivation signal, the setter triggers re-execution of the compute function. The API is the same.
 
 信号无论怎样创建都可以被写入。定义信号的写入直接替换值。派生信号的写入触发计算函数重新执行。API 完全一致。
+
+For a definition signal, the value passed to the setter is stored as-is. Passing a function stores the function itself; the function is not called. If you need its return value, call it explicitly before writing.
+
+对于定义信号，setter 接收的值会原样存储。传入函数时，写入的是函数本身，函数不会被调用。如果需要写入函数返回值，必须先显式调用函数。
+
+```js
+const state = use(null);
+
+state(() => null); // stores the function itself / 将函数本身写入信号
+state()(); // invokes the stored function / 调用信号中存储的函数
+state((() => null)()); // stores null / 写入 null
+```
 
 ```js
 const count = use(1);

@@ -77,7 +77,7 @@ function App() {
   return (
     <div>
       <p>Count: {count}</p>
-      <button onClick={() => count((c) => c + 1)}>+1</button>
+      <button onClick={() => count(count() + 1)}>+1</button>
     </div>
   );
 }

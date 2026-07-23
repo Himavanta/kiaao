@@ -17,7 +17,7 @@ function Counter() {
   return (
     <div>
       <p>Count: {count}</p>
-      <button onClick={() => count((c) => c + 1)}>+1</button>
+      <button onClick={() => count(count() + 1)}>+1</button>
     </div>
   );
 }
@@ -83,7 +83,7 @@ function createCounter() {
     return (
       <div>
         <p>{count}</p>
-        <button onClick={() => count((c) => c + 1)}>+1</button>
+        <button onClick={() => count(count() + 1)}>+1</button>
       </div>
     );
   };
@@ -231,7 +231,7 @@ function Modal(_, { use }) {
 
   return (
     <div>
-      <button onClick={() => open((o) => !o)}>Toggle</button>
+      <button onClick={() => open(!open())}>Toggle</button>
       <Show value={open}>
         {() => (
           <Portal to="#modal-root">

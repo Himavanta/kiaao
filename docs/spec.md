@@ -56,6 +56,7 @@
 
 - 无参调用 `signal()` → 读取，返回当前值 `T`
 - 有参调用 `signal(value)` → 写入，返回 `void`
+- 定义信号写入时将 `value` 原样替换当前值，不执行其中的函数
 
 ```js
 const count = use(0);
@@ -63,6 +64,11 @@ const count = use(0);
 count(); // 读取 → 0
 count(5); // 写入 → 5
 count(count() + 1); // 读取后再写入
+
+const state = use(null);
+state(() => null); // 将函数本身写入信号，不会调用函数
+state()(); // 显式调用信号中存储的函数
+state((() => null)()); // 显式调用后写入返回值 null
 ```
 
 ### 1.3 定义模式：`use(initialValue)`
@@ -82,6 +88,7 @@ const promiseVal = use(somePromise); // Promise 本身作为值
 
 - `initialValue` 可以是任何 JavaScript 值，不做类型限制，不做特殊包装。
 - 若传入函数（包括 getter、Promise、async 函数），它被当作普通值存储，不会被调用。
+- 定义信号后续写入时遵循相同规则：`state(() => null)` 会将函数本身写入为信号值，而不是执行函数获取返回值。
 
 **内部状态**：
 
