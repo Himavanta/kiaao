@@ -15,6 +15,35 @@
 
 本方案通过重新设计 API 解决上述问题,同时保持 kiaao 的极简哲学:不引入 isNavigating、loading、Suspense 等概念(这些属于渲染层,由未来的 Suspense 机制统一处理)。
 
+### 设计动机:异步 push 的灵活性
+
+将 `push` 设计为返回 `Promise<void>` 的异步方法,不仅是为支持异步 onRoute,更重要的是把"导航"从火灾即忘升级为**可组合的异步操作**:
+
+```tsx
+// 1. 等待导航完成后再做后续操作
+async function handleLogin() {
+  await push("/dashboard");
+  showToast("欢迎回来");
+}
+
+// 2. 捕获导航失败(鉴权拒绝、重定向超限等)
+async function handleProtectedAction() {
+  try {
+    await push("/admin");
+  } catch (err) {
+    showErrorMessage("无法访问");
+  }
+}
+
+// 3. 在异步流程中插入导航
+async function saveAndNavigate() {
+  await saveData();
+  await push("/list");
+}
+```
+
+对比旧的同步 `navigate`,用户现在可以 await / catch / finally,与信号系统也能更好地组合(在信号回调里 `await push(...)`)。两种用法都支持:Link 内部火灾即忘(内部 catch),用户手动调用可 await,符合"渐进式复杂度"。
+
 ## 二、API 设计
 
 ### createRouter
@@ -121,14 +150,32 @@ function App() {
 
 ### 重定向链
 
-- 返回字符串会再次触发 `onRoute`,形成重定向链。
-- **无最大次数兜底**:用户需自行保证终止条件(如检查 `to === from` 直接 return),否则会无限循环。
-- 这符合 kiaao "把控制权交给用户"的哲学,框架不做隐藏的状态干预。
+- 返回字符串会再次触发 `onRoute`,形成重定向链。**每一次重定向都会跑 onRoute**,保证每一步都经过守卫,更安全。
+- **软上限 10 次**:超出抛错 `Error: [kiaao] too many redirects (max 10)`,让用户立即发现失控 bug。10 次远超合理业务需求(典型鉴权重定向 1-2 次),不构成对正常使用的限制。
+- 这与"用户自负"不矛盾——用户仍可在 10 次内自由重定向,框架只在明显失控时兜底,防止栈溢出。
+
+### 相对路径说明
+
+onRoute 返回值会直接作为 `push` 的参数,框架**不校验**路径格式。
+
+- 返回绝对路径(以 `/` 开头)是预期用法
+- 返回相对路径(如 `"new"`)会被浏览器按当前 URL 解析(如当前 `/dashboard/users` → 解析为 `/dashboard/new`),这是 Web 原生行为
+- 这种不干预给了开发者更灵活的选择(可利用相对路径语义),符合 kiaao "不替你检查"的哲学
+- 但开发者需理解 `history.pushState` 的相对路径解析规则,否则可能得到意外结果
 
 ### 异常处理
 
-- `onRoute` 抛异常(同步或 Promise reject)→ `console.error` 输出错误 + 取消导航(不 pushState,信号不变)。
-- `push` 返回的 Promise 会 reject,让 `await push(...)` 的调用方能感知失败。
+- `onRoute` 抛异常(同步或 Promise reject)→ `console.error` 输出错误 + 取消导航(不 pushState,信号不变)
+- `push` 返回的 Promise 会 reject,让 `await push(...)` 的调用方能感知失败
+
+### 首次进入的特殊处理
+
+应用初始化时触发 `onRoute(initialPath, null)`:
+
+- 使用 `history.replaceState`(而非 pushState),避免在历史记录里留下初始 URL
+- 返回重定向字符串 → `replaceState` 到新路径 + 更新信号 + **继续跑 onRoute**(重定向链,受软上限保护)
+- 返回 void → 不需要 replaceState(URL 已是 initialPath),仅同步 `_url` 信号
+- **抛异常** → `console.error` + **不做任何 URL/信号更新**,应用按初始 URL 继续(保持初始路由组件渲染)
 
 ### 同步场景
 
@@ -153,6 +200,26 @@ push(path: string): Promise<void>
 **返回 Promise 的设计**:可 await 但不强制。默认火灾即忘,需要时(如等待鉴权完成后再做后续操作)可以 await。
 
 **触发规则**:**任何 `push` 调用都触发 onRoute**,无论 pathname 是否变化。这是唯一一致的设计——用户调用了 push 就该走完整流程,避免"有时候触发有时候不触发"的迷惑行为。
+
+**并发 push**:不处理竞态。快速连续调用 push(如双击)会产生竞态,最终状态取决于 onRoute 的 resolve 顺序。需要防抖请用户自行处理。
+
+### Link 组件的处理
+
+Link 内部调用 push 但不 await,且 catch 掉 rejection(避免未处理的 Promise rejection 警告,错误已通过 onRoute 异常处理流程 console.error):
+
+```ts
+function createLink(push) {
+  return (props) => h("a", {
+    onClick: (e) => {
+      e.preventDefault();
+      push(resolveTo()).catch(() => {});
+    },
+    ...
+  });
+}
+```
+
+用户手动调用 `push` 时则可自由 await / catch。
 
 ## 五、current / search 信号的只读设计
 
@@ -179,9 +246,11 @@ const current = use(_url, () => _url().split("?")[0] || "/");
 const search = use(_url, () => parseSearch(_url().split("?")[1] || ""));
 ```
 
-- 用户调用 `current("/xxx")` 会触发派生重算,但派生函数读取的还是 `_url()` 原值,所以**写入无效**(自然短路)
+- 用户调用 `current("/xxx")` 会触发派生重算,但派生函数读取的还是 `_url()` 原值,所以**写入无效**(派生函数忽略参数,返回源信号当前值,与缓存相等时不触发下游)
 - 实现了"逻辑只读",无需引入新的 readonly 概念
 - 符合 kiaao "不区分可写/只读信号"的哲学
+
+**文档明确**:`current` / `search` 是派生只读信号。直接调用 `current("/xxx")` 不会报错,但写入无效。修改路由必须通过 `push`。
 
 ### 统一源信号设计
 
@@ -259,16 +328,19 @@ kiaao 强调"显式声明依赖"。当前模式把路由依赖隐式散落在组
 
 以下项目**不提供**,理由如下:
 
-| 项目                          | 理由                                                        |
-| ----------------------------- | ----------------------------------------------------------- |
-| `RouterView` 组件导出         | 被 `define` 完全取代,减少 API 表面                          |
-| `onLeave`                     | 与 `onRoute(to, from)` 信息对称,冗余                        |
-| `isNavigating` 信号           | onRoute 内部用户可自管 loading;典型场景(鉴权)不需要 UI 反馈 |
-| loading 状态                  | 属于渲染层,由未来的 Suspense 机制统一处理,不在 router 层    |
-| 重定向次数兜底                | 用户自负,符合 kiaao 控制权交给用户的哲学                    |
-| 动态参数 `:param`             | 保持路由匹配为纯字符串比较,无解析开销;用 query string 传值  |
-| `current` / `search` 的可写性 | 派生实现只读,避免绕过 onRoute 的非法导航                    |
-| `:param` 守卫                 | 同上                                                        |
+| 项目                          | 理由                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| `RouterView` 组件导出         | 被 `define` 完全取代,减少 API 表面                           |
+| `onLeave`                     | 与 `onRoute(to, from)` 信息对称,冗余                         |
+| `isNavigating` 信号           | onRoute 内部用户可自管 loading;典型场景(鉴权)不需要 UI 反馈  |
+| loading 状态                  | 属于渲染层,由未来的 Suspense 机制统一处理,不在 router 层     |
+| 无限重定向                    | 软上限 10 次,超出抛错防栈溢出;正常使用不受限制               |
+| 动态参数 `:param`             | 保持路由匹配为纯字符串比较,无解析开销;用 query string 传值   |
+| `current` / `search` 的可写性 | 派生实现只读,避免绕过 onRoute 的非法导航                     |
+| `:param` 守卫                 | 同上                                                         |
+| 路径格式校验                  | 不校验绝对/相对路径,保留 Web 原生灵活性,符合"不替你检查"哲学 |
+| 并发 push 竞态处理            | 不处理,用户自负,文档说明                                     |
+| SSR 支持                      | 不考虑,保持纯客户端,utils 薄封装便于未来扩展                 |
 
 ## 九、嵌套机制(不变)
 
@@ -320,28 +392,79 @@ function createRouter(options: RouterOptions): Router {
   const search = use(_url, () => parseSearch(_url().split("?")[1] || ""));
 
   async function push(path: string): Promise<void> {
+    let currentPath = path;
+    let from = _url();
+    let redirects = 0;
     try {
-      const result = options.onRoute ? await options.onRoute(path, _url()) : undefined;
-      const finalPath = typeof result === "string" ? result : path;
-      // finalPath 可能再次触发 onRoute(重定向链),由 push 递归处理
-      if (typeof result === "string") {
-        return push(finalPath);
+      while (true) {
+        const result = options.onRoute ? await options.onRoute(currentPath, from) : undefined;
+        if (typeof result !== "string") break;
+        // 重定向链:每一次都跑 onRoute,软上限 10 次防栈溢出
+        if (++redirects > 10) {
+          throw new Error("[kiaao] too many redirects (max 10)");
+        }
+        from = currentPath;
+        currentPath = result;
       }
-      history.pushState(null, "", finalPath);
-      _url(finalPath); // 仅更新源信号,current/search 自动派生
+      history.pushState(null, "", currentPath);
+      _url(currentPath); // 仅更新源信号,current/search 自动派生
     } catch (err) {
       console.error("[kiaao] onRoute error:", err);
       throw err; // 让 await push(...) 感知失败
     }
   }
 
-  // popstate 同步源信号
-  window.addEventListener("popstate", () => {
-    _url(getPathname() + getSearch());
+  // popstate 也走 onRoute(防止后退绕过鉴权)
+  window.addEventListener("popstate", async () => {
+    const newUrl = getPathname() + getSearch();
+    let currentPath = newUrl;
+    let from = _url();
+    let redirects = 0;
+    try {
+      while (true) {
+        const result = options.onRoute ? await options.onRoute(currentPath, from) : undefined;
+        if (typeof result !== "string") break;
+        if (++redirects > 10) {
+          throw new Error("[kiaao] too many redirects (max 10)");
+        }
+        from = currentPath;
+        currentPath = result;
+      }
+      if (currentPath !== newUrl) {
+        // 重定向:用 replaceState(不加历史记录,因为是 popstate 语义)
+        history.replaceState(null, "", currentPath);
+      }
+      _url(currentPath);
+    } catch (err) {
+      console.error("[kiaao] onRoute error during popstate:", err);
+      // 取消:把 URL 改回原位置(popstate 已经改了 URL)
+      history.pushState(null, "", _url());
+    }
   });
 
-  // 初始化:首次进入触发 onRoute(initialPath, null)
-  // (实现时需处理 from=null 的特殊调用)
+  // 初始化:首次进入触发 onRoute(initialPath, null),用 replaceState
+  (async () => {
+    const initialUrl = getPathname() + getSearch();
+    let currentPath = initialUrl;
+    let redirects = 0;
+    try {
+      while (true) {
+        const result = options.onRoute ? await options.onRoute(currentPath, null) : undefined;
+        if (typeof result !== "string") break;
+        if (++redirects > 10) {
+          throw new Error("[kiaao] too many redirects (max 10)");
+        }
+        currentPath = result;
+      }
+      if (currentPath !== initialUrl) {
+        history.replaceState(null, "", currentPath);
+      }
+      _url(currentPath);
+    } catch (err) {
+      console.error("[kiaao] onRoute error on initial:", err);
+      // 异常:不做任何 URL/信号更新,应用按初始 URL 继续
+    }
+  })();
 
   return { current, search, push, define, Link };
 }
@@ -372,14 +495,16 @@ function define(defOptions: DefineOptions): ComponentFunction {
 
 `src/router/index.ts` 需要的改动:
 
-1. `navigate` → `push`,改为 async,集成 `onRoute` 调用 + 重定向链 + 异常处理
+1. `navigate` → `push`,改为 async,集成 `onRoute` 调用 + 重定向链(循环 + 软上限 10)+ 异常处理
 2. `currentPath` → `current`(派生只读),`currentParams` → `search`(派生只读)
 3. 内部引入统一源信号 `_url`,`current`/`search` 从其派生
 4. 新增 `define` 工厂函数(包装现有 RouterView 内部逻辑)
 5. 删除 `RouterView` 导出
 6. `createRouter` 接收 `onRoute` 选项
-7. 初始化时触发 `onRoute(initialPath, null)`
+7. 初始化时触发 `onRoute(initialPath, null)`,用 `replaceState`,异常时不更新
 8. `onRoute` 的 `to`/`from` 参数为完整路径(含 search)
+9. **popstate 走 onRoute 流程**(防止后退绕过鉴权),重定向用 `replaceState`,异常时恢复原 URL
+10. Link 内部 `push(...).catch(() => {})` 处理未捕获 rejection
 
 测试需同步更新:`tests/router/router.test.ts`、`tests/router/router-extreme.test.ts`。
 
