@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@lynx-js/template-webpack-plugin": "^0.13.0",
-    "@rspack/cli": "^2.1.4",
+    "@rspack/cli": "^2.1.5",
     "kiaao": "workspace:*"
   },
   "devDependencies": {
     "@lynx-js/types": "4.0.0",
-    "@rspack/core": "^2.1.4",
+    "@rspack/core": "^2.1.5",
     "@rspack/dev-server": "^2.1.0",
     "typescript": "~7.0.2"
   },
