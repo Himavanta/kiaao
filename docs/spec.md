@@ -186,6 +186,7 @@ function use(...deps: [...Signal[], (setValue?: any) => void]): Signal<void>;
 - `toUse`：功能被 `use` 吸收。`use(signal)` 直接返回已有信号。
 - `toVal`：重命名为 `toValue`。
 - `Getter<T>` / `Setter<T>` 类型：统一为 `Signal<T>`。
+- 逻辑只读信号：kiaao 不提供独立只读类型，常见做法是“派生信号 + 忽略 setter 参数”的模式（参见 guide/reactivity.md）。
 
 ---
 

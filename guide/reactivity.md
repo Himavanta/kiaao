@@ -256,6 +256,39 @@ Returns `v()` if `v` is a signal, otherwise returns `v` itself. A convenience fo
 
 如果 `v` 是信号则返回 `v()`，否则返回 `v` 本身。用于读取可能是响应式的值。
 
+## Logically Read-Only Signals / 逻辑上只读的信号
+
+kiaao does not provide a dedicated readonly signal type. Instead, a signal can be exposed as "logically read-only" by wrapping it in a derivation whose compute function ignores any setter argument. Writes from outside become no-ops; the framework can still update the underlying source.
+
+kiaao 并不提供专门的只读信号类型。相反，可以通过一个“计算函数忽略 setter 参数”的派生信号来对外表现只读。外部写入成为空操作，但框架仍可控制底层源信号。
+
+```js
+// 内部维护可写的源信号（仅认证模块可写）
+const _user = use(null);
+
+// 对外暴露“逻辑只读”的派生信号
+const currentUser = use(_user, () => _user());
+
+// 唯一修改路径：在框架侧操作源信号
+auth.onLogin((user) => _user(user));
+auth.onLogout(() => _user(null));
+
+// 消费者侧：
+function Header() {
+  const user = currentUser();
+  return <header>{user ? user.name : "Sign in"}</header>;
+}
+
+// 写入无效：
+currentUser({ name: "Alice" }); // no-op，信号值不变
+```
+
+**Why a derivation and not a wrapper class? / 为什么是派生而不是包装类**
+
+- Same `Signal<T>` API everywhere — no special readonly type to learn. `Signal<T>` 语法一致，不需要学习额外的只读类型。
+- Writes are cheap: the derivation recomputes, sees the new argument ignored, and short-circuits via `===`. 写入开销小：派生重算后看到入参被忽略，通过 `===` 短路。
+- The "real" state lives in one place; consumers can read it, but only the owner of the source can mutate it. 真实状态集中在源信号一处，消费者可读，仅源信号的拥有者可写。
+
 ## Cleanup / 清理
 
 Signals created with module-level `use` are global and persist for the lifetime of the application. Signals created with `context.use` are automatically cleaned up when the owning component unmounts. Each signal internally manages its own subscriptions and provides a unified `stop()` method that the framework calls during teardown.
