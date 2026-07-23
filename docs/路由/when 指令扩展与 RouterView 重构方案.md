@@ -1,3 +1,7 @@
+> ⚠️ **已废弃 / Deprecated**
+> 本文档中关于 RouterView 重构的部分已被新路由 API 取代,请参考 [路由 API 方案](./路由API方案.md)。
+> `when` 指令扩展部分仍可作为设计参考。保留用于历史追溯。
+
 # when 指令扩展与 RouterView 重构方案 v2.0
 
 **状态**：终版  
