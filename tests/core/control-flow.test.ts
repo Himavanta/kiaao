@@ -236,11 +236,17 @@ describe("Each", () => {
     expect((getContentBeforeRef(anchor)[0] as HTMLElement).dataset.test).toBe("empty");
   });
 
+  /**
+   * 测试类型：边界 — 契约内
+   * 场景：每次无 keyed 数组变化时完整重建条目
+   * 预期：锚点前出现一个新条目，内容来自最新数组
+   * 状态：稳定契约
+   */
   test("without keyed rebuilds all on change", () => {
     const items = use([{ id: 1, text: "A" }]);
     const result = _h(Each, { value: items }, ItemRow);
     mount(result);
-    const anchor = result.nodes[0] as Node;
+    const anchor = result.nodes[result.nodes.length - 1] as Node;
 
     expect(getContentBeforeRef(anchor)).toHaveLength(1);
     expect(getContentBeforeRef(anchor)[0].textContent).toBe("A");

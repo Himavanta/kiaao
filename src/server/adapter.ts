@@ -74,6 +74,31 @@ export function serializeSSRNode(node: SSRNode): string {
 
 const EVENT_RE = /^on[A-Z]/;
 
+// ── Style Object Serialization ─────────────────────────
+
+/**
+ * camelCase → kebab-case。
+ * 例：`backgroundColor` → `background-color`
+ */
+function camelToKebab(str: string): string {
+  return str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * 将 style 对象序列化为 CSS 字符串。
+ * 例：`{ color: "red", fontSize: "16px" }` → `"color: red; font-size: 16px"`
+ *
+ * - 过滤 null/undefined/空字符串；
+ * - key 驼峰转短横线；
+ * - value 原样拼接（数字按字符串输出，与浏览器 CSSStyleDeclaration 一致）。
+ */
+function styleObjectToString(style: object): string {
+  return Object.entries(style)
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${camelToKebab(k)}: ${v}`)
+    .join("; ");
+}
+
 // ── SSR Adapter ──────────────────────────────────────
 
 export const ssrAdapter: RenderAdapter = {
@@ -153,7 +178,13 @@ export const ssrAdapter: RenderAdapter = {
       return;
     }
 
-    // 所有属性都作为字符串输出到 SSR
+    // style 对象 → 序列化为 CSS 字符串（与浏览器 adapter 的 Object.assign(el.style, value) 等价）
+    if (actualKey === "style" && isObject(value)) {
+      element.attrs[actualKey] = styleObjectToString(value as object);
+      return;
+    }
+
+    // 其他属性作为字符串输出到 SSR
     element.attrs[actualKey] = attrToString(value);
   },
 };

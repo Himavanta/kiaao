@@ -55,6 +55,11 @@ describe("renderToString", () => {
     expect(html).toBe("<span>a</span><span>b</span>");
   });
 
+  /**
+   * 测试类型：源码错误
+   * 问题：SSR style 对象被序列化为 JSON，不是合法 CSS
+   * 状态：保留为正常失败，后续修 ssrAdapter 后自动恢复
+   */
   test("handles style object serialization", () => {
     function App() {
       return h("div", { style: { color: "red", fontSize: "16px" } }, "styled");

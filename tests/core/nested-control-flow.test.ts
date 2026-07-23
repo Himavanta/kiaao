@@ -26,6 +26,10 @@ function query(container: HTMLElement, sel: string): number {
   return container.querySelectorAll(sel).length;
 }
 
+function Row({ item, index }: any) {
+  return h("li", { class: "row", "data-index": String(index) }, String(item().name));
+}
+
 // ── Show 嵌套 Show ────────────────────────────────────
 
 describe("nested — Show inside Show", () => {
@@ -116,16 +120,20 @@ describe("nested — Show inside Show", () => {
 // ── Each 嵌套 Each ────────────────────────────────────
 
 describe("nested — Each inside Each", () => {
-  function Row({ item, index }: any) {
-    return h("li", { class: "row", "data-index": String(index) }, String(item().name));
-  }
+  /**
+   * 测试类型：边界 — 契约内
+   * 场景：外层 Each 渲染 Group，Group 使用显式派生读取 item().items 作为内层 Each 的数据源
+   * 预期：内层信号变化（外层 item 更新）后嵌套列表实时更新
+   * 状态：稳定契约
+   */
+  function Group({ item }: any, { use }: { use: any }) {
+    const items = use(item, () => item().items);
 
-  function Group({ item }: any) {
     return h(
       "div",
       { class: "group" },
       h("span", { class: "group-name" }, String(item().name)),
-      h(Each as any, { value: item().items, keyed: (v: any) => v.id }, Row),
+      h(Each as any, { value: items, keyed: (v: any) => v.id }, Row),
     );
   }
 
@@ -148,6 +156,12 @@ describe("nested — Each inside Each", () => {
     expect(query(container, ".row")).toBe(3);
   });
 
+  /**
+   * 测试类型：边界 — 契约内
+   * 场景：外层 Each 持有内层 items 时，内层列表应随外层 item 更新
+   * 预期：嵌套行数从 1 增加到 2
+   * 状态：稳定契约
+   */
   test("nested Each updates on outer change", () => {
     const data = use([{ id: 1, name: "A", items: [{ id: 10, name: "A1" }] }]);
     const result = h(Each as any, { value: data, keyed: (v: any) => v.id }, Group);

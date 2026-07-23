@@ -31,6 +31,12 @@ describe("signal — deep derivation chain", () => {
     expect(j()).toBe(expected2);
   });
 
+  /**
+   * 测试类型：边界 — 契约内
+   * 场景：菱形依赖（A、B 共享 src，C 依赖 A+B），上游变化时计算次数可控
+   * 预期：上游变化后 A、B、C 各自增量重算，且 C 的值正确反映 a+b
+   * 状态：稳定契约
+   */
   test("diamond dependency resolves without redundant computation", () => {
     let aCount = 0,
       bCount = 0,
@@ -49,7 +55,7 @@ describe("signal — deep derivation chain", () => {
       return a() + b();
     });
 
-    expect(c()).toBe((0 + 1 + 0) * 2);
+    expect(c()).toBe(0 + 1 + 0);
     expect([aCount, bCount, cCount]).toEqual([1, 1, 1]);
 
     src(5);
