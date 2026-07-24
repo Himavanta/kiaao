@@ -1,6 +1,6 @@
 # v2 路由实施任务
 
-**状态**：进行中
+**状态**：已完成
 **创建日期**：2026-07-24
 **关联文档**：
 
@@ -31,9 +31,9 @@
 
 ## 当前状态
 
-- [x] v1 源码与测试备份到 `src/router/v1/` 与 `tests/router/v1/`
-- [ ] v2 源码在 `src/router/v2/` 实现
-- [ ] v2 测试在 `tests/router/` 编写
+- [x] v1 源码与测试备份到 `src/router/v1_backup`
+- [x] v2 源码在 `src/router/` 实现
+- [x] v2 测试在 `tests/router/` 编写
 - [ ] `guide/router.md` 重写
 - [ ] `packages/example` 迁移
 - [ ] 删除 v1 备份

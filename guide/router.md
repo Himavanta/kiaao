@@ -1,233 +1,305 @@
 # Router / 路由
 
-Client-side routing is provided as a standalone package `kiaao/router`. It is built entirely on the core primitives — signals for current path, `<Case>` for route matching, and components for views and links. There is no router-specific reactivity system.
+Client-side routing is built on kiaao's core primitives — signals for path management, `<Case>` for route matching, and components for views and links.
 
-客户端路由作为独立包 `kiaao/router` 提供。它完全基于核心原语构建——用信号管理当前路径，用 `<Case>` 进行路由匹配，用组件构建视图和链接。没有路由器专属的响应式系统。
+客户端路由基于 kiaao 核心原语构建——用信号管理路径，用 `<Case>` 进行路由匹配，用组件构建视图和链接。
 
 The router is included in the `kiaao` package. Import it from `kiaao/router`.
 
 路由包含在 `kiaao` 包中。从 `kiaao/router` 导入即可。
 
+```jsx
+import { createRouter } from "kiaao/router";
+```
+
 ---
 
 ## `createRouter` / 创建路由
 
-`createRouter(options?)` creates a router instance. It returns the components and signals needed for routing. Call it once at the application root.
+`createRouter(options)` creates a router instance. It returns a `Router` component for the application root, a `Link` component for navigation, and signals for the current path and query.
 
-`createRouter(options?)` 创建一个路由实例。它返回路由所需的组件和信号。在应用根部调用一次。
+`createRouter(options)` 创建路由实例，返回应用根组件 `Router`、导航组件 `Link`，以及当前路径和查询的信号。
 
 ```jsx
-import { createRouter } from "kiaao/router";
-
-const { RouterView, Link, navigate, currentPath, currentParams } = createRouter({
-  fallback: NotFound, // optional / 可选
+const { Router, Link, push, current, search } = createRouter({
+  routes: {
+    "": RootLayout,
+    login: LoginPage,
+    dashboard: {
+      "": DashboardLayout,
+      users: UsersPage,
+      settings: SettingsPage,
+    },
+  },
+  onRoute: async (to, from) => {
+    if (to.startsWith("/dashboard") && !(await checkAuth())) {
+      return "/login";
+    }
+  },
 });
 ```
 
 ### Options / 参数
 
-| Option / 参数 | Type / 类型 | Description / 说明                                                                |
-| ------------- | ----------- | --------------------------------------------------------------------------------- |
-| `fallback`    | Component   | Component to render when no route matches. Defaults to a "404 Not Found" message. |
-|               |             | 无匹配时渲染的组件。默认为显示 "404 Not Found"。                                  |
+| Option / 参数 | Type / 类型                                    | Description / 说明                                                                    |
+| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `routes`      | `RouteMap`                                     | Nested route definition. The `""` key is always the layout / index page.              |
+|               |                                                | 嵌套路由定义。`""` 键始终是 layout / 索引页。                                         |
+| `onRoute`     | `(to, from) => string \| void \| Promise<...>` | Navigation guard. Returns a string to redirect, `void` to allow, or throws to cancel. |
+|               |                                                | 导航守卫。返回 `string` 触发重定向，`void` 放行，throw 取消导航。                     |
 
 ### Return Value / 返回值
 
-| Property / 属性 | Type / 类型                      | Description / 说明                                  |
-| --------------- | -------------------------------- | --------------------------------------------------- |
-| `RouterView`    | Component                        | The route view. Renders the matched component.      |
-|                 |                                  | 路由视图。渲染匹配的组件。                          |
-| `Link`          | Component                        | Declarative navigation link.                        |
-|                 |                                  | 声明式导航链接。                                    |
-| `navigate`      | `(path: string) => void`         | Programmatic navigation. Receives an absolute path. |
-|                 |                                  | 编程式导航。接收完整绝对路径。                      |
-| `currentPath`   | `Signal<string>`                 | A signal holding the current pathname.              |
-|                 |                                  | 保存当前路径名的信号。                              |
-| `currentParams` | `Signal<Record<string, string>>` | A signal holding the current URL query parameters.  |
-|                 |                                  | 保存当前 URL 查询参数的信号。                       |
+| Property / 属性 | Type / 类型                       | Description / 说明                                                |
+| --------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `Router`        | Component                         | Top-level route component. Render once in your application root.  |
+|                 |                                   | 顶层路由组件。在应用根部渲染一次。                                |
+| `Link`          | Component                         | Declarative navigation. Renders an `<a>` that intercepts clicks.  |
+|                 |                                   | 声明式导航。渲染拦截点击的 `<a>` 元素。                           |
+| `push`          | `(path: string) => Promise<void>` | Programmatic navigation. Async — await it to wait for guards.     |
+|                 |                                   | 编程式导航。异步——可 await 等待守卫完成。                         |
+| `current`       | `Signal<string>`                  | Read-only signal for the current pathname. Writing has no effect. |
+|                 |                                   | 只读信号，当前 pathname。写入无效。                               |
+| `search`        | `Signal<Record<string, string>>`  | Read-only signal for the parsed query string.                     |
+|                 |                                   | 只读信号，解析后的查询字符串。                                    |
 
 ---
 
-## `RouterView` / 路由视图
+## Route Map / 路由表
 
-`RouterView` is the component that watches the current path and renders the matched route. It uses a `<Case>` component internally — the route path acts as the key, and the route component is the branch.
+Routes are defined as a nested object. The `""` key in each object is the **layout** — it always renders. Other keys are child routes, matched segment by segment. A plain function value is shorthand for `{ "": fn }`.
 
-`RouterView` 是监听当前路径并渲染匹配路由的组件。它内部使用 `<Case>` 组件——路由路径作为 key，路由组件作为分支。
+路由使用嵌套对象定义。每个对象中的 `""` 键是 **layout** ——始终渲染。其他键是子路由，逐段匹配。函数值简写等价于 `{ "": fn }`。
 
-### Props
+```js
+const routes = {
+  "": RootLayout, // root layout, always renders / 根 layout，始终渲染
+  login: LoginPage, // function shorthand → leaf / 函数简写 → 叶子
+  dashboard: {
+    "": DashboardLayout, // /dashboard layout / /dashboard 的 layout
+    users: UsersPage, // /dashboard/users
+    settings: SettingsPage, // /dashboard/settings
+  },
+};
+```
 
-| Prop / 属性 | Type / 类型 | Description / 说明                                                                               |
-| ----------- | ----------- | ------------------------------------------------------------------------------------------------ |
-| `routes`    | `Route[]`   | Array of route definitions.                                                                      |
-|             |             | 路由定义数组。                                                                                   |
-| `base`      | `string`    | Path prefix. The RouterView only responds to path changes within this base. Must start with `/`. |
-|             |             | 路径前缀。该 RouterView 只响应 base 内的路径变化。必须以 `/` 开头。                              |
-| `fallback`  | Component   | Fallback when no route matches. Overrides the instance-level fallback.                           |
-|             |             | 无匹配时的后备内容。覆盖实例级 fallback。                                                        |
+- Leaf route functions do **not** receive `RouterView` — they are terminal components.
+- Directory objects render their `""` layout, which receives `RouterView` to render child routes.
 
-### Route Definition / 路由定义
+- 叶子路由不收 `RouterView` ——它们是末端组件。
+- 目录对象渲染 `""` layout，layout 收到 `RouterView` 用于渲染子路由。
 
-```ts
-interface Route {
-  path: string; // path segment to match / 要匹配的路径段
-  component: any; // component function to render / 要渲染的组件函数
+---
+
+## Router / 顶级路由组件
+
+`Router` is the top-level component returned by `createRouter`. Mount it once in your application root. It manages the route tree and renders the root layout with the first `RouterView`.
+
+`Router` 是 `createRouter` 返回的顶层组件。在应用根部挂载一次。它管理路由树并渲染根 layout 及首个 `RouterView`。
+
+```jsx
+const { Router } = createRouter({ routes: { "": RootLayout } });
+
+function App() {
+  return <Router />;
 }
 ```
 
 ---
 
-## Basic Usage / 基本用法
+## RouterView / 路由视图
+
+`RouterView` is injected into layout components via props. It renders the matched child route at the current path segment. **Only layouts receive `RouterView`** — leaf components do not.
+
+`RouterView` 通过 props 注入到 layout 组件中。它渲染当前路径段匹配的子路由。**只有 layout 才能收到 `RouterView`** ——叶子组件不收到。
 
 ```jsx
-import { createRouter } from "kiaao/router";
-import { createApp } from "kiaao";
-
-const { RouterView } = createRouter();
-
-const routes = [
-  { path: "", component: Home },
-  { path: "about", component: About },
-  { path: "users", component: Users },
-];
-
-function App() {
-  return (
-    <div>
-      <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-        <a href="/users">Users</a>
-      </nav>
-      <main>
-        <RouterView routes={routes} />
-      </main>
-    </div>
-  );
-}
-
-const app = createApp(<App />);
-app.mount("#app");
-```
-
-Navigating to `/about` renders the `About` component inside the `<main>` element. The rest of the page (the `<nav>`) is unchanged. This is because `RouterView` only re-renders its own children — not the entire application.
-
-导航到 `/about` 会在 `<main>` 元素内渲染 `About` 组件。页面的其余部分（`<nav>`）保持不变。这是因为 `RouterView` 只重新渲染自己的子节点——而不是整个应用。
-
----
-
-## Nested Routes / 嵌套路由
-
-Use the `base` prop on nested `RouterView` components to create layouts. A parent route renders a layout component, which contains another `RouterView` with a narrower `base`. The same routes array can be reused, or each level can have its own routes.
-
-在嵌套的 `RouterView` 上使用 `base` 属性可创建布局。父路由渲染一个布局组件，其中包含另一个具有更窄 `base` 的 `RouterView`。可以复用同一个路由数组，也可以每层拥有独立的路由。
-
-```jsx
-const { RouterView } = createRouter();
-
-const appRoutes = [
-  { path: "", component: Home },
-  { path: "login", component: Login },
-  { path: "dashboard", component: DashboardLayout },
-];
-
-const dashboardRoutes = [
-  { path: "", component: DashboardHome },
-  { path: "users", component: Users },
-  { path: "settings", component: Settings },
-];
-
-function App() {
-  return <RouterView routes={appRoutes} />;
-}
-
-function DashboardLayout() {
+function DashboardLayout({ RouterView }: { RouterView: ComponentFunction }) {
   return (
     <section>
       <Sidebar />
       <main>
-        <RouterView base="/dashboard" routes={dashboardRoutes} />
+        <RouterView />
       </main>
     </section>
   );
 }
 ```
 
-When navigating to `/dashboard/users`:
+When navigating to `/dashboard/users`, `DashboardLayout` stays in the DOM. Only the content in `<main>` updates — `RouterView` switches from an empty state to rendering `UsersPage`.
 
-1. The top-level `RouterView` matches `dashboard` → renders `DashboardLayout`.
-2. Inside `DashboardLayout`, the nested `RouterView` with `base="/dashboard"` strips the prefix, leaving `/users`.
-3. It matches `users` in `dashboardRoutes` → renders `Users`.
-4. `DashboardLayout` (including `Sidebar`) stays in the DOM. Only the content inside `<main>` updates.
+导航到 `/dashboard/users` 时，`DashboardLayout` 保留在 DOM 中。只有 `<main>` 中的内容更新——`RouterView` 从空状态切换到渲染 `UsersPage`。
 
-导航到 `/dashboard/users` 时：
+### Local Fallback / 局部 fallback
 
-1. 顶层 `RouterView` 匹配 `dashboard` → 渲染 `DashboardLayout`。
-2. 在 `DashboardLayout` 内部，带有 `base="/dashboard"` 的嵌套 `RouterView` 将前缀裁剪，剩下 `/users`。
-3. 在 `dashboardRoutes` 中匹配 `users` → 渲染 `Users`。
-4. `DashboardLayout`（包括 `Sidebar`）保留在 DOM 中。只有 `<main>` 中的内容更新。
+Pass a function as the first child of `RouterView` to serve as fallback when no route matches the current segment.
 
----
-
-## `Link` / 导航链接
-
-`Link` is a declarative navigation component. It renders an `<a>` element that intercepts click events and calls `navigate` internally, preventing full page reloads. The `to` prop accepts an absolute path string or a signal.
-
-`Link` 是声明式导航组件。它渲染一个 `<a>` 元素，拦截点击事件并在内部调用 `navigate`，阻止完整页面重载。`to` 属性接受绝对路径字符串或信号。
+将函数作为 `RouterView` 的第一个子元素传入，当前段无匹配时作为 fallback。
 
 ```jsx
-<Link to="/dashboard/users">Users</Link>;
-
-// Reactive target / 响应式目标
-const item = use({ path: "/dashboard", title: "Dashboard" });
-const to = use(item, () => item().path);
-const text = use(item, () => item().title);
-<Link to={to}>{text}</Link>;
-```
-
----
-
-## Programmatic Navigation / 编程式导航
-
-Use `navigate(path)` for imperative navigation — inside event handlers, after async operations, or anywhere outside of JSX.
-
-使用 `navigate(path)` 进行命令式导航——在事件处理器内部、异步操作之后，或任何 JSX 之外的地方。
-
-```jsx
-const { navigate } = createRouter();
-
-function handleLogin() {
-  // authenticate...
-  navigate("/dashboard");
+function DashboardLayout({ RouterView }) {
+  return (
+    <section>
+      <RouterView>{() => <NotFound />}</RouterView>
+    </section>
+  );
 }
 ```
 
 ---
 
-## Reading the Current Path / 读取当前路径
+## `push` / 编程式导航
 
-`currentPath` is a signal. You can use it in any derivation or JSX expression to react to path changes.
+`push(path)` triggers navigation. It calls the `onRoute` guard (if configured), processes redirects, and updates the browser URL. Returns a `Promise` — await it to wait for guard completion.
 
-`currentPath` 是一个信号。可以在任何派生或 JSX 表达式中使用它来响应路径变化。
+`push(path)` 触发导航。调用 `onRoute` 守卫（如已配置），处理重定向，更新浏览器 URL。返回 `Promise`——可 await 等待守卫完成。
 
-```jsx
-const { currentPath } = createRouter();
+```js
+const { push } = createRouter({ routes });
 
-const isActive = use(currentPath, () => currentPath().startsWith("/admin"));
-
-return <div class={isActive ? "active" : ""}>Current: {currentPath}</div>;
+await push("/dashboard/users");
+// Guard completed, URL updated
 ```
 
-`currentParams` provides the parsed query string as an object. It is also a signal.
+If `onRoute` returns a `string`, the navigation is redirected. The redirect chain is capped at 10 hops.
 
-`currentParams` 以对象形式提供解析后的查询字符串。它也是一个信号。
+如果 `onRoute` 返回 `string`，导航被重定向。重定向链上限 10 次。
 
-```jsx
-const { currentParams } = createRouter();
-
-// URL: /search?q=kiaao&page=1
-console.log(currentParams()); // { q: 'kiaao', 'page': '1' }
+```js
+const { push } = createRouter({
+  routes,
+  onRoute: (to) => (to.startsWith("/admin") ? "/login" : undefined),
+});
 ```
 
 ---
 
-- [JSX/TSX Setup / 配置 JSX/TSX](./jsx-setup.md)
+## Link / 导航链接
+
+`Link` renders an `<a>` element that intercepts click events and calls `push`, preventing full page reloads. The `to` prop accepts a string or a `Signal<string>`.
+
+`Link` 渲染 `<a>` 元素，拦截点击事件并调用 `push`，阻止完整页面重载。`to` 属性接受字符串或 `Signal<string>`。
+
+```jsx
+<Link to="/dashboard/users">Users</Link>;
+
+// Reactive target / 响应式目标
+const target = use("/dashboard");
+<Link to={target}>Dashboard</Link>;
+```
+
+When `to` is a `Signal<string>`, the `href` attribute updates automatically.
+
+当 `to` 是 `Signal<string>` 时，`href` 属性会自动更新。
+
+---
+
+## `current` / `search` — 只读信号
+
+`current` exposes the current pathname as a signal. `search` exposes the parsed query string as a signal. Both are **logically read-only** — writing has no effect. The only way to change them is through `push`.
+
+`current` 以信号形式暴露当前 pathname。`search` 以信号形式暴露解析后的查询字符串。两者均为**逻辑只读**——写入无效。改变它们的唯一途径是 `push`。
+
+```js
+const { current, search } = createRouter({ routes });
+
+// URL: /search?q=kiaao
+current(); // "/search"
+search(); // { q: "kiaao" }
+
+current("/anything"); // 写入无效
+search({ q: "x" }); // 写入无效
+```
+
+---
+
+## `onRoute` / 导航守卫
+
+`onRoute(to, from)` fires before every navigation — `push`, browser back/forward, and the initial page load.
+
+`onRoute(to, from)` 在每次导航前触发——包括 `push`、浏览器前进/后退、首次页面加载。
+
+| Return / 返回          | Behavior / 行为                                   |
+| ---------------------- | ------------------------------------------------- |
+| `void` / `undefined`   | Allow navigation / 放行                           |
+| `string`               | Redirect to this path / 重定向到此路径            |
+| throw / Promise reject | Cancel navigation, URL stays / 取消导航，URL 不变 |
+
+The guard can be `async`. During async guards, the URL does not change — no visual flicker.
+
+守卫可以是 `async`。异步守卫期间 URL 不变——无视觉闪烁。
+
+```js
+const { push } = createRouter({
+  routes,
+  onRoute: async (to, from) => {
+    if (to.startsWith("/admin")) {
+      const ok = await checkAuth();
+      if (!ok) return "/login";
+    }
+  },
+});
+```
+
+---
+
+## Nested Routes Example / 嵌套路由完整示例
+
+```jsx
+import { createRouter } from "kiaao/router";
+
+const routes = {
+  "": RootLayout,
+  demo: {
+    "": DemoLayout,
+    hello: () => <h1>Hello</h1>,
+    world: () => <h1>World</h1>,
+  },
+};
+
+const { Router, Link } = createRouter({ routes });
+
+function RootLayout({ RouterView }) {
+  return (
+    <div>
+      <nav>
+        <Link to="/demo/hello">Hello</Link>
+        <Link to="/demo/world">World</Link>
+      </nav>
+      <main>
+        <RouterView />
+      </main>
+    </div>
+  );
+}
+
+function DemoLayout({ RouterView }) {
+  return (
+    <section>
+      <h2>Demo Section</h2>
+      <RouterView>{() => <p>Select a demo page.</p>}</RouterView>
+    </section>
+  );
+}
+
+function App() {
+  return <Router />;
+}
+```
+
+When navigating:
+
+1. `/` — `RootLayout` renders. Its `RouterView` shows the layout's fallback (or nothing).
+2. `/demo/hello` — `RootLayout` stays. `RouterView` matches `demo` → `DemoLayout` renders. Inside `DemoLayout`, `RouterView` matches `hello` → `<h1>Hello</h1>`.
+3. `/demo/world` — Same as above, but the inner `RouterView` switches to `<h1>World</h1>`. No layout rebuilds.
+
+路由切换时：
+
+1. `/` — `RootLayout` 渲染。其 `RouterView` 显示 layout 的 fallback（或空）。
+2. `/demo/hello` — `RootLayout` 保留。`RouterView` 匹配 `demo` → 渲染 `DemoLayout`。`DemoLayout` 内 `RouterView` 匹配 `hello` → 渲染 `<h1>Hello</h1>`。
+3. `/demo/world` — 同上，但内层 `RouterView` 切换到 `<h1>World</h1>`。所有 layout 保留。
+
+---
+
+- [Components / 组件](./components.md)
+- [Reactivity / 响应式系统](./reactivity.md)

@@ -1,8 +1,6 @@
 // kiaao — router: URL helpers + segment extraction
 //
 // 设计依据见 docs/路由/v2实施/01-设计决策.md
-// extractSegment 算法复用自 v1（保留原算法，不重写）。
-
 // ── Browser URL Helpers ───────────────────────────────
 
 /** 获取当前 pathname + search，不含 origin 与 hash */
