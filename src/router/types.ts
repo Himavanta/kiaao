@@ -99,13 +99,10 @@ export interface RouterLinkProps {
 export type GuardResult = { ok: true; target: string; next: number } | { ok: false };
 
 /**
- * RouteGroup 的 props。
- *
- * 不导出，仅作为内部工厂实现参考。
+ * RouteGroup 工厂入参（内部类型）。
  */
 export interface RouteGroupProps {
   routes: RouteMap;
   base: string;
   current: Signal<string>;
-  fallback?: ComponentFunction;
 }

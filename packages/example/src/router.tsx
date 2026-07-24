@@ -1,9 +1,9 @@
-import { lazy } from "kiaao";
+import { lazy, type ComponentFunction } from "kiaao";
 import { createRouter } from "kiaao/router";
 
 const { Router, Link, push, current, search } = createRouter({
   routes: {
-    "": () => null,
+    "": ({ RouterView }: { RouterView: ComponentFunction }) => <RouterView />,
     i: {
       "": lazy(() => import("./components/layout")),
       expore: lazy(() => import("./components/expore")),

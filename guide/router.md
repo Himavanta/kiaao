@@ -100,9 +100,7 @@ const routes = {
 ```jsx
 const { Router } = createRouter({ routes: { "": RootLayout } });
 
-function App() {
-  return <Router />;
-}
+createApp(Router).mount("#app");
 ```
 
 ---

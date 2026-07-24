@@ -23,14 +23,14 @@ function Counter() {
 }
 ```
 
-Components are connected to the DOM through `createApp` and `mount`. `createApp` receives the root component's render output and manages the lifecycle of the entire application.
+Components are connected to the DOM through `createApp` and `mount`. `createApp` receives the root component function and manages the lifecycle of the entire application.
 
-组件通过 `createApp` 和 `mount` 与 DOM 连接。`createApp` 接收根组件的渲染输出，并管理整个应用的生命周期。
+组件通过 `createApp` 和 `mount` 与 DOM 连接。`createApp` 接收根组件函数，并管理整个应用的生命周期。
 
 ```jsx
-import { createApp, h } from "kiaao";
+import { createApp } from "kiaao";
 
-const app = createApp(<Counter />);
+const app = createApp(Counter);
 app.mount("#app");
 ```
 
@@ -45,7 +45,7 @@ function Greeting({ name }) {
   return <h1>Hello, {name}</h1>;
 }
 
-const app = createApp(<Greeting name="kiaao" />);
+const app = createApp(() => <Greeting name="kiaao" />);
 app.mount("#app");
 ```
 

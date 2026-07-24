@@ -386,7 +386,7 @@ interface DirectiveContext {
 ### 应用入口：`createApp`
 
 ```ts
-function createApp(hr: HResult): App;
+function createApp(component: ComponentFunction): App;
 
 interface App {
   mount(container: string | Element): void;
@@ -394,10 +394,10 @@ interface App {
 }
 ```
 
-`createApp` 接收根组件的 `HResult`，创建根 Owner，管理整个应用的生命周期。`mount` 支持 CSS 选择器字符串或直接传入 DOM 元素。`unmount` 销毁整个应用。
+`createApp` 接收根组件函数，内部调用 `h(component)` 完成渲染，管理整个应用的生命周期。`mount` 支持 CSS 选择器字符串或直接传入 DOM 元素。`unmount` 销毁整个应用。
 
 ```tsx
-const app = createApp(<App />);
+const app = createApp(App);
 app.mount("#root");
 ```
 

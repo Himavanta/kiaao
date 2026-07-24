@@ -176,7 +176,7 @@ Use `createApp` to mount a component tree and manage its lifecycle.
 ```jsx
 import { createApp } from "kiaao";
 
-const app = createApp(<App />);
+const app = createApp(App);
 app.mount("#app");
 
 // Later, when the app should be removed:

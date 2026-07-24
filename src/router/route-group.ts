@@ -2,19 +2,12 @@
 //
 // 不导出。RouteGroup 是递归机件，createRouter 把顶层 RouteGroup 绑定为 Router。
 
-import type { ComponentFunction, HResult, Signal } from "../core/index.ts";
-import { Case, h, use } from "../core/index.ts";
-import { isArray, isFunction } from "../core/index.ts";
-import type { RouteMap } from "./types.ts";
+import type { ComponentFunction, HResult } from "../core/index.ts";
+import { Case, h, use, isArray, isFunction } from "../core/index.ts";
+import type { RouteGroupProps } from "./types.ts";
 import { extractSegment, isSlash } from "./utils.ts";
 
 // ── RouteGroup 工厂 ────────────────────────────────────
-
-interface RouterGroupFactoryOptions {
-  routes: RouteMap;
-  base: string;
-  current: Signal<string>;
-}
 
 /**
  * 内部递归机件。
@@ -24,7 +17,7 @@ interface RouterGroupFactoryOptions {
  * - 函数类型的子路由保持原样，作为叶子组件；
  * - 返回的 ComponentFunction 渲染 layout，并将嵌套的 RouterView 通过 props 注入。
  */
-export function createRouterGroup(options: RouterGroupFactoryOptions): ComponentFunction {
+export function createRouterGroup(options: RouteGroupProps): ComponentFunction {
   const { routes, base, current } = options;
   const indexEntry = routes[""];
   const others: Record<string, ComponentFunction> = {};
