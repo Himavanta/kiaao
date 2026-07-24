@@ -1,9 +1,6 @@
-import { use, Show } from "kiaao/lynx";
+import { use } from "kiaao/lynx";
 
 import "./App.css";
-import arrow from "./assets/arrow.png";
-import lynxLogo from "./assets/lynx-logo.png";
-import reactLynxLogo from "./assets/react-logo.png";
 
 export function App() {
   const alterLogo = use(true);

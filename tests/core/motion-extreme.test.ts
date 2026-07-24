@@ -17,16 +17,16 @@ setAdapter(browserAdapter);
 
 describe("Motion — 基本结构", () => {
   test("createMotion 返回 [visible, Directive]", () => {
-    const [visible, Motion] = createMotion(() => true);
+    const [visible, Motion] = createMotion(use(true));
     expect(typeof visible).toBe("function");
     expect(typeof Motion).toBe("function");
   });
 
   test("visible 信号初始值与业务信号一致", () => {
-    const [visible] = createMotion(() => true);
+    const [visible] = createMotion(use(true));
     expect(visible()).toBe(true);
 
-    const [v2] = createMotion(() => false);
+    const [v2] = createMotion(use(false));
     expect(v2()).toBe(false);
   });
 
@@ -51,8 +51,8 @@ describe("Motion — 基本结构", () => {
 
 describe("Motion — 多个实例", () => {
   test("两个 Motion 实例返回独立 visible", () => {
-    const [va] = createMotion(() => true);
-    const [vb] = createMotion(() => false);
+    const [va] = createMotion(use(true));
+    const [vb] = createMotion(use(false));
     expect(va()).toBe(true);
     expect(vb()).toBe(false);
   });

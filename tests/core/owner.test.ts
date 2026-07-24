@@ -386,7 +386,7 @@ describe("RenderAdapter type compatibility", () => {
       isNode(value: unknown): value is unknown {
         return value != null;
       },
-      isElement(value: unknown): value is unknown {
+      isElement(_value: unknown): _value is unknown {
         return false;
       },
       prev() {
