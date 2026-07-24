@@ -4,6 +4,7 @@
 
 import type { ComponentFunction, HResult, Signal } from "../core/index.ts";
 import { Case, h, use } from "../core/index.ts";
+import { isArray, isFunction } from "../core/index.ts";
 import type { RouteMap } from "./types.ts";
 import { extractSegment } from "./utils.ts";
 
@@ -32,7 +33,7 @@ export function createRouterGroup(options: RouterGroupFactoryOptions): Component
   for (const key of Object.keys(routes)) {
     if (key === "") continue;
     const value = routes[key];
-    if (typeof value === "function") {
+    if (isFunction(value)) {
       // 叶子：保持原函数作为 ComponentFunction
       others[key] = value;
     } else {
@@ -47,7 +48,7 @@ export function createRouterGroup(options: RouterGroupFactoryOptions): Component
   }
 
   // layout 必为函数（createRouter 入口校验）。此处再次保护。
-  if (typeof indexEntry !== "function") {
+  if (!isFunction(indexEntry)) {
     return () => null;
   }
 
@@ -57,15 +58,11 @@ export function createRouterGroup(options: RouterGroupFactoryOptions): Component
     // 每次调用都创建新的 RouterView，闭包捕获 `others` 与 `base`
     const RouterView: ComponentFunction = (viewProps, viewContext): HResult => {
       const segment = use(current, () => extractSegment(current(), base));
-      // children 可能为单个函数（normalizeChildren 后）或函数数组，都兼容
-      const children = viewProps?.children;
-      const fallback = Array.isArray(children)
-        ? children[0]
-        : (children as (() => unknown) | undefined);
+      // children 可能为单个函数（normalizeChildren 后）或函数数组，用解构统一取首元素
+      const [fallback] = isArray(viewProps?.children) ? viewProps.children : [viewProps?.children];
       // 直接调用 Case 绕过 h() 的 props 严格检查；
       // viewContext 让 anchor 归入 RouterView 自己的 owner。
-      const caseChildren = [others, fallback] as Parameters<typeof Case>[0]["children"];
-      return Case({ value: segment, children: caseChildren }, viewContext);
+      return Case({ value: segment, children: [others, fallback] }, viewContext);
     };
 
     return h(IndexLayout, { RouterView });

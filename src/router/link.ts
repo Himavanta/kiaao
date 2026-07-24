@@ -3,6 +3,7 @@
 
 import type { ComponentFunction } from "../core/index.ts";
 import { h, isUse } from "../core/index.ts";
+import { isFunction, isString } from "../core/index.ts";
 import type { RouterLinkProps } from "./types.ts";
 
 /**
@@ -12,9 +13,9 @@ import type { RouterLinkProps } from "./types.ts";
  * - Signal<string>：每次调用读取信号当前值。
  */
 function resolveLinkTarget(to: RouterLinkProps["to"]): string {
-  if (typeof to === "string") return to;
+  if (isString(to)) return to;
   if (isUse(to)) return (to as () => string)();
-  if (typeof to === "function") return (to as () => string)();
+  if (isFunction(to)) return (to as () => string)();
   return String(to);
 }
 
