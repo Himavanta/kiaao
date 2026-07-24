@@ -147,6 +147,16 @@ function DashboardLayout({ RouterView }) {
 }
 ```
 
+- Only the **first** child function is used as fallback. Extra children are ignored.
+- Non-function children (strings, numbers, null, etc.) are **ignored** — they do not cause errors.
+- Each `RouterView` has its own fallback. A fallback in the root layout and a fallback in a nested layout are independent.
+- The fallback component does **not** receive `RouterView` as a prop. It is a leaf.
+
+- 只有 **第一个** 子函数会作为 fallback。多余的 children 被忽略。
+- 非函数的 children（字符串、数字、null 等）被**忽略** ——不会抛错。
+- 每个 `RouterView` 有自己独立的 fallback。根 layout 和嵌套 layout 的 fallback 互不影响。
+- Fallback 组件**不会**收到 `RouterView` prop。它是叶子。
+
 ---
 
 ## `push` / 编程式导航
