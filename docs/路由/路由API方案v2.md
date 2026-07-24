@@ -626,23 +626,52 @@ const routes = {
 - 嵌套动态路由(每层独立信号)是否支持
 - 与 [动态路由方案](./动态路由方案.md) 的关系
 
-### 4. 路径末尾斜杠的处理(待分析决策)
+### 4. URL 路径与查询的处理（已决策）
 
-URL `/demo` vs `/demo/`:
+**4.1 末尾斜杠：保留字面值**
 
-- `extractSegment("/demo", "")` → "demo"
-- `extractSegment("/demo/", "")` → "demo"(末尾斜杠被 split 处理)
+- `push("/foo")` 与 `push("/foo/")` 都按字面值写入 `history.pushState`；
+- `extractSegment` 对两者返回相同 segment（匹配结果一致）；
+- 浏览器历史记录与 `location.pathname` 按用户原样保留；
+- 框架不做隐式规范化或重定向。
 
-**顶层匹配一致**。但进入 demo 层后:
+依据：
 
-- URL `/demo`,base="/demo":segment=""
-- URL `/demo/`,base="/demo":segment=""
+- kiaao 不提供隐藏的智能默认行为；
+- 尾斜杠规范化如需提供，应作为独立 option（如 `trailingSlash: "strip" | "preserve"`），但 v2 不预留该 API；
+- `route.path` 不允许包含 `/`，单段定义隐含了 `""` layout 与 leaf 的明确区别，与尾斜杠无关。
 
-**两者 segment 都是 ""**,行为一致。但 URL 不同(`/demo` vs `/demo/`),浏览器历史记录里是两个条目。
+**4.2 查询字符串**
 
-**问题**:用户可能从 `/demo` 跳到 `/demo/`(或反之),current 信号变化(`"/demo"` vs `"/demo/"`),但 segment 都是 "" → RouterView 不切换 → **视觉无变化,但 URL 变了**。
+- v2 暴露两个对外信号：`current` 与 `search`；
+- `current` 为 `location.pathname`（不含 `?` 与 `#`）；
+- `search` 为 `parseSearch(location.search)` 结果；
+- 两者均由框架内部源信号派生，对外为逻辑只读信号（派生 + 忽略 setter 参数）。
 
-**待决策**:是否标准化末尾斜杠(强制重定向到其中一种)?或接受 URL 不同但视觉一致?
+**4.3 Hash**
+
+- v2 不解析、不响应 `location.hash` 变化；
+- hash 由用户控制，框架不触发 `onRoute`；
+- 文档明确说明此限制。
+
+**4.4 URL 编码**
+
+- 框架使用 `location.pathname` 的实际值（已解码）；
+- 不做编码/规范化；
+- 用户调用 `push("/foo bar")` 后，浏览器实际 URL 为 `/foo%20bar`，`current()` 返回 `/foo bar`；
+- 与 `window.location.pathname` 行为一致，避免隐藏转换。
+
+**4.5 大小写敏感**
+
+- v2 字符串匹配（`startsWith`、`includes`、`split`）全部大小写敏感；
+- `/Admin` 与 `/admin` 是不同 URL 字符串；
+- 不做大小写规范化。
+
+**4.6 `base` 为 `/`**
+
+- `base === "/"` 等价于“不限定 base”，匹配所有路径；
+- 与不传 `base` 的行为完全一致；
+- 根 `RouteGroup` 的 base 默认就是 `/`，路径拼接结果完整。
 
 ### 5. SSR 支持
 
@@ -668,12 +697,12 @@ URL `/demo` vs `/demo/`:
 
 ## 十三、待办
 
-- [ ] 完善 RouterView 与 RouteGroup 实现细节(第十一章 #1)
-- [ ] 设计 RouteMap 类型与工具函数(第十一章 #2)
-- [ ] 验证动态路由方案 G 的集成(第十一章 #3)
-- [ ] 分析决策路径末尾斜杠(第十一章 #4)
-- [ ] 编写测试用例(覆盖第四章运行示例的所有场景)
-- [ ] 更新 `guide/router.md`(单独任务)
+- [ ] 完善 RouterView 与 RouteGroup 实现细节（第十一章 #1）
+- [ ] 设计 RouteMap 类型与工具函数（第十一章 #2）
+- [ ] 验证动态路由方案 G 的集成（第十一章 #3）—— 动态路由本版本不实现
+- [x] 决策路径末尾斜杠（第十一章 #4）—— 已决策：保留字面值，不预留 `trailingSlash` API
+- [ ] 编写测试用例（覆盖第四章运行示例的所有场景）
+- [ ] 更新 `guide/router.md`（单独任务）
 - [ ] 更新 `packages/example` 示例
 
 ## 十四、相关文档
