@@ -23,36 +23,37 @@ export const pushState = (path: string): void => {
  * - popstate 后 onRoute 重定向时
  * - onRoute reject 回滚到原 URL 时
  */
-export const replaceState = (path: string): void => {
-  history.replaceState(null, "", path);
-};
+export const replaceState = (path: string): void => history.replaceState(null, "", path);
 
 // ── Segment Extraction ───────────────────────────────
+
+export const isSlash = (s: string) => s === "/";
 
 /**
  * 从完整路径中提取当前 RouterView 负责的第一个路径段。
  */
 export function extractSegment(fullPath: string, base?: string): string {
-  if (base && base !== "/") {
+  if (base && !isSlash(base)) {
     if (!fullPath.startsWith(base)) return "";
-    if (fullPath.length > base.length && fullPath[base.length] !== "/") {
-      return "";
-    }
+    if (!isSlash(fullPath[base.length])) return "";
   }
 
   const relative = base ? fullPath.slice(base.length) : fullPath;
-  return relative.replace(/^\/+/, "").split("/")[0] || "";
+  // 跳过前导 /，收集第一段
+  let segment = "";
+  let started = false;
+  for (const ch of relative) {
+    if (!started && isSlash(ch)) continue;
+    if (isSlash(ch)) break;
+    started = true;
+    segment += ch;
+  }
+  return segment;
 }
 
 /**
  * 将 query string 解析为对象。
  * 多个同名 key 保留最后一个值，与 v1 一致。
  */
-export function parseSearchRecord(search: string): Record<string, string> {
-  const record: Record<string, string> = {};
-  if (!search) return record;
-  new URLSearchParams(search).forEach((value, key) => {
-    record[key] = value;
-  });
-  return record;
-}
+export const parseSearchRecord = (search: string): Record<string, string> =>
+  !search ? Object.fromEntries(new URLSearchParams(search)) : {};

@@ -6,7 +6,7 @@ import type { ComponentFunction, HResult, Signal } from "../core/index.ts";
 import { Case, h, use } from "../core/index.ts";
 import { isArray, isFunction } from "../core/index.ts";
 import type { RouteMap } from "./types.ts";
-import { extractSegment } from "./utils.ts";
+import { extractSegment, isSlash } from "./utils.ts";
 
 // ── RouteGroup 工厂 ────────────────────────────────────
 
@@ -38,7 +38,7 @@ export function createRouterGroup(options: RouterGroupFactoryOptions): Component
       others[key] = value;
     } else {
       // 目录：递归构造 RouteGroup 工厂
-      const childBase = base === "/" ? `/${key}` : `${base}/${key}`;
+      const childBase = isSlash(base) ? `/${key}` : `${base}/${key}`;
       others[key] = createRouterGroup({
         routes: value,
         base: childBase,
