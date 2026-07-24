@@ -1,6 +1,5 @@
 // kiaao — router: URL helpers + segment extraction
-//
-// 设计依据见 docs/路由/v2实施/01-设计决策.md
+
 // ── Browser URL Helpers ───────────────────────────────
 
 /** 获取当前 pathname + search，不含 origin 与 hash */
@@ -51,7 +50,7 @@ export function extractSegment(fullPath: string, base?: string): string {
 
 /**
  * 将 query string 解析为对象。
- * 多个同名 key 保留最后一个值，与 v1 一致。
+ * 多个同名 key 保留最后一个值。
  */
 export const parseSearchRecord = (search: string): Record<string, string> =>
   search ? Object.fromEntries(new URLSearchParams(search)) : {};

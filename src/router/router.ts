@@ -1,5 +1,4 @@
 // kiaao — router: createRouter 入口
-// 设计依据见 docs/路由/v2实施/01-设计决策.md
 
 import type { ComponentFunction, Signal } from "../core/index.ts";
 import { use } from "../core/index.ts";

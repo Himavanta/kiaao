@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // kiaao — router 基本功能测试
 //
-// 覆盖 v1 等价行为 + v2 新增能力。
+// 覆盖路由核心行为。
 // 极端场景见 router-extreme.test.ts。
 
 import { expect, test, describe, beforeEach } from "vite-plus/test";

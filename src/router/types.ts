@@ -1,5 +1,4 @@
 // kiaao — router: public types
-// 设计依据见 docs/路由/路由API方案v2.md 与 docs/路由/v2实施/01-设计决策.md
 
 import type { ComponentFunction, Signal } from "../core/index.ts";
 
@@ -58,21 +57,6 @@ export interface Router {
 }
 
 // ── 内部组件 props ────────────────────────────────────
-
-/**
- * RouterView 接收的 props。
- *
- * 通过 props 注入到 layout 组件中：
- *   function RootLayout({ RouterView }) { return <RouterView /> }
- */
-export interface RouterViewProps {
-  /**
-   * 局部 fallback。
-   *
-   * 当当前 segment 没有匹配任何子路由时，调用第一个元素作为 fallback 渲染。
-   */
-  children?: [() => unknown];
-}
 
 /**
  * Link 组件接收的 props。

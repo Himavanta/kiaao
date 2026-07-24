@@ -1,6 +1,4 @@
 // kiaao — router: 内部 RouteGroup 与 RouterView 工厂
-//
-// 不导出。RouteGroup 是递归机件，createRouter 把顶层 RouteGroup 绑定为 Router。
 
 import type { ComponentFunction, HResult } from "../core/index.ts";
 import { Case, h, use, isArray, isFunction } from "../core/index.ts";

@@ -1,5 +1,4 @@
 // kiaao — router: Link 组件
-// 设计依据见 docs/路由/v2实施/01-设计决策.md
 
 import type { ComponentFunction } from "../core/index.ts";
 import { h, toValue } from "../core/index.ts";
