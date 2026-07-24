@@ -3,23 +3,25 @@
 
 import type { ComponentFunction, Signal } from "../core/index.ts";
 import { use } from "../core/index.ts";
-import { isFunction, isObject, isString } from "../core/index.ts";
+import { isFunction, isPlainObject, isString } from "../core/index.ts";
 import { createRouterLink } from "./link.ts";
 import { createRouterGroup } from "./route-group.ts";
 import type { GuardResult, Router, RouterOptions } from "./types.ts";
-import { getPathname, getSearch, parseSearchRecord, pushState, replaceState } from "./utils.ts";
+import { getCurrentPath, parseSearchRecord, pushState, replaceState, resolveUrl } from "./utils.ts";
 
 // ── 常量 ──────────────────────────────────────────────
 
 const REDIRECT_LIMIT = 10;
 
+let popstateHandler: (() => void) | null = null;
+
 // ── 运行时校验 ────────────────────────────────────────
 
 function validateRoutes(options: RouterOptions): void {
-  if (!options || !isObject(options)) {
+  if (!isPlainObject(options)) {
     throw new Error("[kiaao] createRouter: options is required");
   }
-  if (!options.routes || !isObject(options.routes)) {
+  if (!isPlainObject(options.routes)) {
     throw new Error("[kiaao] createRouter: options.routes must be an object");
   }
   if (!isFunction(options.routes[""])) {
@@ -69,7 +71,7 @@ type NavigateMode = "push" | "popstate" | "initial";
 /**
  * 统一的导航流程。
  *
- * 处理 onRoute 守卫、重定向链、最终写入 history + 更新 _url。
+ * 处理 onRoute 守卫、重定向链、最终写入 history + 更新 sourceUrl。
  * 不同模式的差异：
  * - push：写入 pushState；守卫失败抛错；
  * - popstate：仅当 target 与 originalTarget 不同时 replaceState；守卫失败回滚；
@@ -111,80 +113,100 @@ async function navigate(opts: {
 // ── 信号 ──────────────────────────────────────────────
 
 function createRouterSignals(): {
-  _url: Signal<string>;
+  sourceUrl: Signal<string>;
   current: Signal<string>;
   search: Signal<Record<string, string>>;
 } {
   // 内部可写源信号：完整 URL（pathname + search），保留字面值（含尾斜杠）。
-  const _url = use(getPathname() + getSearch());
+  const sourceUrl = use(getCurrentPath());
 
   // 对外只读派生信号：分别取 pathname 与 search。
-  const current = use(_url, () => {
-    const full = _url();
-    const qIdx = full.indexOf("?");
-    return qIdx === -1 ? full : full.slice(0, qIdx) || "/";
+  // 使用 new URL 统一解析，避免手动 split 的边界问题。
+  const parsed = use(sourceUrl, () => {
+    const url = resolveUrl(sourceUrl());
+    return {
+      path: url.pathname,
+      query: url.search ? url.search.slice(1) : "",
+    };
   });
-  const search = use(_url, () => {
-    const full = _url();
-    const qIdx = full.indexOf("?");
-    return parseSearchRecord(qIdx === -1 ? "" : full.slice(qIdx + 1));
-  });
+  const current = use(parsed, () => parsed().path);
+  const search = use(parsed, () => parseSearchRecord(parsed().query));
 
-  return { _url, current, search };
+  return { sourceUrl, current, search };
 }
 
 // ── commit 回调 ────────────────────────────────────────
 
-function commitPush(_url: Signal<string>, url: string): void {
-  pushState(url);
-  _url(url);
+function commitPush(sourceUrl: Signal<string>, url: string): void {
+  try {
+    pushState(url);
+  } catch (err) {
+    throw new Error(`[kiaao] pushState failed for "${url}": ${(err as Error).message}`);
+  }
+  sourceUrl(url);
 }
 
-function commitReplaceIfChanged(_url: Signal<string>, originalTarget: string, url: string): void {
+function commitReplaceIfChanged(
+  sourceUrl: Signal<string>,
+  originalTarget: string,
+  url: string,
+): void {
   if (url !== originalTarget) replaceState(url);
-  _url(url);
+  sourceUrl(url);
 }
 
 // ── 浏览器导航监听 ────────────────────────────────────
 
 function installPopstateListener(opts: {
-  _url: Signal<string>;
+  sourceUrl: Signal<string>;
   onRoute: RouterOptions["onRoute"];
 }): void {
-  const { _url, onRoute } = opts;
-  window.addEventListener("popstate", () => {
-    const newUrl = getPathname() + getSearch();
+  if (popstateHandler) {
+    window.removeEventListener("popstate", popstateHandler);
+  }
+  const { sourceUrl, onRoute } = opts;
+  popstateHandler = () => {
+    const newUrl = getCurrentPath();
     void navigate({
       mode: "popstate",
       target: newUrl,
-      from: _url(),
+      from: sourceUrl(),
       originalTarget: newUrl,
       onRoute,
-      commitUrl: (url) => commitReplaceIfChanged(_url, newUrl, url),
-      onError: () => replaceState(_url()),
+      commitUrl: (url) => commitReplaceIfChanged(sourceUrl, newUrl, url),
+      onError: () => {
+        // popstate 已改浏览器 URL，但 sourceUrl 仍为旧值；
+        // replaceState 回滚浏览器 URL 即可，sourceUrl 无需更新。
+        replaceState(sourceUrl());
+      },
+    }).catch((err: Error) => {
+      console.error("[kiaao] popstate navigation error:", err);
     });
-  });
+  };
+  window.addEventListener("popstate", popstateHandler);
 }
 
 function installInitialEntry(opts: {
-  _url: Signal<string>;
+  sourceUrl: Signal<string>;
   onRoute: RouterOptions["onRoute"];
 }): void {
-  const { _url, onRoute } = opts;
+  const { sourceUrl, onRoute } = opts;
   void (async () => {
-    const initial = _url();
+    const initial = sourceUrl();
     await navigate({
       mode: "initial",
       target: initial,
       from: null,
       originalTarget: initial,
       onRoute,
-      commitUrl: (url) => commitReplaceIfChanged(_url, initial, url),
+      commitUrl: (url) => commitReplaceIfChanged(sourceUrl, initial, url),
       onError: () => {
         // 首次进入守卫失败：保持初始 URL 不变
       },
     });
-  })();
+  })().catch((err: Error) => {
+    console.error("[kiaao] initial entry navigation error:", err);
+  });
 }
 
 // ── 入口 ──────────────────────────────────────────────
@@ -192,9 +214,9 @@ function installInitialEntry(opts: {
 export function createRouter(options: RouterOptions): Router {
   validateRoutes(options);
 
-  const { _url, current, search } = createRouterSignals();
-  installPopstateListener({ _url, onRoute: options.onRoute });
-  installInitialEntry({ _url, onRoute: options.onRoute });
+  const { sourceUrl, current, search } = createRouterSignals();
+  installPopstateListener({ sourceUrl, onRoute: options.onRoute });
+  installInitialEntry({ sourceUrl, onRoute: options.onRoute });
 
   // ── 顶层 Router 组件 ─────────────────────────────────
 
@@ -208,10 +230,10 @@ export function createRouter(options: RouterOptions): Router {
     await navigate({
       mode: "push",
       target: path,
-      from: _url(),
+      from: sourceUrl(),
       originalTarget: path,
       onRoute: options.onRoute,
-      commitUrl: (url) => commitPush(_url, url),
+      commitUrl: (url) => commitPush(sourceUrl, url),
       onError: () => {
         throw new Error("[kiaao] push aborted due to onRoute error");
       },

@@ -44,7 +44,7 @@ export interface RouterOptions {
  * createRouter 的对外契约。
  *
  * - Router：顶层组件，在应用根处渲染；
- * - Link：声明式导航，to 支持 string / getter / Signal；
+ * - Link：声明式导航，to 支持 string 或 Signal；
  * - push：编程式导航，异步，触发 onRoute；
  * - current：pathname 的派生只读信号；
  * - search：query 解析后的派生只读信号。
@@ -77,14 +77,12 @@ export interface RouterViewProps {
 /**
  * Link 组件接收的 props。
  *
- * to 支持三种类型：
+ * to 支持两种类型：
  * - string：静态路径；
- * - () => string：getter，路由变化时重新解析；
  * - Signal<string>：信号，路由变化时重新解析。
  */
-// eslint-disable-next-line typescript/no-redundant-type-constituents
 export interface RouterLinkProps {
-  to: string | (() => string) | Signal<string>;
+  to: string | Signal<string>;
   children?: unknown;
   onClick?: (e: Event) => void;
   [key: string]: unknown;

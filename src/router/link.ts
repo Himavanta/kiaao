@@ -2,44 +2,26 @@
 // 设计依据见 docs/路由/v2实施/01-设计决策.md
 
 import type { ComponentFunction } from "../core/index.ts";
-import { h, isUse } from "../core/index.ts";
-import { isFunction, isString } from "../core/index.ts";
+import { h, toValue } from "../core/index.ts";
 import type { RouterLinkProps } from "./types.ts";
 
 /**
- * 解析 to 为字符串路径。支持：
- * - string：原样返回；
- * - () => string：每次调用执行 getter；
- * - Signal<string>：每次调用读取信号当前值。
- */
-function resolveLinkTarget(to: RouterLinkProps["to"]): string {
-  if (isString(to)) return to;
-  if (isUse(to)) return (to as () => string)();
-  if (isFunction(to)) return (to as () => string)();
-  return String(to);
-}
-
-/**
- * 创建 Link 组件。
- *
- * - to 支持 string / (() => string) / Signal<string>；
- * - onClick 拦截：preventDefault 后调用 push；
- * - 异步 push 采用火灾即忘语义，错误静默处理（已被 createRouter 的 onRoute reject 处理）。
+ * 创建 Link 组件。to 支持 string 或 Signal<string>。
+ * - href 直接透传信号，由 setProps 建立响应式绑定；
+ * - onClick 中通过 toValue 取当前值。
  */
 export function createRouterLink(push: (path: string) => Promise<void>): ComponentFunction {
   return function Link(props: RouterLinkProps): ReturnType<typeof h> {
     const { to, children, onClick: userOnClick, ...rest } = props;
-
     return h(
       "a",
       {
         ...rest,
-        href: resolveLinkTarget(to),
+        href: to,
         onClick: (e: Event) => {
           e.preventDefault();
           userOnClick?.(e);
-          const path = resolveLinkTarget(to);
-          push(path).catch(() => {});
+          push(toValue(to)).catch(() => {});
         },
       },
       children,
