@@ -35,5 +35,5 @@
 - [x] v2 源码在 `src/router/` 实现
 - [x] v2 测试在 `tests/router/` 编写
 - [ ] `guide/router.md` 重写
-- [ ] `packages/example` 迁移
+- [x] `packages/example` 迁移
 - [ ] 删除 v1 备份

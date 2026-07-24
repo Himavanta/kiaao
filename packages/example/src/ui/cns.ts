@@ -31,12 +31,9 @@ function resolveValue(v: ClassValue): string[] {
 }
 
 /** 通过 .bind(use) 或 .bind(context.use) 注入 use */
-export function cns(
-  this: UseFn,
-  ...args: [...Signal<any>[], () => ClassValue[] | Record<string, boolean | (() => boolean)>]
-): Signal<string> {
+export function cns(this: UseFn, ...args: any[]): Signal<string> {
   const [fn, ...deps] = args.reverse();
-  return this(...deps, () => {
+  return (this as any)(...deps, () => {
     const val = fn();
     if (Array.isArray(val)) {
       return val.flatMap(resolveValue).filter(Boolean).join(" ");

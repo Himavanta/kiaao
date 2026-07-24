@@ -54,16 +54,16 @@
 
 #### 大部分为 `: any` 参数类型
 
-| 行号 | 代码                                                                  | 判定                                            |
+| 行号 | 代码 | 判定 |
 | ---- | --------------------------------------------------------------------- | ----------------------------------------------- | --- |
-| 25   | `export function normalizeEachSource(source: any)`                    | 可改为 `unknown`，内部做类型守卫                | 🟡  |
-| 49   | `function syncItemSignal(..., rawValue: any): any`                    | 返回类型可用泛型                                | 🟡  |
-| 101  | `function syncItemDOM(..., itemGetter: any, ...): Node \| null`       | `itemGetter` 可改为 `() => unknown`             | 🟡  |
-| 117  | `function renderEach(..., eachFn: (() => any[]) \| (() => any), ...)` | 可加泛型                                        | 🟡  |
-| 145  | `const source = toValue(eachFn);` — `toValue` 返回 any                | 受限于 `toValue` 签名                           | ✅  |
-| 197  | `let node: any;`                                                      | `childFn` 返回 `any`，但实际应为 `Node \| null` | 🟡  |
-| 228  | `export function createEachElement(...)` — 参数 `any`                 | 可加泛型                                        | 🟡  |
-| 124  | `(eachFn as any)`                                                     | 需转为 `any` 以通过 `isUse` 检查                | ✅  |
+| 25 | `export function normalizeEachSource(source: any)` | 可改为 `unknown`，内部做类型守卫 | 🟡 |
+| 49 | `function syncItemSignal(..., rawValue: any): any` | 返回类型可用泛型 | 🟡 |
+| 101 | `function syncItemDOM(..., itemGetter: any, ...): Node \| null` | `itemGetter` 可改为 `() => unknown` | 🟡 |
+| 117 | `function renderEach(..., eachFn: (() => any[]) \| (() => any), ...)` | 可加泛型 | 🟡 |
+| 145 | `const source = toValue(eachFn);` — `toValue` 返回 any | 受限于 `toValue` 签名 | ✅ |
+| 197 | `let node: any;` | `childFn` 返回 `any`，但实际应为 `Node \| null` | 🟡 |
+| 228 | `export function createEachElement(...)` — 参数 `any` | 可加泛型 | 🟡 |
+| 124 | `(eachFn as any)` | 需转为 `any` 以通过 `isUse` 检查 | ✅ |
 
 **总评**：20/27 ✅ 合理，7 🟡 可改善（主要是泛型缺失）
 
@@ -85,12 +85,12 @@
 
 #### 模式：函数参数泛型
 
-| 行号 | 代码                                            | 判定                                        |
+| 行号 | 代码 | 判定 |
 | ---- | ----------------------------------------------- | ------------------------------------------- | --------------- |
-| 58   | `return ((...args: any[]): any => {`            | 变参函数                                    | ✅              |
-| 74   | `}) as UseFunction;`                            | 断言                                        | ✅              |
-| 242  | `return hSSR(tag, props, children) as any;`     | `hSSR` 返回 `SSRSafe`，`h()` 返回 `Element` | 🟡 可用类型细化 |
-| 105  | `children.flat(Infinity)` — children 是 `any[]` | 合理                                        | ✅              |
+| 58 | `return ((...args: any[]): any => {` | 变参函数 | ✅ |
+| 74 | `}) as UseFunction;` | 断言 | ✅ |
+| 242 | `return hSSR(tag, props, children) as any;` | `hSSR` 返回 `SSRSafe`，`h()` 返回 `Element` | 🟡 可用类型细化 |
+| 105 | `children.flat(Infinity)` — children 是 `any[]` | 合理 | ✅ |
 
 **总评**：24/26 ✅ 合理，2 🟡
 

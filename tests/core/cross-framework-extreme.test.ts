@@ -68,7 +68,7 @@ describe("跨框架 — 原生 DOM 操作", () => {
     container.id = "app-root";
     document.body.append(container);
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     app.mount(container);
 
     expect(container.querySelector("p")?.textContent).toBe("app-content");
@@ -89,8 +89,8 @@ describe("跨框架 — 多 createApp 实例", () => {
     const c2 = document.createElement("div");
     document.body.append(c1, c2);
 
-    const app1 = createApp(h(AppA));
-    const app2 = createApp(h(AppB));
+    const app1 = createApp(AppA);
+    const app2 = createApp(AppB);
     app1.mount(c1);
     app2.mount(c2);
 
@@ -115,8 +115,8 @@ describe("跨框架 — 多 createApp 实例", () => {
 
     const c1 = document.createElement("div");
     const c2 = document.createElement("div");
-    const app1 = createApp(h(CompA));
-    const app2 = createApp(h(CompB));
+    const app1 = createApp(CompA);
+    const app2 = createApp(CompB);
     app1.mount(c1);
     app2.mount(c2);
 

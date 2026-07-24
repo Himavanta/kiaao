@@ -23,8 +23,8 @@ describe("multi-instance — isolation", () => {
     const c1 = browserAdapter.el("div") as HTMLElement;
     const c2 = browserAdapter.el("div") as HTMLElement;
 
-    const a1 = createApp(h(App1));
-    const a2 = createApp(h(App2));
+    const a1 = createApp(App1);
+    const a2 = createApp(App2);
 
     a1.mount(c1);
     a2.mount(c2);
@@ -43,7 +43,7 @@ describe("multi-instance — isolation", () => {
   test("createApp renders then unmounts cleanly", () => {
     const Comp = () => h("span", { class: "temp" }, "temporary");
     const container = browserAdapter.el("div") as HTMLElement;
-    const app = createApp(h(Comp));
+    const app = createApp(Comp);
     app.mount(container);
     expect(container.querySelector(".temp")).toBeTruthy();
     app.unmount();
@@ -64,8 +64,8 @@ describe("multi-instance — isolation", () => {
     const c1 = browserAdapter.el("div") as HTMLElement;
     const c2 = browserAdapter.el("div") as HTMLElement;
 
-    const a1 = createApp(hr);
-    const a2 = createApp(hr);
+    const a1 = createApp(() => hr);
+    const a2 = createApp(() => hr);
 
     a1.mount(c1);
     a2.mount(c2);

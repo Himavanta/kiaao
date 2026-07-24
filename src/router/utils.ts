@@ -54,4 +54,4 @@ export function extractSegment(fullPath: string, base?: string): string {
  * 多个同名 key 保留最后一个值，与 v1 一致。
  */
 export const parseSearchRecord = (search: string): Record<string, string> =>
-  !search ? Object.fromEntries(new URLSearchParams(search)) : {};
+  search ? Object.fromEntries(new URLSearchParams(search)) : {};

@@ -16,7 +16,7 @@ describe("createApp", () => {
       return h("div", { id: "root" }, "Hello");
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = document.createElement("div");
     app.mount(container);
 
@@ -34,7 +34,7 @@ describe("createApp", () => {
     container.id = "test-container";
     document.body.append(container);
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     app.mount(container);
 
     expect(container.children.length).toBeGreaterThan(0);
@@ -46,7 +46,7 @@ describe("createApp", () => {
       return h("div", { id: "root" }, "content");
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = document.createElement("div");
     app.mount(container);
 
@@ -61,7 +61,7 @@ describe("createApp", () => {
       return h("span", undefined, "idempotent");
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = document.createElement("div");
     app.mount(container);
 
@@ -78,8 +78,8 @@ describe("createApp", () => {
       return h("p", undefined, "B");
     }
 
-    const appA = createApp(h(AppA));
-    const appB = createApp(h(AppB));
+    const appA = createApp(AppA);
+    const appB = createApp(AppB);
     const containerA = document.createElement("div");
     const containerB = document.createElement("div");
 
@@ -103,7 +103,7 @@ describe("createApp", () => {
       return h("div");
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = document.createElement("div");
     app.mount(container);
     expect(mounted).toBe(true);
@@ -118,7 +118,7 @@ describe("createApp", () => {
       return h("div");
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = document.createElement("div");
     app.mount(container);
     expect(unmounted).toBe(false);
@@ -141,7 +141,7 @@ describe("createApp", () => {
       return h("div", undefined, String(doubled()));
     }
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     app.mount(container);
     expect(container.textContent).toBe("0");
   });

@@ -38,7 +38,7 @@ describe("Motion — 快速切换", () => {
         ]),
       );
 
-    createApp(h(App)).mount(document.body);
+    createApp(App).mount(document.body);
     await new Promise((r) => setTimeout(r, 10));
 
     expect(visible()).toBe(true);
@@ -79,7 +79,7 @@ describe("Motion — 快速切换", () => {
         ]),
       );
 
-    createApp(h(App)).mount(document.body);
+    createApp(App).mount(document.body);
     await new Promise((r) => setTimeout(r, 10));
 
     for (let i = 0; i < 5; i++) {
@@ -98,7 +98,7 @@ describe("Motion — 快速切换", () => {
 
     const App = () => h("div", null, h(Show, { value: visible } as any, [() => h("div")]));
 
-    createApp(h(App)).mount(document.body);
+    createApp(App).mount(document.body);
     await new Promise((r) => setTimeout(r, 10));
 
     state(false);

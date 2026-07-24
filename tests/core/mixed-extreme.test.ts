@@ -5,7 +5,7 @@
 import { expect, test, describe } from "vite-plus/test";
 
 import { setAdapter } from "../../src/adapter/index.ts";
-import { h, Show, Each, use, triggerMount, direct } from "../../src/core/index.ts";
+import { h, Show, Each, use, triggerMount, direct, type Signal } from "../../src/core/index.ts";
 import { Portal } from "../../src/dom/index.ts";
 import { browserAdapter } from "../../src/dom/index.ts";
 
@@ -114,7 +114,7 @@ describe("Show + Async", () => {
 // ── 场景 2：Each + Show ──────────────────────────────
 
 describe("Each + Show", () => {
-  function ItemRow({ item }: { item: () => { id: number; text: string; active: boolean } }) {
+  function ItemRow({ item }: { item: Signal<{ id: number; text: string; active: boolean }> }) {
     const show = use(item, () => item().active);
     return h(
       "div",
@@ -276,7 +276,7 @@ describe("Each + 指令 + Show", () => {
     ctx.onUnmount(() => el.setAttribute("data-cleaned", "true"));
   }) as any);
 
-  function ItemRow({ item }: { item: () => { id: number; active: boolean; text: string } }) {
+  function ItemRow({ item }: { item: Signal<{ id: number; active: boolean; text: string }> }) {
     const show = use(item, () => item().active);
     return h(
       "div",
@@ -337,7 +337,7 @@ describe("Async + Each + Show", () => {
           function ItemRow({
             item,
           }: {
-            item: () => { id: number; text: string; active: boolean };
+            item: Signal<{ id: number; text: string; active: boolean }>;
           }) {
             const show = use(item, () => item().active);
             return h(
@@ -379,7 +379,7 @@ describe("Async + Each + Show", () => {
   test("异步组件 resolve 后内部信号绑定工作正常", async () => {
     const items = use([{ id: 1, text: "A", active: true }]);
 
-    function ItemRow({ item }: { item: () => { id: number; text: string; active: boolean } }) {
+    function ItemRow({ item }: { item: Signal<{ id: number; text: string; active: boolean }> }) {
       const show = use(item, () => item().active);
       return h(
         Show as any,
@@ -519,7 +519,11 @@ describe("综合压力 Each+Show+Directive+Async", () => {
     );
   }
 
-  function SectionRow({ item }: { item: () => { id: number; title: string; expanded: boolean } }) {
+  function SectionRow({
+    item,
+  }: {
+    item: Signal<{ id: number; title: string; expanded: boolean }>;
+  }) {
     const expanded = use(item, () => item().expanded);
     const data = item();
 

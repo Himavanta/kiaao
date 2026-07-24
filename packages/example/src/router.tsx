@@ -1,16 +1,30 @@
 import { lazy } from "kiaao";
-import { createRouter, type Route } from "kiaao/router";
+import { createRouter } from "kiaao/router";
 
-export const { RouterView, Link, navigate, currentPath, currentParams } = createRouter();
+const { Router, Link, push, current, search } = createRouter({
+  routes: {
+    "": () => null,
+    i: {
+      "": lazy(() => import("./components/layout")),
+      expore: lazy(() => import("./components/expore")),
+      apps: lazy(() => import("./components/dashbord")),
+      dataset: lazy(() => import("./test/group-motion.tsx")),
+      tools: lazy(() => import("./test/motion.tsx")),
+      plugins: lazy(() => import("./components/expore")),
+    },
+  },
+  onRoute: (to) => {
+    if (to === "/") return "/i/apps";
+  },
+});
 
-export const appRoutes = [
-  { path: "", component: () => (navigate("/i/apps"), null) },
-  { path: "i", component: lazy(() => import("./components/layout")) },
-];
+export { Router, Link, push, current, search };
 
-export interface MainNavItem extends Route {
+export interface MainNavItem {
   title?: string;
   icon?: string;
+  path: string;
+  component: ReturnType<typeof lazy>;
 }
 
 export const mainNavs: Array<MainNavItem> = [

@@ -32,7 +32,7 @@ describe("adoptBranch function children", () => {
         ),
       );
 
-    const app = createApp(h(App));
+    const app = createApp(App);
     const container = browserAdapter.el("div") as HTMLElement;
     app.mount(container);
 

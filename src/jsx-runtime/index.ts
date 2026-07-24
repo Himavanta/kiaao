@@ -3,8 +3,7 @@
 // Adapts the React JSX calling convention (children inside props)
 // to kiaao's h(tag, props, ...children).
 
-import type { Context } from "../core/index.ts";
-import type { DirectiveContext } from "../core/index.ts";
+import type { ComponentFunction, ComponentResult } from "../core/index.ts";
 import { h, Fragment } from "../core/index.ts";
 import { isArray, isNil, isUndefined } from "../core/index.ts";
 import type { HResult, Props, NullableProps } from "../core/index.ts";
@@ -52,12 +51,9 @@ export { createJsxElement as jsxDEV };
 // ── JSX Type Declarations ──────────────────────────────
 
 export namespace JSX {
-  // h() now returns HResult
-  export type Element = HResult;
-  export interface ElementClass {
-    (props: Props, context?: Context): HResult;
-    (el: HResult, props: Props, ctx: DirectiveContext): void;
-  }
+  // JSX 表达式的产物：h() 的内部结果
+  export type Element = ComponentResult;
+  export type ElementClass = ComponentFunction;
   export interface ElementChildrenAttribute {
     children: any;
   }

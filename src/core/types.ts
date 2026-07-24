@@ -55,6 +55,7 @@ export function isHResult(value: unknown): value is HResult {
 export interface Signal<T> {
   (): T;
   (value: T): void;
+  readonly [REACTIVE]: SignalState<T>;
 }
 
 /** 组件/元素的属性对象类型——不可空 */
@@ -63,17 +64,8 @@ export type Props = Record<string, any>;
 /** 组件/元素的属性对象类型——可空，配合 `= {}` 默认参数使用 */
 export type NullableProps = Props | null | undefined;
 
-/** 组件函数返回值的类型：同步结果为 HResult 或 HResult 数组，异步结果为 Promise */
-export type ComponentResult =
-  | HResult
-  | HResult[]
-  | HostNode[]
-  | Promise<HResult | HResult[]>
-  | string
-  | number
-  | boolean
-  | null
-  | undefined;
+/** 组件函数返回值：框架可消费任意类型，promise / 基础类型等由 h() 内部统一收敛为 HResult */
+export type ComponentResult = unknown;
 
 /** 可合并到 Owner 树的渲染结果 */
 export type MergeableResult = HostNode;

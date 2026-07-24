@@ -1,4 +1,4 @@
-import { Link, currentPath, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
+import { Link, current, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
 import { cns } from "/src/ui/cns";
 import Icon from "/src/ui/icon";
 import { use, Each, type Signal } from "kiaao";
@@ -24,16 +24,16 @@ function MenuItem({ item }: { item: Signal<MainNavItem> }) {
   const itemIcon = use(item, () => item().icon);
   const itemPath = use(item, () => `/i/${item().path}`);
 
-  const linkClass = cn(currentPath, item, () => [
+  const linkClass = cn(current, item, () => [
     "px-3 font-medium text-sm leading-8 rounded-xl flex items-center gap-2 text-gray-600 hover:bg-gray-200",
-    { "bg-white shadow-md text-blue-700 hover:bg-white": currentPath() === `/i/${item().path}` },
+    { "bg-white shadow-md text-blue-700 hover:bg-white": current() === `/i/${item().path}` },
   ]);
-  const iconClass = cn(currentPath, item, () => [
+  const iconClass = cn(current, item, () => [
     "h-4 w-4",
-    { "text-blue-700": currentPath() === `/i/${item().path}` },
+    { "text-blue-700": current() === `/i/${item().path}` },
   ]);
-  const spanClass = cn(currentPath, item, () => ({
-    "text-blue-700": currentPath() === `/i/${item().path}`,
+  const spanClass = cn(current, item, () => ({
+    "text-blue-700": current() === `/i/${item().path}`,
   }));
 
   return (

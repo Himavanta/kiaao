@@ -141,9 +141,9 @@ describe("[已知问题] HResult 重复挂载到不同容器", () => {
     const c1 = browserAdapter.el("div") as HTMLElement;
     const c2 = browserAdapter.el("div") as HTMLElement;
 
-    createApp(hr).mount(c1);
+    createApp(() => hr).mount(c1);
 
     // 期望：抛错告知 hr 已被使用
-    expect(() => createApp(hr).mount(c2)).toThrow();
+    expect(() => createApp(() => hr).mount(c2)).toThrow();
   });
 });

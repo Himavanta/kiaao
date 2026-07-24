@@ -16,7 +16,7 @@ setAdapter(browserAdapter);
 describe("createApp — edge cases", () => {
   test("createApp with empty HResult mounts silently", () => {
     const hr = h("div");
-    const app = createApp(hr);
+    const app = createApp(() => hr);
     const container = browserAdapter.el("div") as HTMLElement;
     expect(() => app.mount(container)).not.toThrow();
     app.unmount();
@@ -25,7 +25,7 @@ describe("createApp — edge cases", () => {
   test("createApp then mount twice on same container is safe", () => {
     const Comp = () => h("span", null, "content");
     const container = browserAdapter.el("div") as HTMLElement;
-    const app = createApp(h(Comp));
+    const app = createApp(Comp);
     app.mount(container);
     expect(() => app.mount(container)).not.toThrow();
     app.unmount();
@@ -33,13 +33,13 @@ describe("createApp — edge cases", () => {
 
   test("createApp unmount before mount is safe", () => {
     const Comp = () => h("span", null, "never");
-    const app = createApp(h(Comp));
+    const app = createApp(Comp);
     expect(() => app.unmount()).not.toThrow();
   });
 
   test("createApp with null result does not crash", () => {
     const NullComp = () => null as any;
-    const app = createApp(h(NullComp));
+    const app = createApp(NullComp);
     const container = browserAdapter.el("div") as HTMLElement;
     expect(() => app.mount(container)).not.toThrow();
     app.unmount();
@@ -49,7 +49,7 @@ describe("createApp — edge cases", () => {
     const ThrowComp = () => {
       throw new Error("init error");
     };
-    const app = createApp(h(ThrowComp));
+    const app = createApp(ThrowComp);
     const container = browserAdapter.el("div") as HTMLElement;
     expect(() => app.mount(container)).not.toThrow();
     app.unmount();

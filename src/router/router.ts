@@ -246,5 +246,11 @@ export function createRouter(options: RouterOptions): Router {
 
   // ── 对外契约 ─────────────────────────────────────────
 
-  return { Router, Link, push, current, search };
+  return {
+    Router: Router as Router["Router"],
+    Link: Link as Router["Link"],
+    push,
+    current,
+    search,
+  };
 }

@@ -1,4 +1,4 @@
-import { Link, currentPath } from "/src/router";
+import { Link, current } from "/src/router";
 import { use, Each, type Signal } from "kiaao";
 
 type MenuItem = {
@@ -16,7 +16,7 @@ const menus = use<MenuItem[]>([
 
 function MenuLink({ item }: { item: Signal<MenuItem> }) {
   const itemPath = use(item, () => item().path);
-  const isActive = use(currentPath, () => (currentPath() === item().path ? "aa" : ""));
+  const isActive = use(current, () => (current() === item().path ? "aa" : ""));
   const itemTitle = use(item, () => item().title);
 
   return (
