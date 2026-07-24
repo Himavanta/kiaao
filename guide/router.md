@@ -89,6 +89,9 @@ const routes = {
 - 叶子路由不收 `RouterView` ——它们是末端组件。
 - 目录对象渲染 `""` layout，layout 收到 `RouterView` 用于渲染子路由。
 
+> **Every layout MUST render `RouterView` in its JSX output**, or child routes are silently swallowed. The framework does not inject it automatically.
+> **每层 `""` layout 必须在 JSX 中渲染 `RouterView`**，否则子路由不会出现。框架不会自动注入。
+
 ---
 
 ## Router / 顶级路由组件
@@ -241,6 +244,50 @@ const { push } = createRouter({
 
 ---
 
+## Lazy Routes / 懒加载路由
+
+Use `lazy()` to code-split route components. Layouts and leaf components can both be lazy. The router works with lazy components the same as synchronous ones — `RouterView` injection and signal reactivity behave identically.
+
+使用 `lazy()` 对路由组件进行代码分割。layout 和叶子组件都可以懒加载。路由对懒加载组件和同步组件的处理方式完全相同——`RouterView` 注入和信号响应行为一致。
+
+```jsx
+import { lazy } from "kiaao";
+import { createRouter } from "kiaao/router";
+
+const routes = {
+  "": lazy(() => import("./layouts/RootLayout")),
+  dashboard: {
+    "": lazy(() => import("./layouts/DashboardLayout")),
+    users: lazy(() => import("./pages/UsersPage")),
+    settings: lazy(() => import("./pages/SettingsPage")),
+  },
+};
+```
+
+Lazy layouts receive `RouterView` as a prop just like synchronous ones:
+
+懒加载 layout 像同步组件一样通过 prop 接收 `RouterView`：
+
+```jsx
+// ./layouts/DashboardLayout.tsx
+export default function ({ RouterView }) {
+  return (
+    <section>
+      <Sidebar />
+      <main>
+        <RouterView />
+      </main>
+    </section>
+  );
+}
+```
+
+The initial page load only downloads the components needed for the current route. Navigating to a new route triggers a fetch for that route's component bundle.
+
+首次页面加载只下载当前路由所需的组件。导航到新路由时按需获取对应组件包。
+
+---
+
 ## Nested Routes Example / 嵌套路由完整示例
 
 ```jsx
@@ -280,9 +327,7 @@ function DemoLayout({ RouterView }) {
   );
 }
 
-function App() {
-  return <Router />;
-}
+createApp(Router).mount("#app");
 ```
 
 When navigating:
