@@ -55,15 +55,17 @@ export function createRouterGroup(options: RouterGroupFactoryOptions): Component
 
   return function RouteGroupComponent(_props, _context): HResult {
     // 每次调用都创建新的 RouterView，闭包捕获 `others` 与 `base`
-    const RouterView: ComponentFunction = (viewProps, _viewContext): HResult => {
+    const RouterView: ComponentFunction = (viewProps, viewContext): HResult => {
       const segment = use(current, () => extractSegment(current(), base));
       // children 可能为单个函数（normalizeChildren 后）或函数数组，都兼容
       const children = viewProps?.children;
       const fallback = Array.isArray(children)
         ? children[0]
         : (children as (() => unknown) | undefined);
-      // eslint-disable-next-line typescript/no-explicit-any
-      return h(Case as any, { value: segment }, others, fallback);
+      // 直接调用 Case 绕过 h() 的 props 严格检查；
+      // viewContext 让 anchor 归入 RouterView 自己的 owner。
+      const caseChildren = [others, fallback] as Parameters<typeof Case>[0]["children"];
+      return Case({ value: segment, children: caseChildren }, viewContext);
     };
 
     return h(IndexLayout, { RouterView });

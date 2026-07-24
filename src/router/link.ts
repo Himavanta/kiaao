@@ -29,9 +29,8 @@ export function createRouterLink(push: (path: string) => Promise<void>): Compone
   return function Link(props: RouterLinkProps): ReturnType<typeof h> {
     const { to, children, onClick: userOnClick, ...rest } = props;
 
-    // eslint-disable-next-line typescript/no-explicit-any
     return h(
-      "a" as any,
+      "a",
       {
         ...rest,
         href: resolveLinkTarget(to),

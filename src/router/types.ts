@@ -93,6 +93,14 @@ export interface RouterLinkProps {
 // ── 内部辅助类型 ──────────────────────────────────────
 
 /**
+ * runGuard 的返回类型。
+ *
+ * - ok: true 表示守卫放行或返回重定向目标，target / next 是下一次迭代值；
+ * - ok: false 表示守卫未通过（throw / reject 或重定向超限），调用方按 navigate 模式处理。
+ */
+export type GuardResult = { ok: true; target: string; next: number } | { ok: false };
+
+/**
  * RouteGroup 的 props。
  *
  * 不导出，仅作为内部工厂实现参考。
