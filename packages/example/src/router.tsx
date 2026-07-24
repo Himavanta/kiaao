@@ -20,45 +20,23 @@ const { Router, Link, push, current, search } = createRouter({
 
 export { Router, Link, push, current, search };
 
+// ── 导航数据（与路由解耦，通过 path 关联）─────────────
+
 export interface MainNavItem {
   title?: string;
   icon?: string;
   path: string;
-  component: ReturnType<typeof lazy>;
 }
 
-export const mainNavs: Array<MainNavItem> = [
-  {
-    title: "探索",
-    icon: "tabler:fountain-filled",
-    path: "expore",
-    component: lazy(() => import("./components/expore")),
-  },
-  {
-    title: "工作室",
-    icon: "solar:accumulator-bold-duotone",
-    path: "apps",
-    component: lazy(() => import("./components/dashbord")),
-  },
-  {
-    title: "知识库",
-    icon: "material-symbols:book-5",
-    path: "dataset",
-    component: lazy(() => import("./test/group-motion.tsx")),
-  },
-  {
-    title: "工具",
-    icon: "icon-park-twotone:toolkit",
-    path: "tools",
-    component: lazy(() => import("./test/motion.tsx")),
-  },
+export const mainNavs: MainNavItem[] = [
+  { title: "探索", icon: "tabler:fountain-filled", path: "expore" },
+  { title: "工作室", icon: "solar:accumulator-bold-duotone", path: "apps" },
+  { title: "知识库", icon: "material-symbols:book-5", path: "dataset" },
+  { title: "工具", icon: "icon-park-twotone:toolkit", path: "tools" },
 ];
 
-export const mainNavPlugin: MainNavItem = {
+export const bottomNav: MainNavItem = {
   title: "插件",
   icon: "mingcute:plugin-2-line",
   path: "plugins",
-  component: lazy(() => import("./components/expore")),
 };
-
-export const indexRoutes: MainNavItem[] = [...mainNavs, mainNavPlugin];

@@ -1,4 +1,4 @@
-import { Link, current, mainNavs, mainNavPlugin, type MainNavItem } from "/src/router";
+import { Link, current, mainNavs, bottomNav, type MainNavItem } from "/src/router";
 import { cns } from "/src/ui/cns";
 import Icon from "/src/ui/icon";
 import { use, Each, type Signal } from "kiaao";
@@ -8,7 +8,6 @@ import { UserCard } from "./user";
 const cn = cns.bind(use);
 
 const menus = use<MainNavItem[]>(mainNavs);
-const navPlugin = use(mainNavPlugin);
 
 function Logo() {
   return (
@@ -56,7 +55,7 @@ export default function () {
       </section>
 
       <section class="flex items-center gap-4">
-        <MenuItem item={navPlugin as unknown as Signal<MainNavItem>} />
+        <MenuItem item={use(bottomNav)} />
         <UserCard />
       </section>
     </nav>
