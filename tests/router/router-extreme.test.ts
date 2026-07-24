@@ -7,9 +7,13 @@ import { setAdapter } from "../../src/adapter/index.ts";
 import { h, use } from "../../src/core/index.ts";
 import { triggerMount } from "../../src/core/index.ts";
 import { browserAdapter } from "../../src/dom/index.ts";
+import { lazy } from "../../src/dom/index.ts";
 import { createRouter } from "../../src/router/index.ts";
 
 setAdapter(browserAdapter);
+
+const getText = (root: HTMLElement, sel: string) => root.querySelector(sel)?.textContent ?? "";
+const nextMicrotask = () => new Promise<void>((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   window.history.pushState(null, "", "/");
@@ -325,5 +329,178 @@ describe("等价行为补充", () => {
     mountRoot([...h(Router).nodes]);
     await push("/crash");
     expect(true).toBe(true);
+  });
+});
+
+// ── RouterView fallback 极端测试 ──────────────────────
+
+describe("RouterView fallback", () => {
+  test("无匹配路由时渲染 fallback", async () => {
+    const Fallback = () => h("div", { id: "fb" }, "404");
+    const Layout = (p: any) =>
+      h(
+        "div",
+        { id: "root" },
+        h(p.RouterView, null, () => Fallback()),
+      );
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(getText(root, "#fb")).toBe("404");
+  });
+
+  test("多 children 只渲染第一个作为 fallback", async () => {
+    const FB1 = () => h("span", { id: "fb1" }, "a");
+    const FB2 = () => h("span", { id: "fb2" }, "b");
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(
+          p.RouterView,
+          null,
+          () => FB1(),
+          () => FB2(),
+        ),
+      );
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(getText(root, "#fb1")).toBe("a");
+    expect(root.querySelector("#fb2")).toBeNull();
+  });
+
+  test("fallback 不是函数时忽略", async () => {
+    const Layout = (p: any) =>
+      h("div", { id: "root" }, h(p.RouterView, null, "不渲染".repeat(1) as any));
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(root.querySelector("#root")?.textContent?.trim()).toBe("");
+  });
+
+  test("fallback 为 null/undefined 时不报错", () => {
+    const Layout = (p: any) => h("div", null, h(p.RouterView, null, null as any));
+    const { Router } = createRouter({ routes: { "": Layout } });
+    expect(() => mountRoot([...h(Router).nodes])).not.toThrow();
+  });
+
+  test("路由匹配时不渲染 fallback", async () => {
+    const Fallback = () => h("div", { id: "fb" }, "404");
+    const Page = () => h("div", { id: "page" }, "hello");
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(p.RouterView, null, () => Fallback()),
+      );
+    const { Router, push } = createRouter({
+      routes: { "": Layout, page: Page },
+    });
+    const root = mountRoot([...h(Router).nodes]);
+    await push("/page");
+    expect(root.querySelector("#page")?.textContent).toBe("hello");
+    expect(root.querySelector("#fb")).toBeNull();
+  });
+
+  test("深层嵌套 layout 各自有独立 fallback", async () => {
+    const FB1 = () => h("div", { id: "fb1" }, "外层404");
+    const FB2 = () => h("div", { id: "fb2" }, "内层404");
+    const InnerPage = () => h("div", { id: "inner" }, "页面");
+    const InnerLayout = (p: any) =>
+      h(
+        "div",
+        { id: "inner-layout" },
+        h(p.RouterView, null, () => FB2()),
+      );
+    const OuterLayout = (p: any) =>
+      h(
+        "div",
+        { id: "outer-layout" },
+        h(p.RouterView, null, () => FB1()),
+      );
+    const { Router, push } = createRouter({
+      routes: { "": OuterLayout, section: { "": InnerLayout, page: InnerPage } },
+    });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(getText(root, "#fb1")).toBe("外层404");
+    await push("/section");
+    expect(getText(root, "#fb2")).toBe("内层404");
+    expect(root.querySelector("#fb1")).toBeNull();
+  });
+
+  test("路由间快速切换时 fallback 正确切换", async () => {
+    const FB = () => h("div", { id: "fb" }, "404");
+    const Page = () => h("div", { id: "page" }, "ok");
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(p.RouterView, null, () => FB()),
+      );
+    const { Router, push } = createRouter({
+      routes: { "": Layout, a: Page, b: Page, c: Page },
+    });
+    const root = mountRoot([...h(Router).nodes]);
+    await push("/a");
+    expect(root.querySelector("#page")).not.toBeNull();
+    await push("/bad");
+    expect(getText(root, "#fb")).toBe("404");
+    await push("/b");
+    expect(root.querySelector("#page")).not.toBeNull();
+    expect(root.querySelector("#fb")).toBeNull();
+    await push("/oops");
+    expect(getText(root, "#fb")).toBe("404");
+  });
+
+  test("fallback 使用信号驱动内容", () => {
+    const msg = use("加载中");
+    const FB = () => h("span", { id: "fb" }, msg);
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(p.RouterView, null, () => FB()),
+      );
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(getText(root, "#fb")).toBe("加载中");
+    msg("出错啦");
+    expect(getText(root, "#fb")).toBe("出错啦");
+  });
+
+  test("fallback 内部不应收到 RouterView", () => {
+    let receivedRV = false;
+    const FB = (p: any) => {
+      if (p && "RouterView" in p) receivedRV = true;
+      return h("div", { id: "fb" }, "404");
+    };
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(p.RouterView, null, () => FB({})),
+      );
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    expect(getText(root, "#fb")).toBe("404");
+    expect(receivedRV).toBe(false);
+  });
+
+  test("fallback 为 lazy 组件", async () => {
+    let loaded = false;
+    const FBLazy = lazy(async () => {
+      loaded = true;
+      return () => h("div", { id: "fb" }, "懒404");
+    });
+    const Layout = (p: any) =>
+      h(
+        "div",
+        null,
+        h(p.RouterView, null, () => h(FBLazy)),
+      );
+    const { Router } = createRouter({ routes: { "": Layout } });
+    const root = mountRoot([...h(Router).nodes]);
+    await nextMicrotask();
+    await nextMicrotask();
+    expect(loaded).toBe(true);
+    expect(getText(root, "#fb")).toBe("懒404");
   });
 });
