@@ -20,7 +20,7 @@ export default defineConfig({
       assetFileNames: "assets/[hash][extname]",
       chunkFileNames: "assets/[hash].js",
     },
-    deps: { skipNodeModulesBundle: true },
+    deps: { neverBundle: true },
     // minify: true,
   },
   lint: {
