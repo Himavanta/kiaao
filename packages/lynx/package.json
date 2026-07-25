@@ -14,7 +14,7 @@
     "kiaao": "workspace:*"
   },
   "devDependencies": {
-    "@lynx-js/types": "4.0.0",
+    "@lynx-js/types": "4.1.0",
     "@rspack/core": "^2.1.5",
     "@rspack/dev-server": "^2.1.0",
     "typescript": "~7.0.2"
