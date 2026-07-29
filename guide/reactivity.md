@@ -263,31 +263,44 @@ kiaao does not provide a dedicated readonly signal type. Instead, a signal can b
 kiaao 并不提供专门的只读信号类型。相反，可以通过一个“计算函数忽略 setter 参数”的派生信号来对外表现只读。外部写入成为空操作，但框架仍可控制底层源信号。
 
 ```js
-// 内部维护可写的源信号（仅认证模块可写）
+// internal writable source — owned by the auth module
+// 内部可写源信号 — 由认证模块持有
 const _user = use(null);
 
-// 对外暴露“逻辑只读”的派生信号
+// logically read-only wrapper — exposed to consumers
+// 逻辑只读包装 — 对消费者暴露
 const currentUser = use(_user, () => _user());
 
-// 唯一修改路径：在框架侧操作源信号
+// sole write path — only the auth module touches the source
+// 唯一写入路径 — 仅认证模块操作源信号
 auth.onLogin((user) => _user(user));
 auth.onLogout(() => _user(null));
 
-// 消费者侧：
+// consumer side — read-only usage
+// 消费者侧 — 只读使用
 function Header() {
   const user = currentUser();
   return <header>{user ? user.name : "Sign in"}</header>;
 }
+```
 
-// 写入无效：
-currentUser({ name: "Alice" }); // no-op，信号值不变
+**Note / 注意**：Writes through `currentUser(...)` are no-ops. The signal value never changes from outside writes — only the auth module's writes to `_user` take effect.
+
+**通过 `currentUser(...)` 写入是空操作。信号值不会因外部写入而改变——只有认证模块对 `_user` 的写入会生效。**
+
+```js
+currentUser({ name: "Alice" }); // no-op, value unchanged / 空操作，值不变
 ```
 
 **Why a derivation and not a wrapper class? / 为什么是派生而不是包装类**
 
-- Same `Signal<T>` API everywhere — no special readonly type to learn. `Signal<T>` 语法一致，不需要学习额外的只读类型。
-- Writes are cheap: the derivation recomputes, sees the new argument ignored, and short-circuits via `===`. 写入开销小：派生重算后看到入参被忽略，通过 `===` 短路。
-- The "real" state lives in one place; consumers can read it, but only the owner of the source can mutate it. 真实状态集中在源信号一处，消费者可读，仅源信号的拥有者可写。
+- Same `Signal<T>` API everywhere — no special readonly type to learn.
+- Writes are cheap: the derivation recomputes, sees the new argument ignored, and short-circuits via `===`.
+- The "real" state lives in one place; consumers can read it, but only the owner of the source can mutate it.
+
+- `Signal<T>` 语法一致，不需要学习额外的只读类型。
+- 写入开销小：派生重算后看到入参被忽略，通过 `===` 短路。
+- 真实状态集中在源信号一处，消费者可读，仅源信号的拥有者可写。
 
 ## Cleanup / 清理
 

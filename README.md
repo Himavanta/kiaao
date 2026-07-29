@@ -61,8 +61,7 @@ function Counter() {
   );
 }
 
-const app = createApp(<Counter />);
-app.mount("#app");
+createApp(Counter).mount("#app");
 ```
 
 ---
@@ -95,6 +94,22 @@ console.log(nextCount()); // 6
 nextCount(100); // triggers recomputation, v is 100 / 触发重算，v 为 100
 console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，短路)
 ```
+
+---
+
+## AI Coding Agents / AI 编码助手
+
+kiaao provides an official skill compatible with the [Agent Skills](https://agentskills.io/) standard. When installed, AI coding agents such as Pi, Claude Code, Cursor, and Codex can correctly understand the kiaao API and generate code that follows the framework's conventions.
+
+kiaao 提供兼容 [Agent Skills](https://agentskills.io/) 标准的官方 skill。安装后，Pi、Claude Code、Cursor、Codex 等 AI 编码助手能正确理解 kiaao API，并生成符合框架约定的代码。
+
+```bash
+npx skills add Himavanta/kiaao
+```
+
+The skill is shipped from this repository and stays in sync with each kiaao release.
+
+skill 内容随 kiaao 版本同步更新。
 
 ---
 
