@@ -1,27 +1,8 @@
----
-name: kiaao
-description: Build reactive UIs with the kiaao framework — a pure-runtime, zero-virtual-DOM alternative to Solid, React, and Vue. Use when writing kiaao components, using `use()` to create `Signal<T>` state, using `<Show>`/`<Each>`/`<Case>` control flow, configuring JSX/TSX, working with kiaao lifecycle, router, SSR, motion, or any task mentioning kiaao.
-license: MIT
----
+# 反模式对照 / Anti-Patterns
 
-# kiaao
+kiaao 与 Solid 表面最像（显式响应式、组件只跑一次、`<Show>`/`<For>` 控制流），但 API 完全相反。React/Vue/Solid 三种框架的写法都不能直接套用：
 
-kiaao 是一个纯运行时、零虚拟 DOM 的响应式 UI 框架。
-
-## 何时应用此 skill
-
-出现以下任一信号时加载：
-
-- 导入路径含 `kiaao`，或代码使用 `use(`
-- 出现 `<Show>` / `<Each>` / `<Case>` 控制流组件
-- 涉及 kiaao 内置模块：router / motion / ssr / astro / lynx
-- 用户提到 kiaao、Signal、显式响应式
-
-## agent 视角关键提示
-
-**kiaao 与 Solid 表面最像（显式响应式、组件只跑一次、`<Show>`/`<For>` 控制流），但 API 完全相反。** React/Vue/Solid 三种框架的写法都不能直接套用：
-
-### ❌ Solid 思维（API 最像，最容易混淆）
+## ❌ Solid 思维（API 最像，最容易混淆）
 
 | 错（Solid 写法）                          | 对（kiaao 写法）                             |
 | ----------------------------------------- | -------------------------------------------- |
@@ -31,7 +12,7 @@ kiaao 是一个纯运行时、零虚拟 DOM 的响应式 UI 框架。
 | `<div>{count()}</div>` 模板调函数         | `<div>{count}</div>` 直接传引用              |
 | `<For each={items}>{(item) => ...}</For>` | `<Each items={items}>{(item) => ...}</Each>` |
 
-### ❌ React 思维
+## ❌ React 思维
 
 | 错（React 写法）               | 对（kiaao 写法）                   |
 | ------------------------------ | ---------------------------------- |
@@ -42,13 +23,15 @@ kiaao 是一个纯运行时、零虚拟 DOM 的响应式 UI 框架。
 
 **为什么**：kiaao 组件只执行一次。`{cond && ...}` 和 `{items.map(...)}` 只在首次渲染时计算一次，之后**不会响应信号变化**——视图会"卡住"。`<Show>`/`<Each>`/`<Case>` 内部订阅依赖信号，依赖变化时框架精确增删/移动 DOM 节点。
 
-### ❌ Vue 思维
+## ❌ Vue 思维
 
 | 错（Vue 写法）                  | 对（kiaao 写法）                   |
 | ------------------------------- | ---------------------------------- |
 | `const r = ref(0); r.value = 5` | `const s = use(0); s(5)`           |
 | `computed(() => ...)`           | `use(dep, () => ...)` 派生         |
 | `watch(src, cb)`                | `use(dep, () => ...)` 无返回值派生 |
+
+## 关键术语 / Key Terminology
 
 回答时优先用 kiaao 的术语和机制：
 
@@ -60,24 +43,3 @@ kiaao 是一个纯运行时、零虚拟 DOM 的响应式 UI 框架。
 - **零虚拟 DOM**：DOM 精确更新，不做 diff/patch
 - **没有"只读信号"**：所有信号都可写，"逻辑只读"通过派生包装实现
 - **状态值在模板里直接传引用**：`{count}` 而非 `{count()}`
-
-## 详细文档（按需查阅）
-
-**完整示例与配置（首次写 kiaao 代码时必读）：**
-
-- [README — 最小可运行应用、import、mount](README.md)
-- [JSX/TSX 配置 — jsxImportSource、tsconfig、构建工具](guide/jsx-setup.md)
-
-**具体 API（按主题）：**
-
-- [响应式系统 — Signal、use()、派生、isUse、toValue、逻辑只读](guide/reactivity.md)
-- [组件 — 组件函数、props、children、Owner](guide/components.md)
-- [控制流 — Show、Each、Case](guide/control-flow.md)
-- [生命周期 — onMount、onUnmount、onUpdate](guide/lifecycle.md)
-- [路由 — Router、RouterView、路由匹配](guide/router.md)
-- [SSR — 字符串渲染、水合](guide/ssr.md)
-- [动效 — 动效指令、from、to、exit](guide/motion.md)
-- [指令 — 自定义指令](guide/directives.md)
-- [属性处理 — class、style、event、attribute](guide/attributes.md)
-
-**写代码前必读**：直接 `read` README + guide/jsx-setup.md。其他 API 按需查对应 guide。

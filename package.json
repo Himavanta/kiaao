@@ -20,7 +20,10 @@
     "url": "git+https://github.com/Himavanta/kiaao.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "guide",
+    "agent",
+    "README.md"
   ],
   "type": "module",
   "exports": {
