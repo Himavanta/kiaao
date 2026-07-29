@@ -65,19 +65,19 @@ kiaao 是一个纯运行时、零虚拟 DOM 的响应式 UI 框架。
 
 **完整示例与配置（首次写 kiaao 代码时必读）：**
 
-- [README → Quick Start](https://github.com/Himavanta/kiaao/blob/main/README.md) — 最小可运行应用、import、mount
-- [guide/jsx-setup.md](https://github.com/Himavanta/kiaao/blob/main/guide/jsx-setup.md) — JSX/TSX 配置：jsxImportSource、tsconfig、构建工具
+- [README — 最小可运行应用、import、mount](README.md)
+- [JSX/TSX 配置 — jsxImportSource、tsconfig、构建工具](guide/jsx-setup.md)
 
 **具体 API（按主题）：**
 
-- [guide/reactivity.md](https://github.com/Himavanta/kiaao/blob/main/guide/reactivity.md) — Signal、use()、use 三种形式、context.use、isUse、toValue、逻辑只读
-- [guide/components.md](https://github.com/Himavanta/kiaao/blob/main/guide/components.md) — 组件函数、props、children、Owner
-- [guide/control-flow.md](https://github.com/Himavanta/kiaao/blob/main/guide/control-flow.md) — Show、Each、Case
-- [guide/lifecycle.md](https://github.com/Himavanta/kiaao/blob/main/guide/lifecycle.md) — onMount、onUnmount、onUpdate
-- [guide/router.md](https://github.com/Himavanta/kiaao/blob/main/guide/router.md) — Router、RouterView、路由匹配
-- [guide/ssr.md](https://github.com/Himavanta/kiaao/blob/main/guide/ssr.md) — SSR、字符串渲染、水合
-- [guide/motion.md](https://github.com/Himavanta/kiaao/blob/main/guide/motion.md) — 动效、from、to、exit
-- [guide/directives.md](https://github.com/Himavanta/kiaao/blob/main/guide/directives.md) — 自定义指令
-- [guide/attributes.md](https://github.com/Himavanta/kiaao/blob/main/guide/attributes.md) — class、style、event、attribute
+- [响应式系统 — Signal、use()、派生、isUse、toValue、逻辑只读](guide/reactivity.md)
+- [组件 — 组件函数、props、children、Owner](guide/components.md)
+- [控制流 — Show、Each、Case](guide/control-flow.md)
+- [生命周期 — onMount、onUnmount、onUpdate](guide/lifecycle.md)
+- [路由 — Router、RouterView、路由匹配](guide/router.md)
+- [SSR — 字符串渲染、水合](guide/ssr.md)
+- [动效 — 动效指令、from、to、exit](guide/motion.md)
+- [指令 — 自定义指令](guide/directives.md)
+- [属性处理 — class、style、event、attribute](guide/attributes.md)
 
-**写代码前必读**：先 web_fetch README Quick Start，再读 jsx-setup.md。其他 API 按需查对应 guide。
+**写代码前必读**：直接 `read` README + guide/jsx-setup.md。其他 API 按需查对应 guide。
