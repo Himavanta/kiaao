@@ -98,6 +98,10 @@ Keys must be strings. The value is converted to a string and looked up in the ta
 
 `<Each>` 从 `MaybeSignal<T[]>` 渲染列表。渲染组件接收 `{ item: Signal<T>, index: number }` 作为 props。第二个子元素（可选）是空状态 fallback 组件。
 
+`item` is a writable definition signal. The component can write to it directly for local UI changes (expand, toggle, inline editing) without updating the source array. The write propagates through kiaao's reactive chain normally. For changes that should persist in the data, update the source array signal instead.
+
+`item` 是可写的定义信号。组件可以直接写入它来实现局部 UI 变更（展开、切换、行内编辑），无需更新源数组。写入会正常触发 kiaao 的响应式链路。需要持久化的数据变更则应更新源数组信号。
+
 ```jsx
 function ItemRow({ item, index }: { item: Signal<string>; index: number }) {
   return <li>{index}: {item()}</li>;
