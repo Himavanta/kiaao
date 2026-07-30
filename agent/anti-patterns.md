@@ -4,13 +4,13 @@ kiaao 与 Solid 表面最像（显式响应式、组件只跑一次、`<Show>`/`
 
 ## ❌ Solid 思维（API 最像，最容易混淆）
 
-| 错（Solid 写法）                          | 对（kiaao 写法）                             |
-| ----------------------------------------- | -------------------------------------------- |
-| `const [get, set] = createSignal(0)`      | `const s = use(0)`（单函数读写一体）         |
-| `set(x)` 赋值                             | `s(x)` 同一函数读写                          |
-| `createEffect(() => ...)` 副作用          | `use(dep, () => ...)` 无返回值派生           |
-| `<div>{count()}</div>` 模板调函数         | `<div>{count}</div>` 直接传引用              |
-| `<For each={items}>{(item) => ...}</For>` | `<Each items={items}>{(item) => ...}</Each>` |
+| 错（Solid 写法）                          | 对（kiaao 写法）                                 |
+| ----------------------------------------- | ------------------------------------------------ |
+| `const [get, set] = createSignal(0)`      | `const s = use(0)`（单函数读写一体）             |
+| `set(x)` 赋值                             | `s(x)` 同一函数读写                              |
+| `createEffect(() => ...)` 副作用          | `use(dep, () => ...)` 无返回值派生               |
+| `<div>{count()}</div>` 模板调函数         | `<div>{count}</div>` 直接传引用                  |
+| `<For each={items}>{(item) => ...}</For>` | `<Each value={items}>{({ item }) => ...}</Each>` |
 
 ## ❌ React 思维
 
@@ -19,7 +19,7 @@ kiaao 与 Solid 表面最像（显式响应式、组件只跑一次、`<Show>`/`
 | `useState(0)` 返回 `[s, setS]` | `use(0)` 返回单函数                |
 | `useEffect(() => ...)` 副作用  | `use(dep, () => ...)` 无返回值派生 |
 | `condition && <div>`           | `<Show value={condition}>`         |
-| `items.map(renderItem)`        | `<Each items={items}>`             |
+| `items.map(renderItem)`        | `<Each value={items}>`             |
 
 **为什么**：kiaao 组件只执行一次。`{cond && ...}` 和 `{items.map(...)}` 只在首次渲染时计算一次，之后**不会响应信号变化**——视图会"卡住"。`<Show>`/`<Each>`/`<Case>` 内部订阅依赖信号，依赖变化时框架精确增删/移动 DOM 节点。
 
@@ -69,7 +69,7 @@ function App() {
   const items = use(["a", "b"]);
   return (
     <ul>
-      <Each value={items}>{(it) => <li>{it}</li>}</Each>
+      <Each value={items}>{({ item: it }) => <li>{it}</li>}</Each>
     </ul>
   );
 }

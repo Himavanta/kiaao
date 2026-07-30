@@ -199,7 +199,7 @@ function Comp(_, context) {
   return (
     <ul>
       <Each value={visibleItems} keyed={keyFn}>
-        {(item) => (
+        {({ item }) => (
           <GroupMotion
             key={keyFn(item())}
             from={{ opacity: 0, transform: "translateX(-20px)" }}

@@ -111,7 +111,7 @@ function App({ items }: { items: string[] }, { use }: Context) {
     <div>
       <h1>Count: {count}</h1>
       <ul>
-        <Each value={items}>{(item) => <li>{item}</li>}</Each>
+        <Each value={items}>{({ item }) => <li>{item}</li>}</Each>
       </ul>
     </div>
   );
