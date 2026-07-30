@@ -1,18 +1,27 @@
 # Control Flow / 控制流
 
-In kiaao, conditional rendering and list rendering are achieved through the built-in components `<Show>`, `<Case>`, and `<Each>`. They are framework primitives that integrate with the Owner tree for automatic lifecycle management — no wrapper elements, no manual cleanup. Branches are **lazy**: component functions are only called when their branch becomes active.
+In kiaao, conditional rendering and list rendering are achieved through the built-in components `<Show>`, `<Case>`, and `<Each>`. They are framework primitives that integrate with the Owner tree for automatic lifecycle management — no wrapper elements, no manual cleanup. Branches are **lazy**: each child function is a full component, receiving `(props, context)` like any other component, and is only called when its branch becomes active.
 
-在 kiaao 中，条件渲染和列表渲染通过内置组件 `<Show>`、`<Case>` 和 `<Each>` 实现。它们是框架原语，与 Owner 树集成以实现自动生命周期管理——无需包裹元素，无需手动清理。分支是**惰性的**：只有当分支变为活动状态时，组件函数才会被调用。
+在 kiaao 中，条件渲染和列表渲染通过内置组件 `<Show>`、`<Case>` 和 `<Each>` 实现。它们是框架原语，与 Owner 树集成以实现自动生命周期管理——无需包裹元素，无需手动清理。分支是**惰性的**：每个子函数都是一个完整的组件，像其他组件一样接收 `(props, context)` 两个参数，仅在其分支变为活动状态时被调用。
 
 ---
 
 ## `<Show>` — Conditional Rendering / 条件渲染
 
-`<Show>` conditionally renders one of two branches based on a signal value. `value` accepts `MaybeSignal<T>` — it does **not** accept a thunk `() => T`. Children must be functions that return components — the function is only called when that branch is active.
+`<Show>` conditionally renders one of two branches based on a signal value. `value` accepts `MaybeSignal<T>` — it does **not** accept a thunk `() => T`. Pass component functions directly, or wrap in an arrow to pass extra props.
 
-`<Show>` 根据一个信号值来条件渲染两个分支中的一个。`value` 接收 `MaybeSignal<T>`——**不接受** thunk `() => T`。子元素必须是返回组件的函数——只有当该分支处于活动状态时，函数才会被调用。
+`<Show>` 根据一个信号值来条件渲染两个分支中的一个。`value` 接收 `MaybeSignal<T>`——**不接受** thunk `() => T`。直接传入组件函数，或用箭头包装传递额外 props。
 
 ```jsx
+function Dashboard(_, { onMount }: Context) {
+  onMount(() => console.log("dashboard mounted"));
+  return <div>Dashboard</div>;
+}
+
+function Login() {
+  return <div>Please log in</div>;
+}
+
 function App() {
   const loggedIn = use(false);
 
@@ -20,8 +29,8 @@ function App() {
     <div>
       <button onClick={() => loggedIn(!loggedIn())}>Toggle</button>
       <Show value={loggedIn}>
-        {() => <Dashboard />}
-        {() => <Login />}
+        {Dashboard}
+        {Login}
       </Show>
     </div>
   );
@@ -42,11 +51,19 @@ function App() {
 
 ## `<Case>` — Multi-Branch Matching / 多分支匹配
 
-`<Case>` renders one of several branches based on a key. `value` accepts `MaybeSignal<string>`. The first child is a mapping table (object), where each value is a **function that returns a component**. The second child (optional) is a fallback function.
+`<Case>` renders one of several branches based on a key. `value` accepts `MaybeSignal<string>`. The first child is a mapping table (object) whose values are components. The second child (optional) is a fallback component.
 
-`<Case>` 基于一个 key 来渲染多个分支中的一个。`value` 接收 `MaybeSignal<string>`。第一个子元素是一个映射表（对象），其中每个值是一个**返回组件的函数**。第二个子元素（可选）是 fallback 函数。
+`<Case>` 基于一个 key 来渲染多个分支中的一个。`value` 接收 `MaybeSignal<string>`。第一个子元素是一个映射表（对象），其值都是组件。第二个子元素（可选）是 fallback 组件。
 
 ```jsx
+function OverviewTab() {
+  return <div>Overview</div>;
+}
+
+function NotFound() {
+  return <div>Tab not found</div>;
+}
+
 function App() {
   const tab = use("overview");
 
@@ -55,16 +72,14 @@ function App() {
       <nav>
         <button onClick={() => tab("overview")}>Overview</button>
         <button onClick={() => tab("settings")}>Settings</button>
-        <button onClick={() => tab("billing")}>Billing</button>
       </nav>
 
       <Case value={tab}>
         {{
-          overview: () => <OverviewTab />,
-          settings: () => <SettingsTab />,
-          billing: () => <BillingTab />,
+          overview: OverviewTab,
+          settings: (props, ctx) => <SettingsTab />,
         }}
-        {() => <NotFound />}
+        {NotFound}
       </Case>
     </div>
   );
@@ -79,37 +94,55 @@ Keys must be strings. The value is converted to a string and looked up in the ta
 
 ## `<Each>` — List Rendering / 列表渲染
 
-`<Each>` renders a list of items from a signal. `value` accepts `MaybeSignal<T[]>`. The first child is a render function `(item: Signal<T>, index: number) => HResult`. The second child (optional) is an empty-state fallback **function**.
+`<Each>` renders a list from `MaybeSignal<T[]>`. The render component receives `{ item: Signal<T>, index: number }` as props. The second child (optional) is an empty-state fallback component.
 
-`<Each>` 从信号渲染一个列表。`value` 接收 `MaybeSignal<T[]>`。第一个子元素是渲染函数 `(item: Signal<T>, index: number) => HResult`。第二个子元素（可选）是空状态 fallback **函数**。
+`<Each>` 从 `MaybeSignal<T[]>` 渲染列表。渲染组件接收 `{ item: Signal<T>, index: number }` 作为 props。第二个子元素（可选）是空状态 fallback 组件。
 
 ```jsx
+function ItemRow({ item, index }: { item: Signal<string>; index: number }) {
+  return <li>{index}: {item()}</li>;
+}
+
 function App() {
   const items = use(["apple", "banana", "cherry"]);
 
   return (
     <ul>
       <Each value={items}>
-        {(item, index) => (
-          <li>
-            {index}: {item}
-          </li>
-        )}
+        {ItemRow}
       </Each>
     </ul>
   );
 }
 ```
 
-For empty state, provide a fallback function:
+Or destructure inline when you don't need a separate component:
 
-对于空状态，提供一个 fallback 函数：
+或者不需要独立组件时在内联解构：
 
 ```jsx
 <Each value={items}>
-  {(item) => <TodoItem data={item} />}
-  {() => <EmptyList />}
+  {({ item, index }) => (
+    <li>
+      {index}: {item}
+    </li>
+  )}
 </Each>
+```
+
+For empty state, provide a fallback component:
+
+对于空状态，提供一个 fallback 组件：
+
+```jsx
+function EmptyList() {
+  return <p>No items</p>;
+}
+
+<Each value={items}>
+  {ItemRow}
+  {EmptyList}
+</Each>;
 ```
 
 ### `keyed` — Stable Identity / 稳定身份标识
@@ -118,9 +151,9 @@ An optional `keyed` function provides a stable identity for each item. When the 
 
 可选的 `keyed` 函数为每个条目提供稳定标识。当数组变化时，`<Each>` 通过 key 进行 diff——匹配 key 的现有 DOM 节点被保留并移动位置，仅增删条目创建或销毁节点。
 
-`keyed` receives the raw item value `T` (the same type as the array elements), **not** `Signal<T>`. This is different from the render function, whose first parameter is `Signal<T>`.
+`keyed` receives the raw item value `T`, **not** `Signal<T>`. This is different from the render component which receives `{ item: Signal<T>, index: number }`.
 
-`keyed` 接收原始值 `T`（与数组元素类型一致），**不是** `Signal<T>`。这与渲染函数不同——渲染函数的第一个参数是 `Signal<T>`。
+`keyed` 接收原始值 `T`，**不是** `Signal<T>`。这与渲染组件不同。
 
 ```jsx
 const users = use([
@@ -131,45 +164,19 @@ const users = use([
 <Each value={users} keyed={(user) => user.id}>
   {/*       keyed: user is { id, name } — access .id directly */}
   {/*       keyed: user 是 { id, name } —— 直接 .id */}
-  {(user) => <UserCard data={user} />}
-  {/* render: user is Signal<{ id, name }> — use user() or {user} */}
-  {/* render: user 是 Signal<{ id, name }> —— 用 user() 或 {user} */}
+  {({ item: user }) => <UserCard data={user} />}
+  {/* render: user is Signal<{ id, name }> — use user() */}
+  {/* render: user 是 Signal<{ id, name }> —— 用 user() */}
 </Each>;
 ```
 
-**`keyed` 函数接收原始条目值，不是信号。如需读取信号，使用 `toValue`。**
-
 ---
 
-## Why Functions? / 为什么需要函数？
+## Why Components? / 为什么是组件？
 
-Control flow children must be functions so that component code is only executed when the branch becomes active. This means:
+Control flow children are components, not plain functions. This means each branch gets its own Owner and Context — just like any `<Foo />` tag. When a branch becomes inactive, its Owner is disposed, cleaning up all signals and lifecycle hooks created inside it. When it becomes active again, the component is called fresh.
 
-- Signals and lifecycle hooks inside a branch are only created when the branch is first rendered.
-- When switching away from a branch, the branch's Owner is disposed, cleaning up all its resources.
-- When switching back, the function is called again, creating a fresh instance.
-
-控制流子元素必须是函数，这样组件代码只会在分支变为活动状态时执行。这意味着：
-
-- 分支内的信号和生命周期钩子只在分支首次渲染时创建。
-- 当切换离开某个分支时，该分支的 Owner 被销毁，清理所有资源。
-- 当切换回来时，函数再次被调用，创建全新实例。
-
----
-
-## Comparison / 对比
-
-control flow was achieved through `when` and `each` attributes on native HTML elements. These have been replaced by `<Show>`, `<Case>`, and `<Each>` components. The new components:
-
-控制流通过原生 HTML 元素上的 `when` 和 `each` 属性实现。这些已被 `<Show>`、`<Case>` 和 `<Each>` 组件取代。新组件：
-
-- Have their own persistent Owner for self-contained lifecycle management.
-- Work correctly in SSR without special handling.
-- Produce no extra DOM wrapper nodes.
-
-- 拥有自己的持久 Owner，实现自包含的生命周期管理。
-- 在 SSR 中正确输出，无需特殊处理。
-- 不产生额外的 DOM 包裹节点。
+控制流子元素是组件，不是普通函数。这意味着每个分支拥有自己的 Owner 和 Context——就像任何 `<Foo />` 标签一样。当分支变为非活动状态时，其 Owner 被销毁，清理内部创建的所有信号和生命周期钩子。当它再次变为活动状态时，组件被全新调用。
 
 ---
 

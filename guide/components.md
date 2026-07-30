@@ -1,8 +1,8 @@
 # Components / 组件
 
-A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use`. Every component receives a `context` object as its second argument, injected by the framework — providing lifecycle methods, a reference to the component's own Owner, and a component-level `use` that automatically cleans up signals on unmount. Always use JSX (`<Foo />`) or `h()` to render components — direct function calls skip framework setup and won't have access to `context`.
+A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use`. Every component receives a `context` object as its second argument, injected by the framework — providing lifecycle methods, a reference to the component's own Owner, and a component-level `use` that automatically cleans up signals on unmount. The same applies to any function used as a JSX child — `{(props, ctx) => <div>...</div>}` is treated as a component with its own Owner and Context. Always use JSX (`<Foo />`) or `h()` to render components — direct function calls skip framework setup and won't have access to `context`.
 
-kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收由框架注入的 `context` 对象作为第二个参数，提供生命周期方法、对组件自身 Owner 的引用，以及在卸载时自动清理信号的组件级 `use`。始终使用 JSX（`<Foo />`）或 `h()` 渲染组件——直接函数调用会跳过框架初始化，无法访问 `context`。
+kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收由框架注入的 `context` 对象作为第二个参数，提供生命周期方法、对组件自身 Owner 的引用，以及在卸载时自动清理信号的组件级 `use`。同样适用于任何用作 JSX 子元素的函数——`{(props, ctx) => <div>...</div>}` 也被视为拥有自身 Owner 和 Context 的组件。始终使用 JSX（`<Foo />`）或 `h()` 渲染组件——直接函数调用会跳过框架初始化，无法访问 `context`。
 
 ## A Basic Component / 基本组件
 
