@@ -23,15 +23,15 @@ kiaao 文档随 kiaao npm 包一起发布，**不是随 skill 安装**。SKILL.m
 
 ### 标准路径（cwd 是项目根）
 
-- **README**（Quick Start、对比）：`./node_modules/kiaao/README.md`
-- **用户文档**（按主题）：`./node_modules/kiaao/guide/`
-- **agent 提示**（反模式、版本检查）：`./node_modules/kiaao/agent/`
+- **README**（Quick Start、对比）：`node_modules/kiaao/README.md`
+- **用户文档**（按主题）：`node_modules/kiaao/guide/`
+- **agent 提示**（反模式、TypeScript 陷阱）：`node_modules/kiaao/agent/`
 
 ### 找不到 kiaao 安装位置时
 
 按顺序尝试：
 
-1. 直接尝试 `./node_modules/kiaao/`（npm/pnpm 平铺安装）
+1. 直接尝试 `node_modules/kiaao/`（npm/pnpm 平铺安装）
 2. `find . -path '*/kiaao/package.json'` 搜索（monorepo / pnpm 严格模式）
 3. `pnpm why kiaao` 或 `npm ls kiaao`（包管理器自带）
 
@@ -41,19 +41,23 @@ kiaao 文档随 kiaao npm 包一起发布，**不是随 skill 安装**。SKILL.m
 
 ## 必读（首次写 kiaao 代码时按顺序读）
 
-1. `./node_modules/kiaao/README.md` — 最小可运行应用、import、mount
-2. `./node_modules/kiaao/guide/jsx-setup.md` — jsxImportSource、tsconfig、构建工具
-3. `./node_modules/kiaao/guide/components.md` — 组件函数、props、children、Owner
-4. `./node_modules/kiaao/guide/control-flow.md` — Show、Each、Case
-5. `./node_modules/kiaao/guide/reactivity.md` — Signal、use()、派生、isUse、toValue、逻辑只读
+1. 快速开始 — `node_modules/kiaao/README.md` — import、mount
+2. JSX/TSX 配置 — `node_modules/kiaao/guide/jsx-setup.md` — jsxImportSource、tsconfig、构建工具
+3. 响应式系统 — `node_modules/kiaao/guide/reactivity.md` — Signal、use()、派生、isUse、toValue、逻辑只读
+4. 组件 — `node_modules/kiaao/guide/components.md` — 组件函数、props、context、Owner
+5. 控制流 — `node_modules/kiaao/guide/control-flow.md` — Show、Each、Case
 
-**写代码前必读**：`./node_modules/kiaao/agent/anti-patterns.md`（Solid/React/Vue 反模式对照 + 关键术语）和 `./node_modules/kiaao/agent/typescript-pitfalls.md`（TS2502、noUnusedLocals、keyed 类型陷阱）
+**写代码前必读**：
+
+- 反模式对照 — `node_modules/kiaao/agent/anti-patterns.md`（Solid/React/Vue 对照 + 关键术语）
+- TypeScript 陷阱 — `node_modules/kiaao/agent/typescript-pitfalls.md`（TS2502、noUnusedLocals）
 
 ## 具体 API（按主题）
 
-- 生命周期：`./node_modules/kiaao/guide/lifecycle.md`
-- 路由：`./node_modules/kiaao/guide/router.md`
-- SSR：`./node_modules/kiaao/guide/ssr.md`
-- 动效：`./node_modules/kiaao/guide/motion.md`
-- 指令：`./node_modules/kiaao/guide/directives.md`
-- 属性处理：`./node_modules/kiaao/guide/attributes.md`
+- 生命周期：`node_modules/kiaao/guide/lifecycle.md`
+- 异步组件：`node_modules/kiaao/guide/async-components.md`
+- 路由：`node_modules/kiaao/guide/router.md`
+- SSR：`node_modules/kiaao/guide/ssr.md`
+- 动效：`node_modules/kiaao/guide/motion.md`
+- 指令：`node_modules/kiaao/guide/directives.md`
+- 属性处理：`node_modules/kiaao/guide/attributes.md`
