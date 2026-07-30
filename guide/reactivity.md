@@ -320,6 +320,52 @@ currentUser({ name: "Alice" }); // no-op, value unchanged / 空操作，值不�
 - 写入开销小：派生重算后看到入参被忽略，通过 `===` 短路。
 - 真实状态集中在源信号一处，消费者可读，仅源信号的拥有者可写。
 
+## Template Reactivity / 模板响应式
+
+In JSX, kiaao distinguishes reactive values from static ones by checking `isUse(value)`. A `Signal<T>` reference passed directly is reactive — kiaao subscribes to it and updates the corresponding DOM node when the signal changes. Anything else — a function call result, an arithmetic expression, a field access — is a plain value, treated as static and never updated.
+
+在 JSX 中，kiaao 通过 `isUse(value)` 区分响应式值与静态值。直接传入的 `Signal<T>` 引用是响应式的——kiaao 订阅它，并在信号变化时更新对应的 DOM 节点。其他任何形式——函数调用结果、算术表达式、字段访问——都是普通值，被视为静态值，永不更新。
+
+This means props and children must be signal references to stay reactive. For computed values, wrap the expression in a derivation:
+
+这意味着属性和子节点必须是信号引用才能保持响应。对于计算值，将表达式包装为派生：
+
+```jsx
+const count = use(1);
+
+// props — derive computed booleans / 属性 — 派生计算布尔值
+const isZero = use(count, () => count() === 0);
+<button disabled={isZero}>−1</button>
+
+// string concatenation — derive the full string / 字符串拼接 — 派生完整字符串
+const theme = use("light");
+const className = use(theme, () => `app theme-${theme()}`);
+<div class={className} />
+
+// children — pass the signal, not its value / 子节点 — 传信号引用，不传值
+<span>{count}</span>
+```
+
+### Field Derivation / 字段派生
+
+A signal holding an object must not be destructured in the component body — that produces plain values frozen at creation time. Instead, derive each field into its own signal:
+
+持有对象的信号不能在组件体内解构——那会产生冻结在创建时刻的普通值。相反，将每个字段派生为独立的信号：
+
+```js
+const todo = use({ text: "hello", done: false });
+
+const text = use(todo, () => todo().text);
+const done = use(todo, () => todo().done);
+
+<span>{text}</span>
+<input checked={done} />
+```
+
+Derived field signals stay in sync with the source object. Updating `todo` with a new object automatically updates `text` and `done`. Event handlers can read the latest value by calling the field signal.
+
+派生字段信号与源对象保持同步。用新对象更新 `todo` 会自动更新 `text` 和 `done`。事件处理中可以通过调用字段信号获取最新值。
+
 ## Cleanup / 清理
 
 Signals created with module-level `use` are global and persist for the lifetime of the application. Signals created with `context.use` are automatically cleaned up when the owning component unmounts. Each signal internally manages its own subscriptions and provides a unified `stop()` method that the framework calls during teardown.

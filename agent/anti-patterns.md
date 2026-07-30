@@ -83,6 +83,58 @@ function App() {
 | `computed(() => ...)`           | `use(dep, () => ...)` 派生         |
 | `watch(src, cb)`                | `use(dep, () => ...)` 无返回值派生 |
 
+## ❌ 模板内响应式 / Template Reactivity
+
+JSX 中只有直接传入 `Signal<T>` 引用才是响应式的。调用信号、表达式计算、字段访问都产生普通值，写入一次后永不更新。
+
+```jsx
+// ❌ count() 是 number，不是 Signal——属性一次性设置，不会响应变化
+const count = use(0);
+<button disabled={count() === 0}>−1</button>;
+```
+
+```jsx
+// ✅ 派生 boolean Signal，传入引用
+const isZero = use(count, () => count() === 0);
+<button disabled={isZero}>−1</button>;
+```
+
+```jsx
+// ❌ template literal 拼接了 Signal 函数本身（不是值），触发类型错误
+const theme = use("light");
+<div class={`app theme-${theme}`} />;
+```
+
+```jsx
+// ✅ 把完整拼接放在派生计算函数里
+const className = use(theme, () => `app theme-${theme()}`);
+<div class={className} />;
+```
+
+```jsx
+// ❌ todo().text 是 string，不是 Signal——子节点为静态文本
+const todo = use({ text: "hello", done: false });
+<span>{todo().text}</span>;
+```
+
+```jsx
+// ✅ 派生字段 Signal
+const text = use(todo, () => todo().text);
+const done = use(todo, () => todo().done);
+<span>{text}</span>
+<input checked={done} />
+```
+
+```jsx
+// ❌ 把 thunk 当 Signal 传——thunk 调用一次就变成 number，仍然不响应
+<span>{() => count()}</span>
+```
+
+```jsx
+// ✅ 传 Signal 引用
+<span>{count}</span>
+```
+
 ## 关键术语 / Key Terminology
 
 回答时优先用 kiaao 的术语和机制：

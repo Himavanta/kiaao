@@ -39,3 +39,24 @@ import { use, type Context } from "kiaao";
 const globalCount = use(0);
 function Counter(_, { use }: Context) { ... }
 ```
+
+## `_` 参数隐式 any
+
+组件函数用 `_` 作为第一个参数名时，即便没开 `strict`，oxlint 的类型检查也会报 TS7006：
+
+```tsx
+// ❌ TS7006: Parameter '_' implicitly has an 'any' type
+function Counter(_, { use }: Context) { ... }
+```
+
+原因：`_` 和下划线前缀 `_props` 不会抑制 TS 的隐式 any 检查。必须显式标注类型。
+
+**解决**：
+
+```tsx
+// ✅ 不需要 props 时
+function Counter(_: unknown, { use }: Context) { ... }
+
+// ✅ 需要 props 时
+function Counter(_: { initial?: number }, { use }: Context) { ... }
+```
