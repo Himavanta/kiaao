@@ -69,7 +69,7 @@ This example demonstrates module-level and component-level signals, definition, 
 
 ---
 
-## AI Coding Agents / AI 编码助手
+## AI Skill / AI 技能
 
 Add kiaao support to any AI coding agent compatible with the [Agent Skills](https://agentskills.io/) standard. The skill is version-synced with the installed kiaao package.
 
