@@ -39,6 +39,30 @@ Add the following to your `tsconfig.json`. The `jsxImportSource` field tells Typ
 
 ---
 
+## Vite+ / Rolldown (oxc)
+
+Vite+ uses Rolldown with oxc as the compiler. The `esbuild` field is deprecated — configure JSX under `oxc` instead.
+
+Vite+ 使用 Rolldown 配合 oxc 编译器。`esbuild` 字段已废弃——在 `oxc` 下配置 JSX。
+
+```ts
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  oxc: {
+    jsx: {
+      importSource: "kiaao",
+    },
+  },
+});
+```
+
+The full `OxcOptions` type is defined in `vite-plus` — see `OxcJSXOptions` for the JSX sub-config.
+
+完整的 `OxcOptions` 类型定义见 `vite-plus`——JSX 子配置参见 `OxcJSXOptions`。
+
+---
+
 ## Vite (esbuild)
 
 Vite uses esbuild by default for development and production builds. Configure it in `vite.config.ts`.
@@ -52,26 +76,6 @@ export default defineConfig({
   esbuild: {
     jsx: "automatic",
     jsxImportSource: "kiaao",
-  },
-});
-```
-
----
-
-## Vite (oxc)
-
-If you use oxc as the compiler, configure it with the `oxc` field instead. oxc is used by tools like Rolldown and some newer Vite setups.
-
-如果你使用 oxc 作为编译器，请在 `oxc` 字段中配置。oxc 用于 Rolldown 和一些较新的 Vite 配置。
-
-```ts
-import { defineConfig } from "vite";
-
-export default defineConfig({
-  oxc: {
-    jsx: {
-      importSource: "kiaao",
-    },
   },
 });
 ```
