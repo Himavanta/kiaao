@@ -8,9 +8,9 @@ In kiaao, conditional rendering and list rendering are achieved through the buil
 
 ## `<Show>` — Conditional Rendering / 条件渲染
 
-`<Show>` conditionally renders one of two branches based on a signal value. Children must be functions that return components — the function is only called when that branch is active.
+`<Show>` conditionally renders one of two branches based on a signal value. `value` accepts `MaybeSignal<T>` — it does **not** accept a thunk `() => T`. Children must be functions that return components — the function is only called when that branch is active.
 
-`<Show>` 根据一个信号值来条件渲染两个分支中的一个。子元素必须是返回组件的函数——只有当该分支处于活动状态时，函数才会被调用。
+`<Show>` 根据一个信号值来条件渲染两个分支中的一个。`value` 接收 `MaybeSignal<T>`——**不接受** thunk `() => T`。子元素必须是返回组件的函数——只有当该分支处于活动状态时，函数才会被调用。
 
 ```jsx
 function App() {
@@ -42,9 +42,9 @@ function App() {
 
 ## `<Case>` — Multi-Branch Matching / 多分支匹配
 
-`<Case>` renders one of several branches based on a key. The first child is a mapping table (object), where each value is a **function that returns a component**. The second child (optional) is a fallback function.
+`<Case>` renders one of several branches based on a key. `value` accepts `MaybeSignal<string>`. The first child is a mapping table (object), where each value is a **function that returns a component**. The second child (optional) is a fallback function.
 
-`<Case>` 基于一个 key 来渲染多个分支中的一个。第一个子元素是一个映射表（对象），其中每个值是一个**返回组件的函数**。第二个子元素（可选）是 fallback 函数。
+`<Case>` 基于一个 key 来渲染多个分支中的一个。`value` 接收 `MaybeSignal<string>`。第一个子元素是一个映射表（对象），其中每个值是一个**返回组件的函数**。第二个子元素（可选）是 fallback 函数。
 
 ```jsx
 function App() {
@@ -79,9 +79,9 @@ Keys must be strings. The value is converted to a string and looked up in the ta
 
 ## `<Each>` — List Rendering / 列表渲染
 
-`<Each>` renders a list of items from an array signal. The first child is a render function `(item: Signal, index: number) => HResult`. The second child (optional) is an empty-state fallback **function**.
+`<Each>` renders a list of items from a signal. `value` accepts `MaybeSignal<T[]>`. The first child is a render function `(item: Signal<T>, index: number) => HResult`. The second child (optional) is an empty-state fallback **function**.
 
-`<Each>` 从数组信号渲染一个列表。第一个子元素是渲染函数 `(item: Signal, index: number) => HResult`。第二个子元素（可选）是空状态 fallback **函数**。
+`<Each>` 从信号渲染一个列表。`value` 接收 `MaybeSignal<T[]>`。第一个子元素是渲染函数 `(item: Signal<T>, index: number) => HResult`。第二个子元素（可选）是空状态 fallback **函数**。
 
 ```jsx
 function App() {
@@ -114,9 +114,13 @@ For empty state, provide a fallback function:
 
 ### `keyed` — Stable Identity / 稳定身份标识
 
-An optional `keyed` function `(item, index) => any` provides stable identity for each item. When the array changes, `<Each>` diffs by key, preserving existing DOM nodes for matching keys and only creating/removing nodes for additions/removals.
+An optional `keyed` function provides a stable identity for each item. When the array changes, `<Each>` diffs items by key — existing DOM nodes for matching keys are preserved and repositioned, while only added or removed items create or destroy nodes.
 
-可选的 `keyed` 函数 `(item, index) => any` 为每个条目提供稳定标识。当数组变化时，`<Each>` 通过 key 进行 diff，保留匹配 key 的现有 DOM 节点，只对增删条目创建/移除节点。
+可选的 `keyed` 函数为每个条目提供稳定标识。当数组变化时，`<Each>` 通过 key 进行 diff——匹配 key 的现有 DOM 节点被保留并移动位置，仅增删条目创建或销毁节点。
+
+`keyed` receives the raw item value `T` (the same type as the array elements), **not** `Signal<T>`. This is different from the render function, whose first parameter is `Signal<T>`.
+
+`keyed` 接收原始值 `T`（与数组元素类型一致），**不是** `Signal<T>`。这与渲染函数不同——渲染函数的第一个参数是 `Signal<T>`。
 
 ```jsx
 const users = use([
@@ -125,11 +129,13 @@ const users = use([
 ]);
 
 <Each value={users} keyed={(user) => user.id}>
+  {/*       keyed: user is { id, name } — access .id directly */}
+  {/*       keyed: user 是 { id, name } —— 直接 .id */}
   {(user) => <UserCard data={user} />}
+  {/* render: user is Signal<{ id, name }> — use user() or {user} */}
+  {/* render: user 是 Signal<{ id, name }> —— 用 user() 或 {user} */}
 </Each>;
 ```
-
-**Note / 注意**：The `keyed` function receives the raw item value, not a signal. Use `toValue` if you need to read a signal inside it.
 
 **`keyed` 函数接收原始条目值，不是信号。如需读取信号，使用 `toValue`。**
 

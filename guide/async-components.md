@@ -5,7 +5,9 @@ An async component is a component function that returns a Promise. The framework
 异步组件是返回 Promise 的组件函数。框架自动检测并处理加载状态——无需额外的 API、包装函数或特殊装饰器。只需从组件中返回 Promise。
 
 ```jsx
-async function UserProfile({ userId }, { onMount, onUnmount }) {
+import type { Context } from "kiaao";
+
+async function UserProfile({ userId }: { userId: string }, { onMount, onUnmount }: Context) {
   const res = await fetch(`/api/users/${userId}`);
   const user = await res.json();
 
@@ -54,7 +56,9 @@ The placeholder is a comment node that marks the position. When the real content
 异步组件中的 `onMount` 回调延迟到 Promise resolve 且真实 DOM 插入后才触发。这与同步组件不同——同步组件的 `onMount` 在 `app.mount()` 递归遍历期间立即触发。
 
 ```jsx
-async function DelayedGreeting(props, { onMount, use }) {
+import type { Context } from "kiaao";
+
+async function DelayedGreeting(_, { onMount, use }: Context) {
   const message = use("Loading...");
 
   onMount(() => {
@@ -79,7 +83,9 @@ If `onMount` is called after mount has already completed (e.g., inside another `
 `onUnmount` 与同步组件中的行为完全一致。它可以在任何地方调用——包括 `onMount` 回调和异步函数内部——只要组件尚未被销毁。如果组件在 Promise resolve 之前卸载，已注册的 `onUnmount` 回调仍会在销毁期间触发。
 
 ```jsx
-async function DataStream(props, { onMount, onUnmount }) {
+import type { Context } from "kiaao";
+
+async function DataStream(_, { onMount, onUnmount }: Context) {
   onMount(() => {
     const ws = new WebSocket("wss://...");
     onUnmount(() => ws.close());
@@ -105,7 +111,7 @@ Attach `.catch()` to the Promise before returning it. The caught error becomes a
 在返回 Promise 之前附加 `.catch()`。捕获的错误变成一个降级 UI——框架看到的是一个 resolve 为 DOM 节点的 Promise，并正常渲染。这是组件级错误边界的推荐模式。
 
 ```jsx
-function SafeComponent(props) {
+function SafeComponent() {
   return fetch("/api/data")
     .then((res) => res.json())
     .then((data) => <Dashboard data={data} />)
@@ -121,7 +127,7 @@ You can also use `async/await` with `try/catch`:
 也可以使用 `async/await` 配合 `try/catch`：
 
 ```jsx
-async function SafeComponent(props) {
+async function SafeComponent() {
   try {
     const data = await fetch("/api/data").then((r) => r.json());
     return <Dashboard data={data} />;
@@ -177,7 +183,9 @@ The invariant that matters: **when a parent's `onMount` runs, all _ready_ childr
 重要的不变量是：**当父组件的 `onMount` 执行时，其子树中所有*已就位*的子组件都已挂载完毕。** 对于异步父组件，尚未 resolve 的子组件不算"已就位"，因此父组件不等待它们。
 
 ```jsx
-async function Parent(props, { onMount }) {
+import type { Context } from "kiaao";
+
+async function Parent(_, { onMount }: Context) {
   onMount(() => console.log("Parent mounted"));
 
   return (

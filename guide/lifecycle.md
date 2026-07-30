@@ -13,7 +13,9 @@ Every component function receives two arguments: `props` and `context`. The `con
 每个组件函数接收两个参数：`props` 和 `context`。`context` 对象提供 `onMount`、`onUnmount`、`use` 和 `owner`。
 
 ```jsx
-function App(props, { onMount, onUnmount, use, owner }) {
+import type { Context } from "kiaao";
+
+function App(props, { onMount, onUnmount, use, owner }: Context) {
   // props — data passed from the parent / 父组件传入的数据
   // context — lifecycle methods and the component's own Owner / 生命周期方法和组件自身的 Owner
   return <div>...</div>;
@@ -60,7 +62,9 @@ function App(props, { onMount, onUnmount, use, owner }) {
 `fn` 可以是同步或 async 函数。若返回 Promise，框架不等待其完成。`fn` 内部的错误——无论是同步抛出还是 Promise rejection——都会被捕获并打印。一个回调的失败不会阻止其他回调执行。
 
 ```jsx
-function App(props, { onMount, use }) {
+import type { Context } from "kiaao";
+
+function App(props, { onMount, use }: Context) {
   const data = use(null);
 
   // Sync callback — registered before mount, runs after mount
@@ -124,7 +128,9 @@ The cleanup callback runs before the component's DOM is removed. All signals, de
 4. 从文档中移除所属 DOM 节点。
 
 ```jsx
-function Timer(props, { onMount, onUnmount, use }) {
+import type { Context } from "kiaao";
+
+function Timer(props, { onMount, onUnmount, use }: Context) {
   const time = use(new Date());
 
   onMount(() => {
@@ -149,7 +155,9 @@ function Timer(props, { onMount, onUnmount, use }) {
 `onUnmount` 同样接受 async 函数。框架不等待其完成。错误会被捕获并打印。
 
 ```jsx
-function DataSync(props, { onUnmount }) {
+import type { Context } from "kiaao";
+
+function DataSync(props, { onUnmount }: Context) {
   onUnmount(async () => {
     await fetch("/api/offline", { method: "POST" });
     console.log("Offline signal sent");

@@ -6,9 +6,9 @@ Custom directives allow reusable DOM behavior to be attached directly to native 
 
 ## Creating a Directive / 创建指令
 
-Use `direct` to create a directive. It marks a function so `h()` can distinguish it from a component.
+Use `direct` to create a directive. It marks the function with a `[DIRECT_KEY]` Symbol so `h()` can distinguish it from a component function.
 
-使用 `direct` 创建指令。它标记一个函数，让 `h()` 能够区分指令和组件。
+使用 `direct` 创建指令。它为函数添加 `[DIRECT_KEY]` Symbol 标记，让 `h()` 能够区分指令和组件函数。
 
 ```ts
 import { direct } from "kiaao";

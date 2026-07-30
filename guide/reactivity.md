@@ -24,9 +24,9 @@ count(count() + 1); // read + write / 读取后再写入
 user({ ...user(), age: 19 });
 ```
 
-**Signal** is a function. Calling it with no arguments returns the current stored value. Calling it with a value replaces the stored value.
+A **Signal** is a function that carries a `[REACTIVE]` Symbol key on itself — this is how kiaao tells a signal apart from a plain function. `isUse(v)` checks for this marker. Calling a signal with no arguments returns its current value. Calling it with a value replaces the stored value. This means `() => T` (a plain function) is **not** a signal, and APIs that expect `Signal<T>` do not accept thunks.
 
-**Signal** 是一个函数。无参调用返回当前存储的值。传入值则替换存储的值。
+**Signal** 是一个携带 `[REACTIVE]` Symbol 键的函数——kiaao 通过它区分信号和普通函数。`isUse(v)` 检查的就是这个标记。无参调用返回当前值，有参调用替换存储值。这意味着 `() => T`（普通函数）**不是**信号，期望 `Signal<T>` 的 API 不接受 thunk。
 
 For a definition signal, the value passed to the setter is stored as-is. The setter never treats a function as an updater. `state(() => null)` stores the function itself; it does not call it. If you want to store the return value, invoke the function explicitly.
 
@@ -42,16 +42,18 @@ state((() => null)()); // stores null / 写入 null
 
 ## Referencing an Existing Signal / 引用已有信号
 
-When called with a single argument that is already a signal (created by `use`), `use` returns that exact same signal. No new signal is created. This is useful for normalizing component props that might be either a plain value or an existing signal — just pass it through `use` and you always get back a `Signal<T>`.
+When called with a single argument that is already a signal (created by `use`), `use` returns that exact same signal. No new signal is created. This is useful for normalizing component props that might be either a plain value or an existing signal — just pass it through `use` and you always get back a `Signal<T>`. API props that accept either a plain value or a signal use the type `MaybeSignal<T>`, which is `T | Signal<T>`.
 
-当传入一个参数且已是信号（由 `use` 创建）时，`use` 返回同一个信号。不会创建新信号。这对于规范化组件 props 非常有用——props 可能是普通值也可能是已有信号，通过 `use` 统一处理，始终拿到 `Signal<T>`。
+当传入一个参数且已是信号（由 `use` 创建）时，`use` 返回同一个信号。不会创建新信号。这对于规范化组件 props 非常有用——props 可能是普通值也可能是已有信号，通过 `use` 统一处理，始终拿到 `Signal<T>`。接受普通值或信号的 API 属性使用 `MaybeSignal<T>` 类型，即 `T | Signal<T>`。
 
 ```js
 const count = use(0);
 const sameCount = use(count); // sameCount === count
 
 // Practical use: component props normalization / 实际用途：组件 props 规范化
-function Slider(props, { use }) {
+import type { Context } from "kiaao";
+
+function Slider(props: { value: number | Signal<number> }, { use }: Context) {
   const value = use(props.value);
   // If props.value is 42 → creates a new component-level signal
   // If props.value is a signal → returns the same signal
@@ -79,6 +81,20 @@ console.log(double()); // 10
 The compute function runs immediately when the derivation is created, and re-runs whenever any of its declared dependencies change. The result is cached. Calling the derived signal returns the cached value without re-running the computation.
 
 计算函数在派生创建时立即执行，并在任何声明的依赖发生变化时重新执行。结果会被缓存。调用派生信号返回缓存值，不会重新执行计算。
+
+Derivations are not limited to the same type as the source. You can derive a boolean or a string from any signal.
+
+派生不限于与源信号相同类型。你可以从任意信号派生出布尔值或字符串。
+
+```js
+const status = use("loading");
+const isLoading = use(status, () => status() === "loading");
+// isLoading is Signal<boolean> / isLoading 是 Signal<boolean>
+
+isLoading(); // true
+status("done");
+isLoading(); // false
+```
 
 ## Setter of a Derived Signal / 派生信号的写入
 
@@ -199,13 +215,13 @@ We recommend using **component-level `use`** whenever possible. It ties signal l
 我们推荐尽可能使用**组件级 `use`**。它将信号的生命周期与组件绑定，防止内存泄漏，并使代码更可预测。模块级 `use` 仅用于需要超越单个组件生命周期的真正全局状态。
 
 ```jsx
-import { use } from "kiaao";
+import { use, type Context } from "kiaao";
 
 // Module-level — global signal (use sparingly)
 // 模块级 — 全局信号（谨慎使用）
 const globalCount = use(0);
 
-function Counter(props, { use }) {
+function Counter(_, { use }: Context) {
   // Component-level — auto-cleaned on unmount (preferred)
   // 组件级 — 卸载时自动清理（推荐）
   const localCount = use(0);
@@ -228,7 +244,9 @@ Component-level `use` handles all three forms — definition, signal referencing
 组件级 `use` 处理所有三种形式——定义、信号引用和派生——并自动注册创建的信号以进行清理。如果传入已有信号给 `context.use(signal)`，不会创建新资源，也不会注册清理，因为该信号由其他地方拥有。
 
 ```jsx
-function Display(props, { use }) {
+import type { Context } from "kiaao";
+
+function Display(props: { value: number | Signal<number> }, { use }: Context) {
   // If props.value is a signal → returns it directly, no cleanup needed
   // 如果 props.value 是信号 → 直接返回，不需要清理
   // If props.value is 42 → creates a component-level signal, auto-cleaned

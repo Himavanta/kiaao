@@ -138,7 +138,9 @@ Pass a function as the first child of `RouterView` to serve as fallback when no 
 将函数作为 `RouterView` 的第一个子元素传入，当前段无匹配时作为 fallback。
 
 ```jsx
-function DashboardLayout({ RouterView }) {
+import type { ComponentFunction } from "kiaao";
+
+function DashboardLayout({ RouterView }: { RouterView: ComponentFunction }) {
   return (
     <section>
       <RouterView>{() => <NotFound />}</RouterView>
@@ -302,6 +304,7 @@ The initial page load only downloads the components needed for the current route
 
 ```jsx
 import { createRouter } from "kiaao/router";
+import type { ComponentFunction } from "kiaao";
 
 const routes = {
   "": RootLayout,
@@ -314,7 +317,7 @@ const routes = {
 
 const { Router, Link } = createRouter({ routes });
 
-function RootLayout({ RouterView }) {
+function RootLayout({ RouterView }: { RouterView: ComponentFunction }) {
   return (
     <div>
       <nav>
@@ -328,7 +331,7 @@ function RootLayout({ RouterView }) {
   );
 }
 
-function DemoLayout({ RouterView }) {
+function DemoLayout({ RouterView }: { RouterView: ComponentFunction }) {
   return (
     <section>
       <h2>Demo Section</h2>

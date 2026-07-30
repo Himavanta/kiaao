@@ -102,7 +102,9 @@ const html = renderToString(App, { items: ["a", "b", "c"] });
 
 ```jsx
 // App.tsx
-function App({ items }, { use }) {
+import type { Context } from "kiaao";
+
+function App({ items }: { items: string[] }, { use }: Context) {
   const count = use(0);
 
   return (

@@ -18,10 +18,62 @@ kiaao 与 Solid 表面最像（显式响应式、组件只跑一次、`<Show>`/`
 | ------------------------------ | ---------------------------------- |
 | `useState(0)` 返回 `[s, setS]` | `use(0)` 返回单函数                |
 | `useEffect(() => ...)` 副作用  | `use(dep, () => ...)` 无返回值派生 |
-| `condition && <div>`           | `<Show when={condition}>`          |
+| `condition && <div>`           | `<Show value={condition}>`         |
 | `items.map(renderItem)`        | `<Each items={items}>`             |
 
 **为什么**：kiaao 组件只执行一次。`{cond && ...}` 和 `{items.map(...)}` 只在首次渲染时计算一次，之后**不会响应信号变化**——视图会"卡住"。`<Show>`/`<Each>`/`<Case>` 内部订阅依赖信号，依赖变化时框架精确增删/移动 DOM 节点。
+
+```jsx
+// ❌ 组件只跑一次，visible() 只在初始化时求值，后续变化不更新 DOM
+function App() {
+  const visible = use(false);
+  return (
+    <div>
+      <button onClick={() => visible(!visible())}>toggle</button>
+      {visible() && <p>hello</p>}
+    </div>
+  );
+}
+```
+
+```jsx
+// ✅ 正确：用 <Show>，框架在信号变化时精确增删 DOM
+function App() {
+  const visible = use(false);
+  return (
+    <div>
+      <button onClick={() => visible(!visible())}>toggle</button>
+      <Show value={visible}>{() => <p>hello</p>}</Show>
+    </div>
+  );
+}
+```
+
+```jsx
+// ❌ items.map() 只跑一次，新增/删除项不会反映到 DOM
+function App() {
+  const items = use(["a", "b"]);
+  return (
+    <ul>
+      {items().map((it) => (
+        <li>{it}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+```jsx
+// ✅ 正确：用 <Each>，新增/删除项时框架精确更新 DOM
+function App() {
+  const items = use(["a", "b"]);
+  return (
+    <ul>
+      <Each value={items}>{(it) => <li>{it}</li>}</Each>
+    </ul>
+  );
+}
+```
 
 ## ❌ Vue 思维
 

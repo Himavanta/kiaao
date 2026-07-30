@@ -1,8 +1,8 @@
 # Components / 组件
 
-A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use`. Every component receives a `context` object as its second argument, providing lifecycle methods, a reference to the component's own Owner, and a component-level `use` that automatically cleans up signals on unmount.
+A component in kiaao is a function that returns JSX. It runs exactly once. There is no re-rendering, no hooks, and no rules of hooks. State lives in signals created with `use`. Every component receives a `context` object as its second argument, injected by the framework — providing lifecycle methods, a reference to the component's own Owner, and a component-level `use` that automatically cleans up signals on unmount. Always use JSX (`<Foo />`) or `h()` to render components — direct function calls skip framework setup and won't have access to `context`.
 
-kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收 `context` 对象作为第二个参数，提供生命周期方法、对组件自身 Owner 的引用，以及在卸载时自动清理信号的组件级 `use`。
+kiaao 中的组件是一个返回 JSX 的函数。它只执行一次。没有重新渲染，没有 hooks，也没有 hooks 的规则。状态存在于用 `use` 创建的信号中。每个组件接收由框架注入的 `context` 对象作为第二个参数，提供生命周期方法、对组件自身 Owner 的引用，以及在卸载时自动清理信号的组件级 `use`。始终使用 JSX（`<Foo />`）或 `h()` 渲染组件——直接函数调用会跳过框架初始化，无法访问 `context`。
 
 ## A Basic Component / 基本组件
 
@@ -11,7 +11,9 @@ A component function runs once when the application mounts. The DOM is created, 
 组件函数在应用挂载时运行一次。DOM 被创建，信号被创建，`{count}` 这样的 JSX 表达式将信号绑定到对应的文本节点。之后写入信号时，只有绑定的文本节点更新。组件函数不会重新运行。
 
 ```jsx
-function Counter() {
+import type { Context } from "kiaao";
+
+function Counter(props, { use }: Context) {
   const count = use(0);
 
   return (
@@ -41,7 +43,7 @@ Components receive props as the first argument, just like any JavaScript functio
 组件通过第一个参数接收 props，与普通 JavaScript 函数完全一样。没有特殊的 `props` 包装——你传入什么，函数就收到什么。
 
 ```jsx
-function Greeting({ name }) {
+function Greeting({ name }: { name: string }) {
   return <h1>Hello, {name}</h1>;
 }
 
@@ -54,7 +56,9 @@ Props can be signals. Pass them through `context.use` to normalize — if the pr
 Props 可以是信号。通过 `context.use` 来规范化——如果 prop 是普通值，`use` 创建一个新的组件级信号。如果 prop 已经是信号，`use` 直接返回该信号。
 
 ```jsx
-function Display(props, { use }) {
+import type { Context } from "kiaao";
+
+function Display(props, { use }: Context) {
   const value = use(props.value);
   // props.value is 42 → creates a new component-level signal
   // props.value is 42 → 创建新的组件级信号
@@ -72,11 +76,25 @@ function Display(props, { use }) {
 
 ## Multiple Instances / 多实例隔离
 
-To create multiple independent instances of a component that share state, wrap the shared signals in a factory function. The factory's closure holds the signals. Each call to the factory produces a new component function with its own independent copy of those signals.
+When a signal needs to outlive any single component — for truly global state or for state shared across multiple component instances — import `use` directly from `kiaao`. This is module-level `use`. Unlike component-level `use` (from `context`), it is not automatically cleaned up on unmount.
 
-要创建共享状态的多个独立实例，将共享信号包裹在工厂函数中。工厂函数的闭包持有这些信号。每次调用工厂函数都会生成一个带有自己独立信号副本的全新组件函数。
+当信号需要超越单个组件生命周期时——用于真正的全局状态或多组件实例间的共享状态——直接从 `kiaao` 导入 `use`。这是模块级 `use`。与组件级 `use`（从 `context` 解构）不同，它不会在卸载时自动清理。
 
 ```jsx
+import { use } from "kiaao";
+
+// Module-level signal — global state
+// 模块级信号 — 全局状态
+const theme = use("light");
+```
+
+To create multiple independent instances of a component, each with its own copy of the same signals, wrap the signals in a factory function. The factory uses module-level `use` inside its closure. Each call to the factory produces a new component function with its own independent copy of those signals.
+
+要创建组件的多个独立实例（每个实例拥有相同信号的独立副本），将信号包裹在工厂函数中。工厂函数在闭包中使用模块级 `use`。每次调用工厂函数都会生成一个带有自己独立信号副本的全新组件函数。
+
+```jsx
+import { use } from "kiaao";
+
 function createCounter() {
   const count = use(0);
   return function Counter() {
@@ -97,25 +115,6 @@ const CounterB = createCounter();
 
 `CounterA` 和 `CounterB` 拥有完全独立的 `count` 信号。更新其中一个不会影响另一个。
 
-## Component-Level `use` / 组件级 `use`
-
-We recommend using `context.use` to create signals inside components. It automatically cleans up the signals when the component unmounts, preventing memory leaks and making ownership explicit.
-
-我们推荐使用 `context.use` 在组件内部创建信号。它在组件卸载时自动清理信号，防止内存泄漏，并使所有权更加明确。
-
-```jsx
-function Timer(_, { use }) {
-  const elapsed = use(0);
-  // elapsed will be cleaned up when Timer unmounts
-  // elapsed 在 Timer 卸载时会被清理
-  return <div>{elapsed}</div>;
-}
-```
-
-Module-level `use` (imported from `kiaao`) is still available for global state, but should be used sparingly — only when the signal truly needs to outlive any single component.
-
-模块级 `use`（从 `kiaao` 导入）仍然可用于全局状态，但应谨慎使用——仅在信号确实需要超越单个组件生命周期时使用。
-
 ## Lifecycle / 生命周期
 
 Lifecycle hooks and component-level `use` are not imported — they come from the `context` object, the second argument to every component function. See the Lifecycle guide for full details.
@@ -123,7 +122,9 @@ Lifecycle hooks and component-level `use` are not imported — they come from th
 生命周期钩子和组件级 `use` 不从框架导入——它们来自每个组件函数的第二个参数 `context` 对象。详见生命周期引导文档。
 
 ```jsx
-function App(props, { onMount, onUnmount, use }) {
+import type { Context } from "kiaao";
+
+function App(props, { onMount, onUnmount, use }: Context) {
   const count = use(0); // component-level, auto-cleaned / 组件级，自动清理
 
   onMount(() => console.log("mounted"));
@@ -137,14 +138,14 @@ function App(props, { onMount, onUnmount, use }) {
 
 ## Exposing the DOM / 暴露 DOM
 
-A component's return value is an `HResult`, which contains `nodes` — the actual DOM nodes. There is no `ref` forwarding, no `forwardRef`, no `defineExpose`. You can interact with the returned nodes directly.
+A component's return value is an `HResult`, which contains `nodes` — the actual DOM nodes. There is no `ref` forwarding, no `forwardRef`, no `defineExpose`. You can interact with the returned nodes directly. Event handlers receive native DOM events — there is no synthetic event wrapper, so `e.currentTarget` must be cast explicitly.
 
-组件的返回值是 `HResult`，其中包含 `nodes`——真实的 DOM 节点。没有 `ref` 转发，没有 `forwardRef`，没有 `defineExpose`。你可以直接与返回的节点交互。
+组件的返回值是 `HResult`，其中包含 `nodes`——真实的 DOM 节点。没有 `ref` 转发，没有 `forwardRef`，没有 `defineExpose`。你可以直接与返回的节点交互。事件处理接收原生 DOM 事件——没有合成事件包装，因此 `e.currentTarget` 需要显式类型断言。
 
 ```jsx
 function TextInput() {
   const text = use("");
-  return <input value={text} onInput={(e) => text(e.target.value)} />;
+  return <input value={text} onInput={(e) => text((e.currentTarget as HTMLInputElement).value)} />;
 }
 
 const result = <TextInput />;
@@ -157,7 +158,7 @@ If you need to access the DOM inside the component, use `onMount`:
 如果需要在组件内部访问 DOM，使用 `onMount`：
 
 ```jsx
-function AutoFocusInput(_, { onMount }) {
+function AutoFocusInput(_, { onMount }: Context) {
   const text = use("");
   onMount(() => {
     // The input is now in the DOM
@@ -174,6 +175,8 @@ Components compose naturally. A parent can hold signals and pass them to childre
 组件可以自然地组合。父组件可以持有信号并通过 props 传递给子组件，或通过模块级信号或工厂闭包共享。
 
 ```jsx
+import { use, type Context } from "kiaao";
+
 function App() {
   const count = use(0);
 
@@ -184,7 +187,7 @@ function App() {
   );
 }
 
-function Display({ value }, { use }) {
+function Display({ value }, { use }: Context) {
   const v = use(value);
   return <p>{v}</p>;
 }
@@ -226,7 +229,7 @@ There is no DOM footprint. CSS selectors like `:nth-child` or `>` direct child c
 ```jsx
 import { Portal } from "kiaao";
 
-function Modal(_, { use }) {
+function Modal(_, { use }: Context) {
   const open = use(false);
 
   return (

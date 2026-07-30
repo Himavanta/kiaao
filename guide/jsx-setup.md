@@ -4,6 +4,22 @@ kiaao works with standard JSX transformation. No custom compiler or plugin is re
 
 kiaao 使用标准的 JSX 转换，不需要自定义编译器或插件。将构建工具的 JSX import source 配置为 `kiaao` 即可。
 
+## Choosing Your Configuration / 选择配置
+
+First, identify which transform engine your toolchain uses, then follow the corresponding section below.
+
+首先确认你的工具链使用哪个 transform 引擎，然后按对应小节配置。
+
+| Toolchain / 工具链 | Transform Engine / 引擎 | Config / 配置入口                            |
+| ------------------ | ----------------------- | -------------------------------------------- |
+| Vite (≤7)          | esbuild                 | `vite.config.ts` → `esbuild`                 |
+| Vite+ / Rolldown   | oxc                     | `vite.config.ts` → `oxc`（`esbuild` 已废弃） |
+| Rspack / Other     | Varies / 各异           | 见各构建工具文档                             |
+
+⚠️ Do not configure both `esbuild.jsx` and `oxc.jsx` at the same time — Rolldown-based toolchains will ignore one and emit a warning.
+
+⚠️ 不要同时配置 `esbuild.jsx` 和 `oxc.jsx`——基于 Rolldown 的工具链会忽略其中一个并发出警告。
+
 ---
 
 ## TypeScript / TypeScript 配置

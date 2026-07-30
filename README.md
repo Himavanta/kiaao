@@ -33,30 +33,66 @@ npm install kiaao
 [JSX/TSX setup — 配置 JSX/TSX](./guide/jsx-setup.md)
 
 ```jsx
-import { use, createApp } from "kiaao";
+import { use, createApp, type Context } from "kiaao";
 
-// Definition mode — a writable signal
-// 定义模式 — 可写信号
-const count = use(0);
+// Module-level — global state, outlives any component
+// 模块级 — 全局状态，独立于组件
+const theme = use("light");
 
-// Derivation mode — a computed signal
-// 派生模式 — 计算信号
-const double = use(count, () => count() * 2);
+function Counter(_, { use }: Context) {
+  // Component-level definition — writable, auto-cleaned on unmount
+  // 组件级定义 — 可写信号，卸载时自动清理
+  const count = use(0);
 
-// Derivation without return — a "side effect" that is just a derived signal with value undefined
-// 无返回值的派生 — 值永远为 undefined 的派生信号，即传统意义上的"副作用"
-use(count, () => {
-  console.log("count is", count());
-});
+  // Component-level derivation — recomputes when dependency changes
+  // 组件级派生 — 依赖变化时重算
+  const double = use(count, () => count() * 2);
 
-// Component — a function that returns JSX, runs exactly once
-// 组件 — 返回 JSX 的函数，只执行一次
-function Counter() {
+  // Cross-type derivation — number to string
+  // 跨类型派生 — 数字到字符串
+  const label = use(count, () => `Count is ${count()}`);
+
+  // Component-level derivation with setter — write triggers recomputation
+  // 组件级派生（带 setter）—— 写入触发重算
+  const nextCount = use(count, (v) => count() + 1);
+
+  // Component-level side effect — derivation without return value
+  // 组件级副作用 — 无返回值的派生，依赖变化时执行
+  use(count, () => {
+    console.log("count is", count());
+  });
+
+  // Storing a function — setter stores as-is, never calls it
+  // 存储函数 — setter 原样存储，不会调用
+  const stored = use(() => "hello");
+  // stored()    → the function itself / 函数本身
+  // stored()()  → "hello" / 调用存储的函数
+
+  // Logically read-only — derivation ignores setter argument
+  // 逻辑只读 — 派生忽略 setter 参数
+  const _raw = use(0);
+  const readOnly = use(_raw, () => _raw());
+  // readOnly(999) → no-op, value unchanged / 空操作，值不变
+
   return (
     <div>
+      <p>Theme: {theme}</p>
       <p>Count: {count}</p>
       <p>Double: {double}</p>
+      <p>{label}</p>
+      <p>nextCount: {nextCount}</p>
+      <p>ReadOnly: {readOnly}</p>
+      <p>Stored: {stored()()}</p>
       <button onClick={() => count(count() + 1)}>+1</button>
+      <button onClick={() => nextCount(count() + 100)}>
+        nextCount(count()+100)
+      </button>
+      <button onClick={() => stored(() => "world")}>
+        stored(() => "world")
+      </button>
+      <button onClick={() => readOnly(999)}>
+        readOnly(999)
+      </button>
     </div>
   );
 }
@@ -64,36 +100,9 @@ function Counter() {
 createApp(Counter).mount("#app");
 ```
 
----
+This example covers every signal concept in kiaao: module-level and component-level scope, definition, derivation, cross-type derivation, setter-triggered recomputation with short-circuit, side effects, function storage, and logically read-only wrapping. For full details, follow the guides linked below.
 
-A signal can be written regardless of how it was created. For a definition signal, the setter replaces the value. For a derivation signal, the setter triggers re-execution of the compute function. The API is the same.
-
-信号无论怎样创建都可以被写入。定义信号的写入直接替换值。派生信号的写入触发计算函数重新执行。API 完全一致。
-
-For a definition signal, the value passed to the setter is stored as-is. Passing a function stores the function itself; the function is not called. If you need its return value, call it explicitly before writing.
-
-对于定义信号，setter 接收的值会原样存储。传入函数时，写入的是函数本身，函数不会被调用。如果需要写入函数返回值，必须先显式调用函数。
-
-```js
-const state = use(null);
-
-state(() => null); // stores the function itself / 将函数本身写入信号
-state()(); // invokes the stored function / 调用信号中存储的函数
-state((() => null)()); // stores null / 写入 null
-```
-
-```js
-const count = use(1);
-const nextCount = use(count, (v) => count() + 1);
-
-console.log(nextCount()); // 2
-
-count(5);
-console.log(nextCount()); // 6
-
-nextCount(100); // triggers recomputation, v is 100 / 触发重算，v 为 100
-console.log(nextCount()); // 6 (value unchanged, short-circuited / 值未变，短路)
-```
+此示例覆盖了 kiaao 的全部信号概念：模块级与组件级作用域、定义、派生、跨类型派生、setter 触发重算与短路、副作用、函数存储、逻辑只读包装。详见下方文档。
 
 ---
 

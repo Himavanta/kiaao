@@ -47,7 +47,7 @@ kiaao 文档随 kiaao npm 包一起发布，**不是随 skill 安装**。SKILL.m
 4. `./node_modules/kiaao/guide/control-flow.md` — Show、Each、Case
 5. `./node_modules/kiaao/guide/reactivity.md` — Signal、use()、派生、isUse、toValue、逻辑只读
 
-**写代码前必读**：`./node_modules/kiaao/agent/anti-patterns.md`（Solid/React/Vue 反模式对照 + 关键术语）
+**写代码前必读**：`./node_modules/kiaao/agent/anti-patterns.md`（Solid/React/Vue 反模式对照 + 关键术语）和 `./node_modules/kiaao/agent/typescript-pitfalls.md`（TS2502、noUnusedLocals、keyed 类型陷阱）
 
 ## 具体 API（按主题）
 

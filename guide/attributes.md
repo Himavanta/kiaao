@@ -182,7 +182,7 @@ Attributes matching the pattern `onXxx` (where `Xxx` starts with an uppercase le
 
 ```jsx
 <button onClick={() => count(count() + 1)}>+1</button>
-<input onInput={(e) => name(e.target.value)} />
+<input onInput={(e) => name((e.currentTarget as HTMLInputElement).value)} />
 ```
 
 ---
