@@ -99,7 +99,6 @@ npx skills add Himavanta/kiaao
 
 ## Documentation / 文档
 
-- [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
 - [Reactivity / 响应式系统](./guide/reactivity.md)
 - [Components / 组件](./guide/components.md)
 - [Control Flow / 控制流](./guide/control-flow.md)
@@ -110,6 +109,7 @@ npx skills add Himavanta/kiaao
 - [Motion / 动画](./guide/motion.md)
 - [Router / 路由](./guide/router.md)
 - [SSR / 服务端渲染](./guide/ssr.md)
+- [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
 
 ---
 
