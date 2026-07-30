@@ -218,6 +218,7 @@ interface HResult {
 **子节点处理**：
 
 - 若子节点为信号：创建文本占位，通过匿名派生绑定动态更新。清理函数收集至 `HResult.cleanups`，随资源上浮至最近持久 Owner。
+- 若子节点为函数：视为组件，通过 `handleComponent` 创建独立 Owner，返回边界 HResult。
 - 若为 DOM 节点：直接附加。
 - 其他值：转为字符串创建静态文本节点。
 
@@ -317,41 +318,42 @@ interface DirectiveContext {
 
 框架提供 `Show`、`Case`、`Each` 三个控制流组件，用于条件渲染和列表渲染。它们遵循统一的首次渲染同步化模式：首次渲染在组件函数体内同步完成，后续变化通过信号订阅驱动 DOM 更新。
 
-**重要**：控制流组件的子元素必须是函数（返回组件），以实现惰性渲染——只有活跃分支的组件函数才会被调用。
+**重要**：控制流组件的子元素是组件——接收 `(props, context)` 两个参数，与其他组件完全一致。每个分支拥有独立的 Owner，仅在分支变为活动状态时被创建。
 
 ### 4.1 `<Show value={signal}>`
 
 根据 `value` 的真值渲染 `primary` 或 `fallback` 组件。
 
 ```tsx
-<Show value={show()}>
-  {() => <Primary />}
-  {() => <Fallback />}
+<Show value={show}>
+  {(props, ctx) => <Primary />}
+  {(props, ctx) => <Fallback />}
 </Show>
 ```
 
-- 第一个子函数在 `value` 为 truthy 时渲染。
-- 第二个子函数（可选）在 `value` 为 falsy 时渲染。
+- 第一个子组件在 `value` 为 truthy 时渲染。
+- 第二个子组件（可选）在 `value` 为 falsy 时渲染。
+- 传入组件函数引用或箭头包装均可，效果等价。
 - 首次渲染同步执行，返回 `[...分支节点, 注释锚点]`。
 - 后续变化通过信号订阅，在锚点前替换分支内容。
 
 ### 4.2 `<Case value={signal}>`
 
-多分支匹配组件。第一个子元素是映射表对象，其中每个值是一个返回组件的函数。第二个子元素（可选）是 fallback 函数。
+多分支匹配组件。第一个子元素是映射表对象，其中每个值是组件。第二个子元素（可选）是 fallback 组件。
 
 ```tsx
-<Case value={tab()}>
+<Case value={tab}>
   {{
-    a: () => <CompA />,
-    b: () => <CompB />,
+    a: (props, ctx) => <CompA />,
+    b: (props, ctx) => <CompB />,
   }}
-  {() => <Fallback />}
+  {(props, ctx) => <Fallback />}
 </Case>
 ```
 
-- 根据 `value` 与映射表 key 匹配，调用对应的函数进行渲染。
-- 无匹配时调用 fallback 函数（若有）。
-- 每个分支函数仅在其 key 匹配时被调用。
+- 根据 `value` 与映射表 key 匹配，调用对应的组件进行渲染。
+- 无匹配时调用 fallback 组件（若有）。
+- 每个分支仅在其 key 匹配时被调用。
 
 ### 4.3 `<Each value={signal} keyed?={(item, index) => key}>`
 
@@ -359,14 +361,14 @@ interface DirectiveContext {
 
 ```tsx
 <Each value={list}>
-  {(item: Signal<T>, index: number) => <ItemComponent item={item} index={index} />}
-  {() => <Empty />}
+  {({ item, index }) => <ItemComponent item={item} index={index} />}
+  {(props, ctx) => <Empty />}
 </Each>
 ```
 
-- 第一个子元素是渲染函数 `(item: Signal<T>, index: number) => HResult`（必选）。
-- 第二个子元素（可选）是空状态 fallback 函数，当数组为空时调用。
-- `keyed` 函数用于指定 item 的稳定标识，实现增量 DOM 更新。
+- 第一个子元素是渲染组件，接收 `{ item: Signal<T>, index: number }` 作为 props。
+- 第二个子元素（可选）是空状态 fallback 组件，当数组为空时调用。
+- `keyed` 函数接收原始值 `T`（非 `Signal<T>`），用于指定 item 的稳定标识，实现增量 DOM 更新。
 - 首次渲染同步构建所有条目（或 fallback），返回 `[...条目节点, 锚点]`。
 - 后续变化根据 `keyed` 进行 diff 或全量重建，通过锚点定位。
 
