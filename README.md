@@ -6,9 +6,7 @@
 
 A framework is for expressing ideas, not hiding them.
 
-kiaao is a pure-runtime reactive UI framework. It does not proxy your data, does not collect dependencies for you, and does not re-run your component functions. It does exactly one thing: precisely update the DOM after you explicitly declare your dependencies.
-
-All state is created by `use`. Every signal is a `Signal<T>` — a single function that reads when called with no arguments and writes when called with a value. There is no distinction between "writable" and "readonly" signals — you always get both capabilities, and you never need to check. There is no concept of "side effects" — a derivation that returns nothing is simply a derived signal whose value is `undefined`.
+kiaao is a pure-runtime reactive UI framework. No Proxy objects intercept your property access, no auto-collected dependency graph, component functions never re-run. Everything is a function. Every signal is `Signal<T>` — read with no arguments, write with a value. No `createSignal`, no `useState`, no `ref`. No separate "side effect" API — any derivation that returns nothing is simply a derived signal.
 
 If you have ever felt out of control because of your framework's "smartness", if you want transparency, predictability, and full control, kiaao is for you.
 
@@ -16,9 +14,7 @@ If you have ever felt out of control because of your framework's "smartness", if
 
 框架是用来表达思想的，不是用来隐藏它的。
 
-kiaao 是一个纯运行时的响应式 UI 框架。它不代理你的数据，不替你收集依赖，不反复运行你的组件函数。它只做一件事：在你明确声明依赖关系之后，精确地更新 DOM。
-
-所有状态都由 `use` 创建。每一个信号都是 `Signal<T>` —— 一个统一的函数，无参调用时读取，有参调用时写入。不存在"可写"和"只读"信号的区别——你总是同时拥有两种能力，永远不需要检查。没有"副作用"的概念——不返回值的派生，就是一个值为 `undefined` 的派生信号。
+kiaao 是一个纯运行时的响应式 UI 框架。没有 Proxy 对象拦截你的属性访问，没有自动收集的依赖图，组件函数从不重新运行。一切皆函数。每个信号都是 Signal<T>——无参读，有参写。没有 createSignal，没有 useState，没有 ref。没有独立的"副作用"API——任何无返回值的派生，就是一个值为 undefined 的派生信号。
 
 如果你曾因框架的"智能"而感到失控，如果你想要的是透明、可预测和完全的掌控，kiaao 是为你准备的。
 
