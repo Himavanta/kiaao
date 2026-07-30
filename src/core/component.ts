@@ -134,7 +134,7 @@ export function toHResult(child: any): HResult {
   }
 
   if (isFunction(child)) {
-    return toHResult(child());
+    return handleComponent(child as ComponentFunction, {}, []);
   }
 
   if (isArray(child)) {

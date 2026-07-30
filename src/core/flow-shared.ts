@@ -7,7 +7,7 @@ import { adoptResult } from "./component.ts";
 import { h } from "./h.ts";
 import { triggerMount } from "./owner.ts";
 import { isUse, use } from "./signal.ts";
-import { isArray, isFunction } from "./type-guards.ts";
+import { isArray } from "./type-guards.ts";
 import type { HostNode, HResult, Owner } from "./types.ts";
 import { getSignalState } from "./types.ts";
 
@@ -37,10 +37,7 @@ export function adoptBranch(options: {
 }): HResult {
   const { parentOwner, anchor, Component, componentProps, skipInsert } = options;
   const adapter = getAdapter();
-  const props =
-    componentProps && isFunction(componentProps.children)
-      ? { ...componentProps, children: componentProps.children() }
-      : componentProps;
+  const props = componentProps;
   const r = h(Component, props);
   adoptResult(parentOwner, r);
 
