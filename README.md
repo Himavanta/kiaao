@@ -40,59 +40,26 @@ import { use, createApp, type Context } from "kiaao";
 const theme = use("light");
 
 function Counter(_, { use }: Context) {
-  // Component-level definition — writable, auto-cleaned on unmount
-  // 组件级定义 — 可写信号，卸载时自动清理
+  // Component-level definition — auto-cleaned on unmount; setter stores as-is
+  // 组件级定义 — 可写，卸载自动清理；原样存储，传入函数不会调用
   const count = use(0);
 
-  // Component-level derivation — recomputes when dependency changes
-  // 组件级派生 — 依赖变化时重算
-  const double = use(count, () => count() * 2);
+  // Component-level derivation — also writable, write arg passed to compute
+  // 组件级派生 — 可写，写入参数传入计算函数
+  const double = use(count, (v) => count() * 2);
 
-  // Cross-type derivation — number to string
-  // 跨类型派生 — 数字到字符串
-  const label = use(count, () => `Count is ${count()}`);
-
-  // Component-level derivation with setter — write triggers recomputation
-  // 组件级派生（带 setter）—— 写入触发重算
-  const nextCount = use(count, (v) => count() + 1);
-
-  // Component-level side effect — derivation without return value
-  // 组件级副作用 — 无返回值的派生，依赖变化时执行
+  // Derivation without return — runs on dependency change
+  // 无返回值派生 — 依赖变化时执行
   use(count, () => {
     console.log("count is", count());
   });
-
-  // Storing a function — setter stores as-is, never calls it
-  // 存储函数 — setter 原样存储，不会调用
-  const stored = use(() => "hello");
-  // stored()    → the function itself / 函数本身
-  // stored()()  → "hello" / 调用存储的函数
-
-  // Logically read-only — derivation ignores setter argument
-  // 逻辑只读 — 派生忽略 setter 参数
-  const _raw = use(0);
-  const readOnly = use(_raw, () => _raw());
-  // readOnly(999) → no-op, value unchanged / 空操作，值不变
 
   return (
     <div>
       <p>Theme: {theme}</p>
       <p>Count: {count}</p>
       <p>Double: {double}</p>
-      <p>{label}</p>
-      <p>nextCount: {nextCount}</p>
-      <p>ReadOnly: {readOnly}</p>
-      <p>Stored: {stored()()}</p>
       <button onClick={() => count(count() + 1)}>+1</button>
-      <button onClick={() => nextCount(count() + 100)}>
-        nextCount(count()+100)
-      </button>
-      <button onClick={() => stored(() => "world")}>
-        stored(() => "world")
-      </button>
-      <button onClick={() => readOnly(999)}>
-        readOnly(999)
-      </button>
     </div>
   );
 }
@@ -100,25 +67,21 @@ function Counter(_, { use }: Context) {
 createApp(Counter).mount("#app");
 ```
 
-This example covers every signal concept in kiaao: module-level and component-level scope, definition, derivation, cross-type derivation, setter-triggered recomputation with short-circuit, side effects, function storage, and logically read-only wrapping. For full details, follow the guides linked below.
+This example demonstrates module-level and component-level signals, definition, derivation (including no-return derivations), and setter behaviors: definition setters store as-is, and derivation setters trigger recomputation with the arg passed to compute. For full details, follow the guides linked below.
 
-此示例覆盖了 kiaao 的全部信号概念：模块级与组件级作用域、定义、派生、跨类型派生、setter 触发重算与短路、副作用、函数存储、逻辑只读包装。详见下方文档。
+此示例演示了模块级与组件级信号、定义、派生（含无返回值派生），以及 setter 行为：定义 setter 原样存储，派生 setter 触发重算并将入参传入计算函数。详见下方文档。
 
 ---
 
 ## AI Coding Agents / AI 编码助手
 
-kiaao provides an official skill compatible with the [Agent Skills](https://agentskills.io/) standard. When installed, AI coding agents such as Pi, Claude Code, Cursor, and Codex can correctly understand the kiaao API and generate code that follows the framework's conventions.
+Add kiaao support to any AI coding agent compatible with the [Agent Skills](https://agentskills.io/) standard. The skill is version-synced with the installed kiaao package.
 
-kiaao 提供兼容 [Agent Skills](https://agentskills.io/) 标准的官方 skill。安装后，Pi、Claude Code、Cursor、Codex 等 AI 编码助手能正确理解 kiaao API，并生成符合框架约定的代码。
+为兼容 [Agent Skills](https://agentskills.io/) 标准的 AI 编码助手添加 kiaao 支持。skill 与已安装的 kiaao 包版本同步。
 
 ```bash
 npx skills add Himavanta/kiaao
 ```
-
-The skill is shipped from this repository and stays in sync with each kiaao release.
-
-skill 内容随 kiaao 版本同步更新。
 
 ---
 
@@ -140,17 +103,17 @@ skill 内容随 kiaao 版本同步更新。
 
 ## Documentation / 文档
 
+- [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
 - [Reactivity / 响应式系统](./guide/reactivity.md)
 - [Components / 组件](./guide/components.md)
-- [Lifecycle / 生命周期](./guide/lifecycle.md)
 - [Control Flow / 控制流](./guide/control-flow.md)
-- [Motion / 动画](./guide/motion.md)
+- [Lifecycle / 生命周期](./guide/lifecycle.md)
+- [Attributes / 属性处理](./guide/attributes.md)
 - [Async Components / 异步组件](./guide/async-components.md)
 - [Directives / 自定义指令](./guide/directives.md)
-- [Attributes / 属性处理](./guide/attributes.md)
-- [SSR / 服务端渲染](./guide/ssr.md)
+- [Motion / 动画](./guide/motion.md)
 - [Router / 路由](./guide/router.md)
-- [JSX/TSX Setup / 配置 JSX/TSX](./guide/jsx-setup.md)
+- [SSR / 服务端渲染](./guide/ssr.md)
 
 ---
 
