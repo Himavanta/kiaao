@@ -60,3 +60,44 @@ function Counter(_: unknown, { use }: Context) { ... }
 // ✅ 需要 props 时
 function Counter(_: { initial?: number }, { use }: Context) { ... }
 ```
+
+## `key={x}` 报 TS2322
+
+在 kiaao 组件上写 `key` 会报类型错误，因为 `key` 不在组件的 props 类型里：
+
+```tsx
+// ❌ TS2322: Type '{ key: number }' is not assignable to type 'Props'
+<Column key={item.id} />
+```
+
+kiaao 没有 React 的 key 属性概念。列表稳定的身份标识通过 `<Each>` 的 `keyed` 函数提供，而不是挂在每个子组件上。
+
+**解决**：用 `<Each keyed={...}>` 而非在子组件上写 key。
+
+## 事件处理器 `e` 隐式 any
+
+kiaao 的 JSX 类型使用宽松的 `IntrinsicElements`（`Record<string, any>`），意味着 `onInput` 的事件参数类型不会自动推导：
+
+```tsx
+// ❌ TS7006: Parameter 'e' implicitly has an 'any' type
+<input onInput={(e) => console.log(e.currentTarget.value)} />
+```
+
+**解决**：显式标注事件类型并断言 `currentTarget`：
+
+```tsx
+// ✅
+<input onInput={(e: InputEvent) => (e.currentTarget as HTMLInputElement).value} />
+```
+
+## `Signal<T>` 传给期望 `T` 的 props
+
+子组件声明了 `props: { value: number }`，但传入的是 `signal`（`Signal<number>`），类型不匹配：
+
+```tsx
+// ❌ TS2322: Type 'Signal<number>' is not assignable to type 'number'
+const count = use(0);
+<Display value={count} />;
+```
+
+**解决**：用 `MaybeSignal<T>`（`T | Signal<T>`）声明 props，让组件同时接受普通值和信号。参见 `components.md` 的 Props 段。
