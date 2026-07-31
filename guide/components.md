@@ -57,22 +57,24 @@ Props 可以是信号。通过 `context.use` 来规范化——如果 prop 是�
 
 Use `MaybeSignal<T>`（`T | Signal<T>`）to type props that accept either a plain value or a signal. This is the standard pattern for flexible component APIs — the same type used by `<Show value>`, `<Each value>`, and `<Case value>`.
 
+Use `MaybeSignal<T>`（`T | Signal<T>`）to type props that accept either a plain value or a signal. This is the standard pattern for flexible component APIs — the same type used by `<Show value>`, `<Each value>`, and `<Case value>`.
+
 用 `MaybeSignal<T>`（`T | Signal<T>`）来声明接受普通值或信号的 props 类型。这是灵活组件 API 的标准模式——`<Show value>`、`<Each value>`、`<Case value>` 都使用此类型。
 
 ```jsx
-import type { Context } from "kiaao";
+import type { Context, MaybeSignal } from "kiaao";
 
-function Display(props, { use }: Context) {
-  const value = use(props.value);
-  // props.value is 42 → creates a new component-level signal
-  // props.value is 42 → 创建新的组件级信号
-  // props.value is a signal → returns the same signal
-  // props.value 是信号 → 返回该信号
+function Display({ value }: { value: MaybeSignal<number> }, { use }: Context) {
+  const v = use(value);
+  // value is 42 → creates a new component-level signal
+  // value is 42 → 创建新的组件级信号
+  // value is a signal → returns the same signal
+  // value 是信号 → 返回该信号
 
   return (
     <div>
-      <p>Value: {value}</p>
-      <button onClick={() => value(value() + 1)}>Increment</button>
+      <p>Value: {v}</p>
+      <button onClick={() => v(v() + 1)}>Increment</button>
     </div>
   );
 }
@@ -179,7 +181,7 @@ Components compose naturally. A parent can hold signals and pass them to childre
 组件可以自然地组合。父组件可以持有信号并通过 props 传递给子组件，或通过模块级信号或工厂闭包共享。
 
 ```jsx
-import { use, type Context } from "kiaao";
+import { use, type Context, type MaybeSignal } from "kiaao";
 
 function App() {
   const count = use(0);
@@ -191,7 +193,7 @@ function App() {
   );
 }
 
-function Display({ value }, { use }: Context) {
+function Display({ value }: { value: MaybeSignal<number> }, { use }: Context) {
   const v = use(value);
   return <p>{v}</p>;
 }
