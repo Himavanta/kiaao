@@ -370,6 +370,111 @@ describe("Each 极端", () => {
 });
 
 // ═══════════════════════════════════════════════════════
+// Each — item 逻辑只读
+// ═══════════════════════════════════════════════════════
+
+describe("Each item 只读", () => {
+  test("写入 item(newVal) 是空操作，值不变", () => {
+    const items = use(["A"]);
+    let itemRef: any = null;
+
+    function ItemRow({ item }: { item: () => any }) {
+      itemRef = item;
+      return h("li", null, item);
+    }
+
+    const result = h(Each as any, { value: items }, ItemRow);
+    const container = mount(result);
+
+    expect(container.textContent).toBe("A");
+
+    itemRef("Z");
+    expect(container.textContent).toBe("A"); // 写入被忽略
+  });
+
+  test("item() 始终反映源数组最新值", () => {
+    const items = use(["A"]);
+
+    function ItemRow({ item }: { item: () => any }) {
+      return h("li", null, item);
+    }
+
+    const result = h(Each as any, { value: items }, ItemRow);
+    const container = mount(result);
+
+    expect(container.textContent).toBe("A");
+
+    items(["B"]);
+    expect(container.textContent).toBe("B");
+  });
+
+  test("keyed diff 时 item 随源数组更新", () => {
+    const items = use([
+      { id: 1, text: "A" },
+      { id: 2, text: "B" },
+    ]);
+
+    function ItemRow({ item }: { item: () => any }, { use }: any) {
+      const text = use(item, () => item().text);
+      return h("li", null, text);
+    }
+
+    const result = h(Each as any, { value: items, keyed: (it: any) => it.id }, ItemRow);
+    const container = mount(result);
+
+    const items_list = () => container.querySelectorAll("li");
+    expect(items_list()).toHaveLength(2);
+
+    // 替换第二个，保留第一个
+    items([
+      { id: 1, text: "A-updated" },
+      { id: 3, text: "C" },
+    ]);
+    expect(items_list()).toHaveLength(2);
+    expect(items_list()[0]?.textContent).toBe("A-updated");
+    expect(items_list()[1]?.textContent).toBe("C");
+  });
+
+  test("写入 item 不影响源数组", () => {
+    const items = use(["A"]);
+    let itemRef: any = null;
+
+    function ItemRow({ item }: { item: () => any }) {
+      itemRef = item;
+      return h("li", null, item);
+    }
+
+    h(Each as any, { value: items }, ItemRow);
+
+    itemRef("Z");
+    expect(items()[0]).toBe("A"); // 源数组未变
+  });
+
+  test("多项列表每项的 item 独立", () => {
+    const items = use(["A", "B", "C"]);
+    const refs: any[] = [];
+
+    function ItemRow({ item, index }: { item: () => any; index: number }) {
+      refs[index] = item;
+      return h("li", null, item);
+    }
+
+    const result = h(Each as any, { value: items }, ItemRow);
+    const container = mount(result);
+
+    expect(contentBefore(result)).toHaveLength(3);
+
+    // 写入任一项都不影响 DOM
+    refs[0]("X");
+    refs[1]("Y");
+    refs[2]("Z");
+    expect(container.querySelectorAll("li")[0]?.textContent).toBe("A");
+    expect(container.querySelectorAll("li")[1]?.textContent).toBe("B");
+    expect(container.querySelectorAll("li")[2]?.textContent).toBe("C");
+  });
+});
+
+// ═══════════════════════════════════════════════════════
 // 组合场景
 // ═══════════════════════════════════════════════════════
 

@@ -98,9 +98,9 @@ Keys must be strings. The value is converted to a string and looked up in the ta
 
 `<Each>` 从 `MaybeSignal<T[]>` 渲染列表。渲染组件接收 `{ item: Signal<T>, index: number }` 作为 props。第二个子元素（可选）是空状态 fallback 组件。
 
-`item` is a writable definition signal. The component can write to it directly for local UI changes (expand, toggle, inline editing) without updating the source array. The write propagates through kiaao's reactive chain normally. For changes that should persist in the data, update the source array signal instead.
+`item` is a logically read-only derivation — it always reflects the latest value at that position in the source array. Writing to it is a no-op. To change data, update the source array signal. For local UI state, create your own signal inside the component.
 
-`item` 是可写的定义信号。组件可以直接写入它来实现局部 UI 变更（展开、切换、行内编辑），无需更新源数组。写入会正常触发 kiaao 的响应式链路。需要持久化的数据变更则应更新源数组信号。
+`item` 是逻辑只读派生——始终反映源数组该位置的最新值。写入是空操作。更改数据请更新源数组信号。局部 UI 状态在组件内自行创建信号。
 
 ```jsx
 function ItemRow({ item, index }: { item: Signal<string>; index: number }) {
@@ -148,6 +148,10 @@ function EmptyList() {
   {EmptyList}
 </Each>;
 ```
+
+Each time `items` changes to an empty array, the fallback component is recreated. This follows kiaao's `===` rule — a new empty array is a new reference, so `<Each>` treats it as a change. If your fallback has side effects（animations, fetch, etc.），keep the array reference stable by caching and returning the same `[]` when items are genuinely unchanged. See reactivity.md for the reference stability pattern.
+
+每次 `items` 变为空数组时，fallback 组件会被重建。这遵循 kiaao 的 `===` 规则——新的空数组是新引用，`<Each>` 将其视为变化。如果 fallback 有副作用（动画、fetch 等），在条目确实未变时缓存并返回同一个 `[]` 引用以保持稳定。参见 reactivity.md 的引用稳定性模式。
 
 ### `keyed` — Stable Identity / 稳定身份标识
 

@@ -366,6 +366,12 @@ Derived field signals stay in sync with the source object. Updating `todo` with 
 
 派生字段信号与源对象保持同步。用新对象更新 `todo` 会自动更新 `text` 和 `done`。事件处理中可以通过调用字段信号获取最新值。
 
+### Reference Stability / 引用稳定性
+
+Every derivation recomputation produces a new value. For objects and arrays, this means a new reference — even if the contents are identical to the previous result. kiaao uses `===` to decide whether to notify downstream subscribers. A new reference signals a change; an identical reference short-circuits.
+
+每次派生重算都产生一个新值。对于对象和数组，这意味着一个新引用——即使内容与上次结果完全相同。kiaao 用 `===` 决定是否通知下游订阅者。新引用意味着变化；相同引用则短路。
+
 ## Cleanup / 清理
 
 Signals created with module-level `use` are global and persist for the lifetime of the application. Signals created with `context.use` are automatically cleaned up when the owning component unmounts. Each signal internally manages its own subscriptions and provides a unified `stop()` method that the framework calls during teardown.

@@ -55,6 +55,10 @@ Props can be signals. Pass them through `context.use` to normalize — if the pr
 
 Props 可以是信号。通过 `context.use` 来规范化——如果 prop 是普通值，`use` 创建一个新的组件级信号。如果 prop 已经是信号，`use` 直接返回该信号。
 
+Use `MaybeSignal<T>`（`T | Signal<T>`）to type props that accept either a plain value or a signal. This is the standard pattern for flexible component APIs — the same type used by `<Show value>`, `<Each value>`, and `<Case value>`.
+
+用 `MaybeSignal<T>`（`T | Signal<T>`）来声明接受普通值或信号的 props 类型。这是灵活组件 API 的标准模式——`<Show value>`、`<Each value>`、`<Case value>` 都使用此类型。
+
 ```jsx
 import type { Context } from "kiaao";
 

@@ -7,7 +7,7 @@ import { getAdapter } from "../adapter/index.ts";
 import type { ComponentFunction, Context } from "./component.ts";
 import { adoptBranch, normalizeChildList, subscribeSignal } from "./flow-shared.ts";
 import { disposeOwner } from "./owner.ts";
-import { definitionMode, toValue } from "./signal.ts";
+import { toValue } from "./signal.ts";
 import { isArray, isEmpty, isNotNil } from "./type-guards.ts";
 import type {
   ControlFlowChildren,
@@ -33,6 +33,7 @@ interface EachState {
   fallbackComponent: ComponentFunction | undefined;
   entries: Entry[];
   itemSignalMap: Map<any, Signal<any>>;
+  context: Context;
 }
 
 // ── Internal Helpers ──────────────────────────────────
@@ -45,13 +46,14 @@ function renderEachEntry(options: {
   skipInsert: boolean;
 }): HResult {
   const { state, rawValue, identity, index, skipInsert } = options;
-  const itemSignal = definitionMode(rawValue);
-  state.itemSignalMap.set(identity, itemSignal);
+  const bridge = state.context.use(rawValue);
+  const item = state.context.use(bridge, () => bridge());
+  state.itemSignalMap.set(identity, bridge);
   return adoptBranch({
     parentOwner: state.owner,
     anchor: state.anchor,
     Component: state.itemComponent,
-    componentProps: { item: itemSignal, index },
+    componentProps: { item, index },
     skipInsert,
   });
 }
@@ -232,6 +234,7 @@ export function Each<T = any>(
     fallbackComponent,
     entries: [],
     itemSignalMap: new Map(),
+    context,
   };
 
   let fallbackResult: HResult | null = null;

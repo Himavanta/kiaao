@@ -4,6 +4,10 @@ kiaao works with standard JSX transformation. No custom compiler or plugin is re
 
 kiaao 使用标准的 JSX 转换，不需要自定义编译器或插件。将构建工具的 JSX import source 配置为 `kiaao` 即可。
 
+⚠️ Files containing JSX must use the `.tsx` extension（`.jsx` for JavaScript）. The `jsxImportSource` setting only controls type resolution and runtime imports — it does not make `.ts` files parse JSX. An entry file with `<` syntax in a `.ts` file will fail to parse.
+
+⚠️ 含 JSX 的源文件必须使用 `.tsx` 扩展名（JavaScript 用 `.jsx`）。`jsxImportSource` 配置只控制类型解析和运行时导入——它不会让 `.ts` 文件解析 JSX。入口文件中出现 `<` 语法且扩展名为 `.ts` 将导致解析失败。
+
 ## Choosing Your Configuration / 选择配置
 
 First, identify which transform engine your toolchain uses, then follow the corresponding section below.
