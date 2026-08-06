@@ -3,7 +3,9 @@ import { createRouter } from "kiaao/router";
 
 const { Router, Link, push, current, search } = createRouter({
   routes: {
-    "": ({ RouterView }: { RouterView: ComponentFunction }) => <RouterView />,
+    "": ({ RouterView }: { RouterView: ComponentFunction }) => (
+      <RouterView>{() => <div>NotFound</div>}</RouterView>
+    ),
     i: {
       "": lazy(() => import("./components/layout")),
       expore: lazy(() => import("./components/expore")),
@@ -12,6 +14,7 @@ const { Router, Link, push, current, search } = createRouter({
       tools: lazy(() => import("./test/motion.tsx")),
       plugins: lazy(() => import("./components/expore")),
     },
+    world: lazy(() => import("./world/index.tsx")),
   },
   onRoute: (to) => {
     if (to === "/") return "/i/apps";
