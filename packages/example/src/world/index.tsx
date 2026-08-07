@@ -145,20 +145,11 @@ function createGame(...systems: SystemWithPool[]) {
       sys.update(sys.pool, frame, delta);
     }
 
-    // ─── 3. 只更新有变化的信号 ──────────────────────
+    // ─── 3. 更新信号 ──────────────────────
     for (const [id, newData] of frame) {
       const signal = gamePool.get(id);
       if (!signal) continue;
-      const oldData = signal();
-      // 简单比较所有字段
-      let changed = false;
-      for (const key in newData) {
-        if (oldData[key] !== newData[key]) {
-          changed = true;
-          break;
-        }
-      }
-      if (changed) signal(newData);
+      signal(newData);
     }
 
     requestAnimationFrame(loop);
