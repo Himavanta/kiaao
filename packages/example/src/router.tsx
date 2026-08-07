@@ -16,7 +16,7 @@ const { Router, Link, push, current, search } = createRouter({
     },
     world: lazy(() => import("./world/index.tsx")),
   },
-  onRoute: (to) => {
+  onRoute(to) {
     if (to === "/") return "/i/apps";
   },
 });

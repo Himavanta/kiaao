@@ -1,8 +1,0 @@
-.box {
-  position: fixed;
-  border-radius: 8px;
-  // 提示浏览器该元素会变化，提前创建合成层
-  will-change: transform;
-  // 取消 transition 以免干扰物理效果
-  transition: none;
-}
