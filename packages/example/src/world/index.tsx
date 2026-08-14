@@ -68,34 +68,43 @@ type Movable = { x: number; y: number; vx: number; vy: number };
 type Bounded = Movable & { w: number; h: number };
 
 function createMovementSystem<T extends Movable = Movable>() {
-  // 系统私有池：存储哪些实体受此系统影响
-  const pool = new Set<EntityId>();
+  // 移动池：每帧更新位置；静止池：保持不动，零帧写入开销
+  const movePool = new Set<EntityId>();
+  const staticPool = new Set<EntityId>();
 
   // register: 接收配置，返回初始化函数
-  const register = (props: { x?: number; y?: number; vx?: number; vy?: number }) => {
+  const register = (props: {
+    x?: number;
+    y?: number;
+    vx?: number;
+    vy?: number;
+    moving?: boolean;
+  }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
+      const isMoving = props.moving ?? true;
 
       onMount(() => {
-        pool.add(id);
+        (isMoving ? movePool : staticPool).add(id);
       });
       onUnmount(() => {
-        pool.delete(id);
+        movePool.delete(id);
+        staticPool.delete(id);
       });
 
-      // 返回数据切片
+      // 返回数据切片：静止实体的速度恒为 0
       return {
         x: props.x ?? 0,
         y: props.y ?? 0,
-        vx: props.vx ?? 0,
-        vy: props.vy ?? 0,
+        vx: isMoving ? (props.vx ?? 0) : 0,
+        vy: isMoving ? (props.vy ?? 0) : 0,
       };
     };
   };
 
-  // update: 帧逻辑，写时拷贝原地修改
+  // update: 帧逻辑，只遍历移动池（静止池实体不参与帧写入）
   const update = (frame: FrameManager<T>, delta: number) => {
-    for (const id of pool) {
+    for (const id of movePool) {
       frame(id, (e) => {
         e.x += e.vx * delta;
         e.y += e.vy * delta;
@@ -165,66 +174,98 @@ function createBoundarySystem<T extends Bounded = Bounded>() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 function createCollisionSystem<T extends Bounded = Bounded>() {
-  const pool = new Set<EntityId>();
+  // 移动池 + 静止池：配对只发生在移动实体侧，静止×静止不检测
+  const movePool = new Set<EntityId>();
+  const staticPool = new Set<EntityId>();
 
-  const register = () => {
+  const register = (props: { moving?: boolean }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
+      const isMoving = props.moving ?? true;
+
       onMount(() => {
-        pool.add(id);
+        (isMoving ? movePool : staticPool).add(id);
       });
       onUnmount(() => {
-        pool.delete(id);
+        movePool.delete(id);
+        staticPool.delete(id);
       });
       // 碰撞系统不产生新数据
       return {};
     };
   };
 
-  const update = (frame: FrameManager<T>) => {
-    const entities = Array.from(pool);
+  // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
+  // 速度只处理碰撞法线方向（分离轴）的分量，切线方向分量保留
+  const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
+    const a = frame(idA);
+    const b = frame(idB);
+    if (!a || !b) return;
 
-    for (const [i, idA] of entities.entries()) {
-      for (const idB of entities.slice(i + 1)) {
-        const a = frame(idA);
-        const b = frame(idB);
-        if (!a || !b) continue;
+    // 矩形相交判定
+    const hit = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    if (!hit) return;
 
-        // 矩形相交判定
-        const hit = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-        if (!hit) continue;
+    // 分开防止重叠：沿重叠较小的轴推离
+    const overlapX = (a.w + b.w) / 2 - Math.abs(a.x - b.x);
+    const overlapY = (a.h + b.h) / 2 - Math.abs(a.y - b.y);
 
-        // 交换速度
-        const tempVx = a.vx;
-        const tempVy = a.vy;
-
-        // 分开防止重叠
-        const overlapX = (a.w + b.w) / 2 - Math.abs(a.x - b.x);
-        const overlapY = (a.h + b.h) / 2 - Math.abs(a.y - b.y);
-
+    // 静止实体：不交换速度，撞击者按法线方向反弹并推离（障碍物原地不动）
+    if (bStatic) {
+      frame(idA, (e) => {
         if (overlapX > overlapY) {
-          frame(idA, (e) => {
-            e.vx = b.vx;
-            e.vy = b.vy;
-            if (a.y > b.y) e.y += overlapY;
-          });
-          frame(idB, (e) => {
-            e.vx = tempVx;
-            e.vy = tempVy;
-            if (a.y <= b.y) e.y += overlapY;
-          });
+          e.vy = -a.vy;
+          if (a.y > b.y) e.y += overlapY;
+          else e.y -= overlapY;
         } else {
-          frame(idA, (e) => {
-            e.vx = b.vx;
-            e.vy = b.vy;
-            if (a.x > b.x) e.x += overlapX;
-          });
-          frame(idB, (e) => {
-            e.vx = tempVx;
-            e.vy = tempVy;
-            if (a.x <= b.x) e.x += overlapX;
-          });
+          e.vx = -a.vx;
+          if (a.x > b.x) e.x += overlapX;
+          else e.x -= overlapX;
         }
+      });
+      return;
+    }
+
+    // 交换速度（只交换法线方向分量）
+    const tempVx = a.vx;
+    const tempVy = a.vy;
+
+    if (overlapX > overlapY) {
+      frame(idA, (e) => {
+        e.vy = b.vy;
+        if (a.y > b.y) e.y += overlapY;
+      });
+      frame(idB, (e) => {
+        e.vy = tempVy;
+        if (a.y <= b.y) e.y += overlapY;
+      });
+      return;
+    }
+
+    frame(idA, (e) => {
+      e.vx = b.vx;
+      if (a.x > b.x) e.x += overlapX;
+    });
+    frame(idB, (e) => {
+      e.vx = tempVx;
+      if (a.x <= b.x) e.x += overlapX;
+    });
+  };
+
+  // update: 移动×移动去重配对 + 移动×静止全配对
+  const update = (frame: FrameManager<T>) => {
+    const moves = Array.from(movePool);
+    const statics = Array.from(staticPool);
+
+    for (const [i, idA] of moves.entries()) {
+      for (const idB of moves.slice(i + 1)) {
+        resolve(frame, idA, idB, false);
+      }
+    }
+
+    for (const idA of moves) {
+      for (const idB of statics) {
+        resolve(frame, idA, idB, true);
       }
     }
   };
@@ -368,15 +409,23 @@ export const StyleMemo = direct((el, props, { use }) => {
 type BoxProps = {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  vx?: number;
+  vy?: number;
   color: string;
+  /** 是否参与移动：false 时实体注册到静止池，保持不动（仍参与边界/碰撞） */
+  moving?: boolean;
 };
 
-function Box({ x, y, vx, vy, color }: BoxProps, ctx: Context) {
+function Box({ x, y, vx, vy, color, moving = true }: BoxProps, ctx: Context) {
   const { use } = ctx;
 
-  const entity = useGame(ctx, regMove({ x, y, vx, vy }), regBound({ w: 80, h: 80 }), regColl());
+  // 所有实体统一注册三个系统；moving 参数决定进移动池还是静止池（移动/碰撞同步）
+  const entity = useGame(
+    ctx,
+    regMove({ x, y, vx, vy, moving }),
+    regBound({ w: 80, h: 80 }),
+    regColl({ moving }),
+  );
 
   return (
     <StyleMemo
@@ -402,7 +451,7 @@ function Box({ x, y, vx, vy, color }: BoxProps, ctx: Context) {
 export default function App() {
   return (
     <>
-      <Box x={100} y={100} vx={150} vy={50} color="#e74c3c" />
+      <Box x={100} y={100} color="#e74c3c" moving={false} />
       <Box x={400} y={300} vx={-100} vy={-80} color="#3498db" />
       <Box x={700} y={200} vx={60} vy={120} color="#2ecc71" />
       <Box x={200} y={500} vx={-200} vy={-30} color="#f39c12" />
