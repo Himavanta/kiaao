@@ -1,13 +1,14 @@
 import { Each, use, type Context } from "kiaao";
 
-import { StyleMemo } from "./directives";
-import { createGame, type EntityId, type FrameManager } from "./engine";
+import { createGame, type EntityId, type FrameManager } from "../engine";
+import { StyleMemo } from "../engine/directives";
 import {
   createBoundarySystem,
   createCollisionSystem,
   createMovementSystem,
   type Movable,
-} from "./systems";
+  type Shape,
+} from "../engine/systems";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1. 重力系统（world2 自定义系统示例）
@@ -59,6 +60,7 @@ type BallEntity = {
   w: number;
   h: number;
   gravity: number;
+  shape: Shape;
 };
 
 const [regMove, updMove] = createMovementSystem<BallEntity>();
@@ -92,7 +94,7 @@ function Ball({ x, y, vx, vy, size, color, gravity, onRemove }: BallProps, ctx: 
     ctx,
     regMove({ x, y, vx, vy }),
     regBound({ w: size, h: size }),
-    regColl({ moving: true }),
+    regColl({ moving: true, shape: "circle" }),
     regGrav({ gravity }),
   );
 

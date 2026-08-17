@@ -1,6 +1,6 @@
 import type { Context } from "kiaao";
 
-import type { EntityId, FrameManager } from "./engine";
+import type { EntityId, FrameManager } from "./index";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 系统字段需求
@@ -121,12 +121,89 @@ export function createBoundarySystem<T extends Bounded = Bounded>() {
 // 碰撞系统
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export function createCollisionSystem<T extends Bounded = Bounded>() {
+/** 碰撞形状：矩形（默认）或圆形（半径 = w / 2，要求 w == h） */
+export type Shape = "rect" | "circle";
+
+/** 碰撞系统字段需求：实体具备尺寸与形状 */
+export type Collidable = Bounded & { shape: Shape };
+
+/** 接触信息：法线 (nx, ny) 指向 a 被推离 b 的方向，depth 为推离量 */
+type Contact = {
+  hit: boolean;
+  nx: number;
+  ny: number;
+  depth: number;
+};
+
+const noContact: Contact = { hit: false, nx: 0, ny: 0, depth: 0 };
+
+/** 矩形 × 矩形：min-max 重叠，沿重叠较小的轴分离 */
+function detectRectRect(a: Bounded, b: Bounded): Contact {
+  const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  if (overlapX <= 0 || overlapY <= 0) return noContact;
+
+  if (overlapX < overlapY) {
+    return { hit: true, nx: a.x < b.x ? -1 : 1, ny: 0, depth: overlapX };
+  }
+  return { hit: true, nx: 0, ny: a.y < b.y ? -1 : 1, depth: overlapY };
+}
+
+/** 圆 × 圆：中心距比较，法线 = 圆心连线 */
+function detectCircleCircle(a: Bounded, b: Bounded): Contact {
+  const ra = a.w / 2;
+  const rb = b.w / 2;
+  const dx = a.x + ra - (b.x + rb);
+  const dy = a.y + ra - (b.y + rb);
+  const dist = Math.hypot(dx, dy);
+  const minDist = ra + rb;
+  if (dist >= minDist) return noContact;
+
+  // 同心退化：任意方向（取 +X）
+  if (dist === 0) return { hit: true, nx: 1, ny: 0, depth: ra + rb };
+  return { hit: true, nx: dx / dist, ny: dy / dist, depth: minDist - dist };
+}
+
+/** 圆 × 矩形：圆心到矩形最近点（Clamp），法线 = 圆心 − 最近点 */
+function detectCircleRect(a: Bounded, b: Bounded): Contact {
+  const r = a.w / 2;
+  const cx = a.x + r;
+  const cy = a.y + r;
+  const px = Math.max(b.x, Math.min(cx, b.x + b.w));
+  const py = Math.max(b.y, Math.min(cy, b.y + b.h));
+  const dx = cx - px;
+  const dy = cy - py;
+  const distSq = dx * dx + dy * dy;
+  if (distSq >= r * r) return noContact;
+
+  // 圆心在矩形内（最近点 = 圆心）：选穿透最浅的边推离
+  if (distSq === 0) {
+    const edges = [
+      { nx: -1, ny: 0, depth: cx - b.x },
+      { nx: 1, ny: 0, depth: b.x + b.w - cx },
+      { nx: 0, ny: -1, depth: cy - b.y },
+      { nx: 0, ny: 1, depth: b.y + b.h - cy },
+    ];
+    edges.sort((m, n) => m.depth - n.depth);
+    const { nx, ny, depth } = edges[0];
+    return { hit: true, nx, ny, depth: depth + r };
+  }
+
+  const dist = Math.sqrt(distSq);
+  return { hit: true, nx: dx / dist, ny: dy / dist, depth: r - dist };
+}
+
+/** 交换 a/b 后法线取反（detect 的法线约定是"a 远离 b"） */
+function invert(c: Contact): Contact {
+  return c.hit ? { hit: true, nx: -c.nx, ny: -c.ny, depth: c.depth } : c;
+}
+
+export function createCollisionSystem<T extends Collidable = Collidable>() {
   // 移动池 + 静止池：配对只发生在移动实体侧，静止×静止不检测
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  const register = (props: { moving?: boolean }) => {
+  const register = (props: { moving?: boolean; shape?: Shape }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       const isMoving = props.moving ?? true;
@@ -138,65 +215,58 @@ export function createCollisionSystem<T extends Bounded = Bounded>() {
         movePool.delete(id);
         staticPool.delete(id);
       });
-      // 碰撞系统不产生新数据
-      return {};
+
+      // 返回数据切片：形状参与碰撞判定
+      return { shape: props.shape ?? "rect" };
     };
   };
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
-  // 速度只处理碰撞法线方向（分离轴）的分量，切线方向分量保留
   const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
     const a = frame(idA);
     const b = frame(idB);
     if (!a || !b) return;
 
-    // 矩形相交判定
-    const hit = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-    if (!hit) return;
+    // 按形状配对选择检测函数（法线统一指向"a 远离 b"）
+    const contact =
+      a.shape === "circle"
+        ? b.shape === "circle"
+          ? detectCircleCircle(a, b)
+          : detectCircleRect(a, b)
+        : b.shape === "circle"
+          ? invert(detectCircleRect(b, a))
+          : detectRectRect(a, b);
+    if (!contact.hit) return;
 
-    // 分开防止重叠：沿重叠较小的轴推离（min-max 精确重叠量，不受尺寸差异影响）
-    const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-    const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-
-    // 静止实体：不交换速度，撞击者按法线方向反弹并推离（障碍物原地不动）
+    // 静止实体：反射 + 推离（障碍物原地不动）
     if (bStatic) {
       frame(idA, (e) => {
-        if (overlapX > overlapY) {
-          e.vy = -a.vy;
-          if (a.y > b.y) e.y += overlapY;
-          else e.y -= overlapY;
-        } else {
-          e.vx = -a.vx;
-          if (a.x > b.x) e.x += overlapX;
-          else e.x -= overlapX;
-        }
+        const dot = e.vx * contact.nx + e.vy * contact.ny;
+        e.vx -= 2 * dot * contact.nx;
+        e.vy -= 2 * dot * contact.ny;
+        e.x += contact.nx * contact.depth;
+        e.y += contact.ny * contact.depth;
       });
       return;
     }
 
-    // 交换速度（只交换法线方向分量）
-    const tempVx = a.vx;
-    const tempVy = a.vy;
-
-    if (overlapX > overlapY) {
-      frame(idA, (e) => {
-        e.vy = b.vy;
-        if (a.y > b.y) e.y += overlapY;
-      });
-      frame(idB, (e) => {
-        e.vy = tempVy;
-        if (a.y <= b.y) e.y += overlapY;
-      });
-      return;
-    }
+    // 移动×移动：交换法线分量（切线保留）+ 双方沿法线分离
+    const vaN = a.vx * contact.nx + a.vy * contact.ny;
+    const vbN = b.vx * contact.nx + b.vy * contact.ny;
 
     frame(idA, (e) => {
-      e.vx = b.vx;
-      if (a.x > b.x) e.x += overlapX;
+      const curN = e.vx * contact.nx + e.vy * contact.ny;
+      e.vx += (vbN - curN) * contact.nx;
+      e.vy += (vbN - curN) * contact.ny;
+      e.x += contact.nx * contact.depth;
+      e.y += contact.ny * contact.depth;
     });
     frame(idB, (e) => {
-      e.vx = tempVx;
-      if (a.x <= b.x) e.x += overlapX;
+      const curN = e.vx * contact.nx + e.vy * contact.ny;
+      e.vx += (vaN - curN) * contact.nx;
+      e.vy += (vaN - curN) * contact.ny;
+      e.x -= contact.nx * contact.depth;
+      e.y -= contact.ny * contact.depth;
     });
   };
 

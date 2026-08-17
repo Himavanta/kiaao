@@ -1,8 +1,13 @@
 import type { Context } from "kiaao";
 
-import { StyleMemo } from "./directives";
-import { createGame } from "./engine";
-import { createBoundarySystem, createCollisionSystem, createMovementSystem } from "./systems";
+import { createGame } from "../engine";
+import { StyleMemo } from "../engine/directives";
+import {
+  createBoundarySystem,
+  createCollisionSystem,
+  createMovementSystem,
+  type Shape,
+} from "../engine/systems";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1. 创建游戏实例
@@ -16,6 +21,7 @@ type BoxEntity = {
   vy: number;
   w: number;
   h: number;
+  shape: Shape;
 };
 
 const [regMove, updMove] = createMovementSystem<BoxEntity>();
