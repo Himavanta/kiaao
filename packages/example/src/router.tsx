@@ -15,6 +15,7 @@ const { Router, Link, push, current, search } = createRouter({
       plugins: lazy(() => import("./components/expore")),
     },
     world: lazy(() => import("./world/index.tsx")),
+    world2: lazy(() => import("./world/world2.tsx")),
   },
   onRoute(to) {
     if (to === "/") return "/i/apps";
