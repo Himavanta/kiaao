@@ -1,11 +1,12 @@
 import { Each, use, type Context } from "kiaao";
 
-import { createGame, type EntityId, type FrameManager } from "../engine";
+import { createGame, type EngineEvents, type EntityId, type FrameManager } from "../engine";
 import { StyleMemo } from "../engine/directives";
 import {
   createBoundarySystem,
   createCollisionSystem,
   createMovementSystem,
+  type Bounds,
   type Movable,
   type Shape,
 } from "../engine/systems";
@@ -60,7 +61,12 @@ type BallEntity = {
   w: number;
   h: number;
   gravity: number;
+  bounds: Bounds;
   shape: Shape;
+  enabled: boolean;
+  breakable: boolean;
+  drive: number;
+  points: number;
 };
 
 const [regMove, updMove] = createMovementSystem<BallEntity>();
@@ -69,7 +75,7 @@ const [regColl, updColl] = createCollisionSystem<BallEntity>();
 const [regGrav, updGrav] = createGravitySystem<BallEntity>();
 
 // 帧内执行顺序：重力 → 移动 → 边界 → 碰撞
-const { useGame } = createGame(updGrav, updMove, updBound, updColl);
+const { useGame } = createGame<BallEntity, EngineEvents>([updGrav, updMove, updBound, updColl]);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 3. 弹球组件

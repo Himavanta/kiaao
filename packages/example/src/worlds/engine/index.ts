@@ -59,25 +59,64 @@ function createFrameManager<T extends Record<string, any>>(
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 游戏引擎
+// 事件系统
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 系统更新函数：帧逻辑入口，统一签名 (frame, delta) */
-export type Update<T extends Record<string, any> = Record<string, any>> = (
-  frame: FrameManager<T>,
-  delta: number,
-) => void;
+/** 事件词汇表：事件名 → payload 类型（游戏层领域词汇，独立声明） */
+export type EventMap = Record<string, Record<string, unknown>>;
+
+/** 事件统一形态：判别联合（消费端 switch 自动收窄 payload） */
+export type GameEvent<EM extends EventMap> = {
+  [K in keyof EM]: { type: K; payload: EM[K] };
+}[keyof EM];
+
+/** emits 句柄：事件名即方法，payload 自动校验 */
+export type Emits<EM extends EventMap> = { [K in keyof EM]: (payload: EM[K]) => void };
+
+/** 引擎通用系统词汇：系统库各系统发射的事件（游戏词汇表需包含或扩展） */
+export type EngineEvents = {
+  break: { id: EntityId; by: EntityId; points: number };
+  bounce: { id: EntityId; by: EntityId };
+  out: { id: EntityId };
+};
+
+/** 系统更新函数：帧逻辑入口，可发射事件 */
+export type Update<
+  T extends Record<string, any> = Record<string, any>,
+  EM extends EventMap = {},
+> = (frame: FrameManager<T>, delta: number, emits: Emits<EM>) => void;
+
+/** 事件系统：纯函数形态（无池、无 register），消费事件并落地为数据 */
+export type EventSystem<
+  T extends Record<string, any> = Record<string, any>,
+  EM extends EventMap = {},
+> = (frame: FrameManager<T>, events: GameEvent<EM>[], emits: Emits<EM>) => void;
 
 /**
- * 创建游戏：持有帧循环与主数据池。
+ * 创建游戏：持有帧循环、主数据池与事件队列。
  * - useGame(ctx, ...registers)：组件注册实体，合并各系统切片为完整实体
+ * - emits：事实入口（帧外也可用：DOM 事件、异步回调），事件在事件阶段被消费
  * - dispose()：停止帧循环（组件卸载、游戏结束等场景）
  */
-export function createGame<T extends Record<string, any> = Record<string, any>>(
-  ...updates: Array<Update<T>>
-) {
+export function createGame<
+  T extends Record<string, any> = Record<string, any>,
+  EM extends EventMap = {},
+>(updates: Array<Update<T, EM>>, eventSystems: Array<EventSystem<T, EM>> = []) {
   // 主数据池：id → Signal
   const gamePool = new Map<EntityId, Signal<T>>();
+
+  // 事件队列：累积区语义（帧外可随时入队），事件阶段消费即清空
+  const eventQueue: GameEvent<EM>[] = [];
+
+  // Proxy emits：属性访问即发射函数（零样板、类型安全）
+  const emits = new Proxy({} as Emits<EM>, {
+    get: (_target, key: string | symbol) => {
+      if (typeof key !== "string") return undefined;
+      return (payload: unknown) => {
+        eventQueue.push({ type: key, payload } as GameEvent<EM>);
+      };
+    },
+  });
 
   let prevTime = performance.now();
   let rafId = 0;
@@ -90,9 +129,17 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
     // 创建帧管理器（延迟快照）
     const { frame, flush } = createFrameManager(gamePool);
 
-    // 按顺序执行所有系统
+    // 更新阶段：所有更新系统按序执行（可 emits 发射事件）
     for (const update of updates) {
-      update(frame, delta);
+      update(frame, delta, emits);
+    }
+
+    // 事件阶段：循环分发直到队列空（链式事件同帧完成）
+    while (eventQueue.length > 0) {
+      const batch = eventQueue.splice(0);
+      for (const eventSystem of eventSystems) {
+        eventSystem(frame, batch, emits);
+      }
     }
 
     // 帧末提交所有脏数据
@@ -136,6 +183,7 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
 
   return {
     useGame,
+    emits,
     // 销毁：停止帧循环（组件卸载、游戏结束等场景）
     dispose: () => cancelAnimationFrame(rafId),
   };

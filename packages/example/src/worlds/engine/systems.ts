@@ -64,13 +64,36 @@ export function createMovementSystem<T extends Movable = Movable>() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 边界反弹系统
+// 边界系统（按边动作：反弹 / 夹住 / 穿过 / 出界）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export function createBoundarySystem<T extends Bounded = Bounded>() {
+/** 边界动作：bounce 反弹 / clamp 夹住 / pass 穿过 / die 标记出界 */
+export type BoundAction = "bounce" | "clamp" | "pass" | "die";
+
+/** 四边动作配置 */
+export type Bounds = {
+  left: BoundAction;
+  right: BoundAction;
+  top: BoundAction;
+  bottom: BoundAction;
+};
+
+/** 默认动作：四边反弹（与旧版行为一致） */
+const DEFAULT_BOUNDS: Bounds = { left: "bounce", right: "bounce", top: "bounce", bottom: "bounce" };
+
+/** 边界系统字段需求：实体具备尺寸与边界动作 */
+export type BoundedEntity = Bounded & { bounds: Bounds };
+
+/** 边界系统发射的事件词汇：出界（die 边） */
+export type BoundaryEmits = { out: (payload: { id: EntityId }) => void };
+
+export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(config?: {
+  width?: number;
+  height?: number;
+}) {
   const pool = new Set<EntityId>();
 
-  const register = (props: { w?: number; h?: number }) => {
+  const register = (props: { w?: number; h?: number; bounds?: Partial<Bounds> }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       onMount(() => {
@@ -80,36 +103,101 @@ export function createBoundarySystem<T extends Bounded = Bounded>() {
         pool.delete(id);
       });
 
-      // 返回数据切片
+      // 返回数据切片：边界动作参与帧判定
       return {
         w: props.w ?? 80,
         h: props.h ?? 80,
+        bounds: { ...DEFAULT_BOUNDS, ...props.bounds },
       };
     };
   };
 
-  const update = (frame: FrameManager<T>) => {
-    const maxX = window.innerWidth;
-    const maxY = window.innerHeight;
+  // 水平边处理：left / right（die 边由 update 提前拦截并报告事件）
+  const applyHorizontal = (e: T, maxX: number) => {
+    const { left, right } = e.bounds;
+    if (e.x < 0) {
+      if (left === "bounce") {
+        e.x = 0;
+        e.vx = -e.vx;
+      } else if (left === "clamp") {
+        e.x = 0;
+        e.vx = 0;
+      }
+    }
+    if (e.x + e.w > maxX) {
+      if (right === "bounce") {
+        e.x = maxX - e.w;
+        e.vx = -e.vx;
+      } else if (right === "clamp") {
+        e.x = maxX - e.w;
+        e.vx = 0;
+      }
+    }
+  };
+
+  // 垂直边处理：top / bottom（die 边由 update 提前拦截并报告事件）
+  const applyVertical = (e: T, maxY: number) => {
+    const { top, bottom } = e.bounds;
+    if (e.y < 0) {
+      if (top === "bounce") {
+        e.y = 0;
+        e.vy = -e.vy;
+      } else if (top === "clamp") {
+        e.y = 0;
+        e.vy = 0;
+      }
+    }
+    if (e.y + e.h > maxY) {
+      if (bottom === "bounce") {
+        e.y = maxY - e.h;
+        e.vy = -e.vy;
+      } else if (bottom === "clamp") {
+        e.y = maxY - e.h;
+        e.vy = 0;
+      }
+    }
+  };
+
+  // 是否存在需要处理的越界（pass 边忽略）
+  const isOutOfBounds = (e: T, maxX: number, maxY: number) => {
+    const { bounds } = e;
+    return (
+      (e.x < 0 && bounds.left !== "pass") ||
+      (e.x + e.w > maxX && bounds.right !== "pass") ||
+      (e.y < 0 && bounds.top !== "pass") ||
+      (e.y + e.h > maxY && bounds.bottom !== "pass")
+    );
+  };
+
+  // 是否存在 die 边出界（出界事实由游戏规则处理）
+  const hasDieEdge = (e: T, maxX: number, maxY: number) => {
+    const { bounds } = e;
+    return (
+      (e.x < 0 && bounds.left === "die") ||
+      (e.x + e.w > maxX && bounds.right === "die") ||
+      (e.y < 0 && bounds.top === "die") ||
+      (e.y + e.h > maxY && bounds.bottom === "die")
+    );
+  };
+
+  const update = (frame: FrameManager<T>, _delta: number, emits: BoundaryEmits) => {
+    const maxX = config?.width ?? window.innerWidth;
+    const maxY = config?.height ?? window.innerHeight;
 
     for (const id of pool) {
-      frame(id, (e) => {
-        if (e.x < 0) {
-          e.x = 0;
-          e.vx = -e.vx;
-        }
-        if (e.x + e.w > maxX) {
-          e.x = maxX - e.w;
-          e.vx = -e.vx;
-        }
-        if (e.y < 0) {
-          e.y = 0;
-          e.vy = -e.vy;
-        }
-        if (e.y + e.h > maxY) {
-          e.y = maxY - e.h;
-          e.vy = -e.vy;
-        }
+      // 读模式判断越界：无越界不写（避免无谓的信号传播）
+      const e = frame(id);
+      if (!e || !isOutOfBounds(e, maxX, maxY)) continue;
+
+      // die 边出界：报告事实（出界后果由事件系统处理），不直接修改数据
+      if (hasDieEdge(e, maxX, maxY)) {
+        emits.out({ id });
+        continue;
+      }
+
+      frame(id, (v) => {
+        applyHorizontal(v, maxX);
+        applyVertical(v, maxY);
       });
     }
   };
@@ -124,8 +212,24 @@ export function createBoundarySystem<T extends Bounded = Bounded>() {
 /** 碰撞形状：矩形（默认）或圆形（半径 = w / 2，要求 w == h） */
 export type Shape = "rect" | "circle";
 
-/** 碰撞系统字段需求：实体具备尺寸与形状 */
-export type Collidable = Bounded & { shape: Shape };
+/** 碰撞系统字段需求：实体具备尺寸、形状、碰撞开关、可击碎标记、表面速度传导系数与击碎奖励 */
+export type Collidable = Bounded & {
+  shape: Shape;
+  /** 碰撞开关：false 的实体不参与碰撞判定（如被击碎的砖块） */
+  enabled: boolean;
+  /** 可击碎标记：被撞击时报告击碎事实 */
+  breakable: boolean;
+  /** 表面速度传导系数：静止实体的运动带动撞击者（如挡板带球） */
+  drive: number;
+  /** 击碎奖励：可击碎实体被击碎时的分值（由事件消费系统使用） */
+  points: number;
+};
+
+/** 碰撞系统发射的事件词汇：击碎（可击碎实体）/ 弹碰（普通障碍） */
+export type CollisionEmits = {
+  break: (payload: { id: EntityId; by: EntityId; points: number }) => void;
+  bounce: (payload: { id: EntityId; by: EntityId }) => void;
+};
 
 /** 接触信息：法线 (nx, ny) 指向 a 被推离 b 的方向，depth 为推离量 */
 type Contact = {
@@ -203,7 +307,14 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  const register = (props: { moving?: boolean; shape?: Shape }) => {
+  const register = (props: {
+    moving?: boolean;
+    shape?: Shape;
+    enabled?: boolean;
+    breakable?: boolean;
+    drive?: number;
+    points?: number;
+  }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       const isMoving = props.moving ?? true;
@@ -216,16 +327,31 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
         staticPool.delete(id);
       });
 
-      // 返回数据切片：形状参与碰撞判定
-      return { shape: props.shape ?? "rect" };
+      // 返回数据切片：形状/开关/可击碎/传导系数/击碎奖励参与碰撞判定
+      return {
+        shape: props.shape ?? "rect",
+        enabled: props.enabled ?? true,
+        breakable: props.breakable ?? false,
+        drive: props.drive ?? 0,
+        points: props.points ?? 0,
+      };
     };
   };
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
-  const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
+  const resolve = (
+    frame: FrameManager<T>,
+    emits: CollisionEmits,
+    idA: EntityId,
+    idB: EntityId,
+    bStatic: boolean,
+  ) => {
     const a = frame(idA);
     const b = frame(idB);
     if (!a || !b) return;
+
+    // 已禁用的实体不参与碰撞（如被击碎的砖块）
+    if (!a.enabled || !b.enabled) return;
 
     // 按形状配对选择检测函数（法线统一指向"a 远离 b"）
     const contact =
@@ -238,12 +364,19 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
           : detectRectRect(a, b);
     if (!contact.hit) return;
 
-    // 静止实体：反射 + 推离（障碍物原地不动）
+    // 静止实体：报告事实 + 反射/推离（障碍物原地不动）
     if (bStatic) {
+      // 可击碎实体：报告击碎事实（禁用/加分/加速由事件消费系统落地）
+      if (b.breakable) emits.break({ id: idB, by: idA, points: b.points });
+      else emits.bounce({ id: idB, by: idA });
+
       frame(idA, (e) => {
         const dot = e.vx * contact.nx + e.vy * contact.ny;
         e.vx -= 2 * dot * contact.nx;
         e.vy -= 2 * dot * contact.ny;
+        // 表面速度传导：静止实体的运动带动撞击者（如挡板带球）
+        e.vx += b.drive * b.vx;
+        e.vy += b.drive * b.vy;
         e.x += contact.nx * contact.depth;
         e.y += contact.ny * contact.depth;
       });
@@ -271,19 +404,19 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
   };
 
   // update: 移动×移动去重配对 + 移动×静止全配对
-  const update = (frame: FrameManager<T>) => {
+  const update = (frame: FrameManager<T>, _delta: number, emits: CollisionEmits) => {
     const moves = Array.from(movePool);
     const statics = Array.from(staticPool);
 
     for (const [i, idA] of moves.entries()) {
       for (const idB of moves.slice(i + 1)) {
-        resolve(frame, idA, idB, false);
+        resolve(frame, emits, idA, idB, false);
       }
     }
 
     for (const idA of moves) {
       for (const idB of statics) {
-        resolve(frame, idA, idB, true);
+        resolve(frame, emits, idA, idB, true);
       }
     }
   };

@@ -1,11 +1,12 @@
 import type { Context } from "kiaao";
 
-import { createGame } from "../engine";
+import { createGame, type EngineEvents } from "../engine";
 import { StyleMemo } from "../engine/directives";
 import {
   createBoundarySystem,
   createCollisionSystem,
   createMovementSystem,
+  type Bounds,
   type Shape,
 } from "../engine/systems";
 
@@ -21,14 +22,19 @@ type BoxEntity = {
   vy: number;
   w: number;
   h: number;
+  bounds: Bounds;
   shape: Shape;
+  enabled: boolean;
+  breakable: boolean;
+  drive: number;
+  points: number;
 };
 
 const [regMove, updMove] = createMovementSystem<BoxEntity>();
 const [regBound, updBound] = createBoundarySystem<BoxEntity>();
 const [regColl, updColl] = createCollisionSystem<BoxEntity>();
 
-const { useGame } = createGame(updMove, updBound, updColl);
+const { useGame } = createGame<BoxEntity, EngineEvents>([updMove, updBound, updColl]);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 2. Box 组件

@@ -17,6 +17,7 @@ const { Router, Link, push, current, search } = createRouter({
     worlds: lazy(() => import("./worlds/index.tsx")),
     "bouncing-boxes": lazy(() => import("./worlds/bouncing-boxes/index.tsx")),
     "gravity-balls": lazy(() => import("./worlds/gravity-balls/index.tsx")),
+    breakout: lazy(() => import("./worlds/breakout/index.tsx")),
   },
   onRoute(to) {
     if (to === "/") return "/i/apps";
