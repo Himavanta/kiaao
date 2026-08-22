@@ -1,9 +1,10 @@
 import { Each, type Context } from "kiaao";
 
-import { createGame, type FrameManager } from "../engine";
+import { createGame } from "../engine";
 import {
   createBoundarySystem,
   createCollisionSystem,
+  createInputSystem,
   createMovementSystem,
 } from "../engine/systems";
 import type { Assets } from "./assets";
@@ -17,7 +18,6 @@ import {
   createSoundSystem,
   LIVES,
   PADDLE_H,
-  PADDLE_SPEED,
   PADDLE_W,
   ROWS,
   type BreakoutEntity,
@@ -32,15 +32,33 @@ const PADDLE_BOUNDS = { left: "clamp", right: "clamp", top: "pass", bottom: "pas
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export default function Game({ assets }: { assets: Assets }, ctx: Context) {
-  const { use, onMount, onUnmount } = ctx;
-
-  // 输入方向（持续状态 → 信号）
-  const dir = use(0);
+  const { use, onUnmount } = ctx;
 
   // ── 系统实例化与路由连接（组装层：系统间的连接在此一目了然）──
 
+  // 输入系统（源系统）：键盘路由表 + 持续状态信号（方向键 → input.dir）
+  // 瞬时动作 → 直接调消费者 emit；持续状态 → 写 dir 信号
+  const input = createInputSystem({
+    keydown: {
+      Space: () => rules.emit.launch({}),
+      Enter: () => rules.emit.restart({}),
+      ArrowLeft: () => input.dir(-1),
+      KeyA: () => input.dir(-1),
+      ArrowRight: () => input.dir(1),
+      KeyD: () => input.dir(1),
+    },
+    keyup: {
+      ArrowLeft: () => input.dir(0),
+      KeyA: () => input.dir(0),
+      ArrowRight: () => input.dir(0),
+      KeyD: () => input.dir(0),
+    },
+  });
+
   // 规则系统 + 音效系统（事件系统：内部闭包队列，update 中处理）
+  // 规则系统注入 dir 信号：挡板跟随（方向 → 挡板速度）在 rules.update 中执行
   const rules = createRuleSystem<BreakoutEntity>({
+    dir: input.dir,
     win: (p) => audio.emit.win(p),
     lose: (p) => audio.emit.lose(p),
   });
@@ -61,7 +79,6 @@ export default function Game({ assets }: { assets: Assets }, ctx: Context) {
 
   // 游戏实例：帧循环（组件内创建，卸载时销毁）
   const { useEntity, dispose } = createGame<BreakoutEntity>([
-    updInput,
     movement.update,
     boundary.update,
     collision.update,
@@ -72,9 +89,11 @@ export default function Game({ assets }: { assets: Assets }, ctx: Context) {
   // ── 实体注册 ──
 
   // 状态实体：承载实体目录（balls 数组）与游戏状态（分数/生命/状态机）
+  // 顺带 enter 输入系统：借用其生命周期钩子（挂载时挂键盘监听 / 卸载时移除）
   const stateEntity = useEntity(
     ctx,
     rules.enter.state({ balls: [], score: 0, lives: LIVES, state: "ready" as GameState }),
+    input.enter(),
   );
 
   // 挡板实体：静止语义（碰撞不交换速度），左右夹住，表面速度传导带动球
@@ -92,47 +111,8 @@ export default function Game({ assets }: { assets: Assets }, ctx: Context) {
   // 系统对象集合（供子组件使用）
   const systems: GameSystems = { movement, boundary, collision, rules };
 
-  // ── 输入更新系统：方向信号 → 挡板速度（仅在变化时写入）──
-
-  let lastDir = 0;
-  function updInput(frame: FrameManager<BreakoutEntity>) {
-    const d = dir();
-    if (d !== lastDir) {
-      frame(paddle.id, (v) => {
-        v.vx = d * PADDLE_SPEED;
-      });
-      lastDir = d;
-    }
-  }
-
-  // ── 键盘输入：方向 → 信号（持续状态）；动作 → 事件（瞬时事实，直接调用系统 emit）──
-
-  onMount(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "a") dir(-1);
-      else if (e.key === "ArrowRight" || e.key === "d") dir(1);
-      else if (e.key === " ") {
-        e.preventDefault();
-        rules.emit.launch({});
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        rules.emit.restart({});
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === " ") e.preventDefault(); // 阻止空格在 keyup 激活聚焦按钮
-      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "ArrowRight" || e.key === "d") {
-        dir(0);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    onUnmount(() => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      dispose();
-    });
-  });
+  // 组件卸载时销毁帧循环（键盘监听由输入系统的 enter 钩子移除）
+  onUnmount(() => dispose());
 
   // ── 点击空白 → 生成奖励球（坐标换算到游戏区域）──
 

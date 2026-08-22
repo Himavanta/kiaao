@@ -1,4 +1,4 @@
-import type { Context } from "kiaao";
+import { use, type Context, type Signal } from "kiaao";
 
 import type { EntityId, FrameManager } from "./index";
 
@@ -413,4 +413,65 @@ export function createCollisionSystem<T extends Collidable = Collidable>(routes?
   };
 
   return { enter, update };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 输入系统（源系统：无队列、无 update）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** 输入路由表：键（KeyboardEvent.code）→ 动作回调 */
+export type InputRoutes = {
+  keydown?: Record<string, () => void>;
+  keyup?: Record<string, () => void>;
+};
+
+/** 输入系统：源系统——DOM 事件到即转发（压入消费者队列），无自己的队列 */
+export type InputSystem = {
+  enter: () => (id: EntityId, ctx: Context) => Record<string, never>;
+  /** 持续状态：方向信号（-1 左 / 0 停 / 1 右），帧逻辑每帧读取 */
+  dir: Signal<number>;
+};
+
+/**
+ * 输入系统：集中管理全局键盘监听 + 持续状态信号
+ * - 瞬时动作：路由回调直接调消费者 emit（事件到即转发，无需队列）
+ * - 持续状态：路由回调写 dir 信号（方向 -1/0/1），帧逻辑每帧读取
+ * - 路由表命中即 preventDefault（游戏键不触发浏览器行为）
+ * - 生命周期：enter 借用宿主实体的 ctx 钩子（挂载时挂监听 / 卸载时移除）
+ */
+export function createInputSystem(routes: InputRoutes): InputSystem {
+  const dir = use(0);
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    const action = routes.keydown?.[e.code];
+    if (action) {
+      e.preventDefault();
+      action();
+    }
+  };
+
+  const onKeyUp = (e: KeyboardEvent) => {
+    const action = routes.keyup?.[e.code];
+    if (action) {
+      e.preventDefault();
+      action();
+    }
+  };
+
+  // enter 工厂：与其他系统同形（接收配置，返回初始化函数）——无配置，仅借用生命周期钩子
+  const enter = () => {
+    return (_id: EntityId, ctx: Context) => {
+      ctx.onMount(() => {
+        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keyup", onKeyUp);
+      });
+      ctx.onUnmount(() => {
+        window.removeEventListener("keydown", onKeyDown);
+        window.removeEventListener("keyup", onKeyUp);
+      });
+      return {};
+    };
+  };
+
+  return { enter, dir };
 }

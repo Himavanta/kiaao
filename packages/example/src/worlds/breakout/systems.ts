@@ -1,4 +1,4 @@
-import type { Context } from "kiaao";
+import { type Context, type Signal } from "kiaao";
 
 import type { EntityId, FrameManager } from "../engine";
 import type { Bounds, Shape } from "../engine/systems";
@@ -90,8 +90,10 @@ export type LosePayload = Record<string, never>;
 // 规则系统（事件系统：更新系统的超集）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 规则系统的外部依赖：链式事件的目标（音效系统的 emit，组装时注入） */
+/** 规则系统的外部依赖：链式事件的目标（音效系统的 emit，组装时注入）与方向信号 */
 export type RuleDeps = {
+  /** 持续输入状态：方向信号（-1 左 / 0 停 / 1 右）——挡板跟随每帧读取 */
+  dir: Signal<number>;
   win: (payload: WinPayload) => void;
   lose: (payload: LosePayload) => void;
 };
@@ -171,11 +173,23 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
     },
   };
 
-  // update：帧循环中处理各队列（链式事件：处理中向 deps 发射）
+  // 挡板跟随优化：方向不变时零写入（避免无谓信号传播）
+  let lastDir = 0;
+
+  // update：挡板跟随（方向信号 → 挡板速度）+ 处理各队列（链式事件：处理中向 deps 发射）
   const update = (frame: FrameManager<T>) => {
     if (statePool.size === 0) return;
     const [stateId] = statePool;
     const [paddleId] = paddlePool;
+
+    // 挡板跟随：持续输入状态 → 实体数据（仅在变化时写入）
+    const d = deps.dir();
+    if (d !== lastDir && paddleId) {
+      frame(paddleId, (v) => {
+        v.vx = d * PADDLE_SPEED;
+      });
+      lastDir = d;
+    }
 
     for (const e of breakQueue.splice(0)) onBreak(frame, e, stateId, deps);
     for (const e of outQueue.splice(0)) onOut(frame, e, stateId, deps);

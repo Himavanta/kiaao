@@ -87,6 +87,9 @@ rules = {
 
 // 纯事件系统
 audio = { emit: { break, bounce, win, lose }, update }
+
+// 输入系统（源系统：无队列、无 update——DOM 事件到即转发）
+input = { enter, dir }
 ```
 
 **系统对象的成员 = 该系统对外能力的声明**——看一个系统对象就知道它能干什么（注册什么实体、接收什么事件、跑什么帧逻辑）。
@@ -232,18 +235,59 @@ flush：提交分数/状态数据 → HUD 更新、覆盖层显示
 - 瞬时事实（碰撞、点击、发球动作）→ 系统 `emit.xxx(payload)` 压入目标队列
 - 持续状态（方向键按住、坐标、血量）→ 信号/实体数据
 
-### 4.4 输入的两分
+### 4.4 输入系统（源系统）
 
-- **瞬时动作**（点击、空格发球、Enter 重开）→ 直接调用系统 emit（组件持有系统引用）
-- **持续状态**（方向键按住）→ 信号 → 帧内更新系统读取写入实体数据
+输入也是"事实"（与碰撞/出界同类），但输入系统与消费型事件系统形态不同：
 
 ```ts
-// 组件层：
-rules.emit.launch({});
-rules.emit.click({ x, y });
-// 持续状态：
-const dir = use(0); // 键盘事件写信号
-// 帧内输入系统读 dir 信号写挡板 vx
+// 组装层：
+const input = createInputSystem({
+  keydown: {
+    Space: () => rules.emit.launch({}),        // 瞬时动作 → 直接调消费者 emit
+    Enter: () => rules.emit.restart({}),
+    ArrowLeft: () => input.dir(-1),            // 持续状态 → 写自己的信号
+    KeyA: () => input.dir(-1),
+    ArrowRight: () => input.dir(1),
+    KeyD: () => input.dir(1),
+  },
+  keyup: {
+    ArrowLeft: () => input.dir(0),
+    KeyA: () => input.dir(0),
+    ArrowRight: () => input.dir(0),
+    KeyD: () => input.dir(0),
+  },
+});
+
+// 规则系统注入 dir 信号（挡板跟随在 rules.update 中执行）
+const rules = createRuleSystem({ dir: input.dir, win: ..., lose: ... });
+
+// 状态实体顺带 enter 输入系统（借用生命周期钩子：挂载时挂监听 / 卸载时移除）
+useEntity(ctx, rules.enter.state({ ... }), input.enter());
+
+// 规则系统 update 内（挡板跟随：方向信号 → 挡板速度，仅在变化时写入）：
+const d = deps.dir();
+if (d !== lastDir && paddleId) {
+  frame(paddleId, (v) => (v.vx = d * PADDLE_SPEED));
+  lastDir = d;
+}
+```
+
+**输入系统的特性**：
+
+- **源系统（生产者）**：无队列——DOM 事件天然异步，事件到即转发（直接压入消费者队列，消费者 update 下一帧处理）——多一层自己的队列零增益
+- **无 update**：不进帧循环（DOM 驱动，非帧驱动）
+- **生命周期 = 宿主实体的生命周期**：enter 借用 ctx 的 onMount/onUnmount 挂卸监听——零新 API
+- **瞬时动作**（空格/Enter/点击）→ 路由回调直接调消费者 emit
+- **持续状态**（方向键）→ 路由回调写自己的 `dir` 信号——帧逻辑每帧读取（方向键按住不是事件，是状态：keydown 只在按下瞬间触发一次，"按住"必须存下来每帧读）
+- **消费方归位**："方向 → 挡板速度"的跟随逻辑不放输入系统（它是"信号 → 实体行为"的游戏逻辑，输入系统是"外部世界 → 信号/事件"的翻译器）——挡板是规则系统的实体，跟随逻辑进 `rules.update`（dir 依赖注入）——组装层只剩连接，没有逻辑
+- **路由表命中即 preventDefault**（游戏键不触发浏览器行为）
+- **UI 元素交互**（如点击层）留在视图层 DOM 绑定（坐标换算需要元素 rect）——输入系统只管全局监听器
+- 路由回调引用 `input` 本身是安全的：闭包延迟执行（按键时才调用，此时声明已完成）
+
+组装层路由图至此闭环：
+
+```
+DOM → input（源系统）→ rules.emit / input.dir → 帧逻辑 → 实体数据 → UI
 ```
 
 ---
@@ -445,7 +489,16 @@ function createGame<T>(updates: Array<Update<T>>) {
 - 职责名（movement/boundary/collision/rules/audio）：**变量名表达职责，工厂名表达形态**（createXxxSystem）——`rules.emit.launch({})` 读作"规则系统发射发球"，主语是职责
 - 与引擎概念呼应："系统"是工厂的产物，变量名只需要说它负责什么
 
-### 8.10 保留的 v1/v2 决策
+### 8.10 为什么输入是"源系统"（无队列、无 update）？
+
+- 输入是事实（与碰撞/出界同类），但输入系统的角色是**生产者**：它不消费事件，只把 DOM 事件翻译成业务事件（emit）或持续状态（dir 信号）
+- **无队列**：DOM 事件天然异步——直接转发与"入自己队列再转发"效果相同（消费者反正下一帧处理）——多一层零增益
+- **无 update**：DOM 驱动而非帧驱动——不进帧循环
+- **生命周期复用 ctx**：enter 借用宿主实体的 onMount/onUnmount 挂卸监听——系统不需要 dispose API
+- **持续状态住系统**：dir 信号由输入系统创建并暴露（它收到 keydown/keyup，自然维护档位）——状态与逻辑内聚；外部只读
+- 路由回调引用系统自身（`input.dir`）安全：闭包延迟执行
+
+### 8.11 保留的 v1/v2 决策
 
 - 延迟快照（读多写少场景）
 - 系统池私有（封装性）
@@ -464,7 +517,7 @@ function createGame<T>(updates: Array<Update<T>>) {
 4. **更丰富的系统示例**：AI 系统、动画系统、回合制事件系统
 5. **事件 payload 的联合消费**：多队列合并处理（当多个事件共享处理逻辑时）
 
-> 命名已定稿：useEntity / enter（实体进入）/ emit（事件进入）/ update（帧逻辑）/ 职责名变量
+> 命名已定稿：useEntity / enter（实体进入）/ emit（事件进入）/ update（帧逻辑）/ 职责名变量 / 输入系统（源系统）
 
 ---
 
