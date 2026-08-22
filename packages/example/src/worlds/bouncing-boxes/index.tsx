@@ -1,6 +1,6 @@
 import type { Context } from "kiaao";
 
-import { createGame, type EngineEvents } from "../engine";
+import { createGame } from "../engine";
 import { StyleMemo } from "../engine/directives";
 import {
   createBoundarySystem,
@@ -30,11 +30,11 @@ type BoxEntity = {
   points: number;
 };
 
-const [regMove, updMove] = createMovementSystem<BoxEntity>();
-const [regBound, updBound] = createBoundarySystem<BoxEntity>();
-const [regColl, updColl] = createCollisionSystem<BoxEntity>();
+const movement = createMovementSystem<BoxEntity>();
+const boundary = createBoundarySystem<BoxEntity>();
+const collision = createCollisionSystem<BoxEntity>();
 
-const { useGame } = createGame<BoxEntity, EngineEvents>([updMove, updBound, updColl]);
+const { useEntity } = createGame<BoxEntity>([movement.update, boundary.update, collision.update]);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 2. Box 组件
@@ -54,11 +54,11 @@ function Box({ x, y, vx, vy, color, moving = true }: BoxProps, ctx: Context) {
   const { use } = ctx;
 
   // 所有实体统一注册三个系统；moving 参数决定进移动池还是静止池（移动/碰撞同步）
-  const entity = useGame(
+  const entity = useEntity(
     ctx,
-    regMove({ x, y, vx, vy, moving }),
-    regBound({ w: 80, h: 80 }),
-    regColl({ moving }),
+    movement.enter({ x, y, vx, vy, moving }),
+    boundary.enter({ w: 80, h: 80 }),
+    collision.enter({ moving }),
   );
 
   return (

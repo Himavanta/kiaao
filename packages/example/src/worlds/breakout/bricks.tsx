@@ -1,11 +1,9 @@
-import { type Context, type Signal } from "kiaao";
+import { type Context } from "kiaao";
 
-import type { EntityId } from "../engine";
+import type { EntityId, EntitySignal } from "../engine";
 import { StyleMemo } from "../engine/directives";
 import type { Bounds, Shape } from "../engine/systems";
 import type { BreakoutEntity } from "./systems";
-
-export type { BreakoutEntity };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 砖块布局
@@ -51,32 +49,48 @@ export function createBrickGrid(
   return bricks;
 }
 
-/** 注册函数集合（由游戏模块创建并传入） */
-export type GameRegisters = {
-  useGame: (
-    ctx: Context,
-    ...registers: Array<(id: EntityId, ctx: Context) => Partial<BreakoutEntity>>
-  ) => Signal<BreakoutEntity>;
-  regMove: (props: {
-    x?: number;
-    y?: number;
-    vx?: number;
-    vy?: number;
-    moving?: boolean;
-  }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-  regBound: (props: {
-    w?: number;
-    h?: number;
-    bounds?: Partial<Bounds>;
-  }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-  regColl: (props: {
-    moving?: boolean;
-    shape?: Shape;
-    enabled?: boolean;
-    breakable?: boolean;
-    drive?: number;
-    points?: number;
-  }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 注册函数集合（由游戏模块创建并传入）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/** useEntity 句柄：组件注册实体的入口（返回实体信号，id 挂在信号上） */
+export type UseEntity = (
+  ctx: Context,
+  ...enters: Array<(id: EntityId, ctx: Context) => Partial<BreakoutEntity>>
+) => EntitySignal<BreakoutEntity>;
+
+export type GameSystems = {
+  movement: {
+    enter: (props: {
+      x?: number;
+      y?: number;
+      vx?: number;
+      vy?: number;
+      moving?: boolean;
+    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
+  };
+  boundary: {
+    enter: (props: {
+      w?: number;
+      h?: number;
+      bounds?: Partial<Bounds>;
+    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
+  };
+  collision: {
+    enter: (props: {
+      moving?: boolean;
+      shape?: Shape;
+      enabled?: boolean;
+      breakable?: boolean;
+      drive?: number;
+      points?: number;
+    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
+  };
+  rules: {
+    enter: {
+      brick: () => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
+    };
+  };
 };
 
 // 砖块尺寸与边界（全 pass：不参与边界系统处理）
@@ -90,28 +104,24 @@ export const PASS_BOUNDS: Bounds = { left: "pass", right: "pass", top: "pass", b
 
 type BrickProps = {
   data: BrickData;
-  regs: GameRegisters;
-  onRegistered: (id: EntityId) => void;
+  systems: GameSystems;
+  useEntity: UseEntity;
 };
 
 /**
  * 砖块：静止实体，碰撞可击碎。
- * 击碎事实由碰撞系统发射、规则系统落地（enabled 置 false）；
+ * 击碎事实由碰撞系统经路由发射、规则系统落地（enabled 置 false）；
  * 组件只订阅实体数据隐藏，不承载任何游戏逻辑。
  */
-function Brick({ data, regs, onRegistered }: BrickProps, ctx: Context) {
+function Brick({ data, systems, useEntity }: BrickProps, ctx: Context) {
   const { use } = ctx;
 
-  // 注册时收集实体 id（供规则系统重开时统一恢复 enabled）
-  const entity = regs.useGame(
+  const entity = useEntity(
     ctx,
-    (id, c) => {
-      onRegistered(id);
-      return regs.regMove({ x: data.x, y: data.y, moving: false })(id, c);
-    },
-    (id, c) => regs.regBound({ w: BRICK_W, h: BRICK_H, bounds: PASS_BOUNDS })(id, c),
-    (id, c) =>
-      regs.regColl({ moving: false, enabled: true, breakable: true, points: data.points })(id, c),
+    systems.movement.enter({ x: data.x, y: data.y, moving: false }),
+    systems.boundary.enter({ w: BRICK_W, h: BRICK_H, bounds: PASS_BOUNDS }),
+    systems.collision.enter({ moving: false, enabled: true, breakable: true, points: data.points }),
+    systems.rules.enter.brick(),
   );
 
   return (

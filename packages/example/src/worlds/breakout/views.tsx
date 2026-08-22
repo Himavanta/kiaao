@@ -1,9 +1,14 @@
 import { Show, type Context, type Signal } from "kiaao";
 
-import type { EntityId } from "../engine";
 import { StyleMemo } from "../engine/directives";
-import type { BreakoutEntity, GameRegisters } from "./bricks";
-import { BALL_SIZE, MAX_SCORE, type BallData, type GameState } from "./systems";
+import type { GameSystems, UseEntity } from "./bricks";
+import {
+  BALL_SIZE,
+  MAX_SCORE,
+  type BallData,
+  type BreakoutEntity,
+  type GameState,
+} from "./systems";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 球实体组件：声明式生命周期的承载者（数组驱动挂载/卸载）
@@ -11,27 +16,25 @@ import { BALL_SIZE, MAX_SCORE, type BallData, type GameState } from "./systems";
 
 type BallProps = {
   data: BallData;
-  regs: GameRegisters;
-  onRegistered: (id: EntityId, dataId: number) => void;
+  systems: GameSystems;
+  useEntity: UseEntity;
 };
 
 /** 球：动态实体（数组项生成/过滤时挂载/卸载），只注册 + 渲染，无游戏逻辑 */
-function Ball({ data, regs, onRegistered }: BallProps, ctx: Context) {
+function Ball({ data, systems, useEntity }: BallProps, ctx: Context) {
   const { use } = ctx;
 
-  const entity = regs.useGame(
+  // dataId 关联实体目录数组项（规则系统出界时按此销毁）
+  const entity = useEntity(
     ctx,
-    (id, c) => {
-      onRegistered(id, data.id);
-      return regs.regMove({ x: data.x, y: data.y, vx: data.vx, vy: data.vy })(id, c);
-    },
-    (id, c) =>
-      regs.regBound({
-        w: BALL_SIZE,
-        h: BALL_SIZE,
-        bounds: { left: "bounce", right: "bounce", top: "bounce", bottom: "die" },
-      })(id, c),
-    (id, c) => regs.regColl({ moving: true, shape: "circle" })(id, c),
+    () => ({ dataId: data.id }),
+    systems.movement.enter({ x: data.x, y: data.y, vx: data.vx, vy: data.vy }),
+    systems.boundary.enter({
+      w: BALL_SIZE,
+      h: BALL_SIZE,
+      bounds: { left: "bounce", right: "bounce", top: "bounce", bottom: "die" },
+    }),
+    systems.collision.enter({ moving: true, shape: "circle" }),
   );
 
   return (

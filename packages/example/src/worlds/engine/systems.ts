@@ -20,14 +20,8 @@ export function createMovementSystem<T extends Movable = Movable>() {
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  // register: 接收配置，返回初始化函数
-  const register = (props: {
-    x?: number;
-    y?: number;
-    vx?: number;
-    vy?: number;
-    moving?: boolean;
-  }) => {
+  // enter: 接收配置，返回初始化函数
+  const enter = (props: { x?: number; y?: number; vx?: number; vy?: number; moving?: boolean }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       const isMoving = props.moving ?? true;
@@ -60,7 +54,7 @@ export function createMovementSystem<T extends Movable = Movable>() {
     }
   };
 
-  return [register, update] as const;
+  return { enter, update };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -84,16 +78,19 @@ const DEFAULT_BOUNDS: Bounds = { left: "bounce", right: "bounce", top: "bounce",
 /** 边界系统字段需求：实体具备尺寸与边界动作 */
 export type BoundedEntity = Bounded & { bounds: Bounds };
 
-/** 边界系统发射的事件词汇：出界（die 边） */
-export type BoundaryEmits = { out: (payload: { id: EntityId }) => void };
+/** 边界系统事件路由：die 边出界（由组装层绑定消费者） */
+export type BoundaryRoutes = { onOut?: (payload: { id: EntityId }) => void };
 
-export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(config?: {
-  width?: number;
-  height?: number;
-}) {
+export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
+  config?: {
+    width?: number;
+    height?: number;
+  },
+  routes?: BoundaryRoutes,
+) {
   const pool = new Set<EntityId>();
 
-  const register = (props: { w?: number; h?: number; bounds?: Partial<Bounds> }) => {
+  const enter = (props: { w?: number; h?: number; bounds?: Partial<Bounds> }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       onMount(() => {
@@ -180,7 +177,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(co
     );
   };
 
-  const update = (frame: FrameManager<T>, _delta: number, emits: BoundaryEmits) => {
+  const update = (frame: FrameManager<T>) => {
     const maxX = config?.width ?? window.innerWidth;
     const maxY = config?.height ?? window.innerHeight;
 
@@ -189,9 +186,9 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(co
       const e = frame(id);
       if (!e || !isOutOfBounds(e, maxX, maxY)) continue;
 
-      // die 边出界：报告事实（出界后果由事件系统处理），不直接修改数据
+      // die 边出界：通过路由报告事实（出界后果由消费者处理），不直接修改数据
       if (hasDieEdge(e, maxX, maxY)) {
-        emits.out({ id });
+        routes?.onOut?.({ id });
         continue;
       }
 
@@ -202,7 +199,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(co
     }
   };
 
-  return [register, update] as const;
+  return { enter, update };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -223,12 +220,6 @@ export type Collidable = Bounded & {
   drive: number;
   /** 击碎奖励：可击碎实体被击碎时的分值（由事件消费系统使用） */
   points: number;
-};
-
-/** 碰撞系统发射的事件词汇：击碎（可击碎实体）/ 弹碰（普通障碍） */
-export type CollisionEmits = {
-  break: (payload: { id: EntityId; by: EntityId; points: number }) => void;
-  bounce: (payload: { id: EntityId; by: EntityId }) => void;
 };
 
 /** 接触信息：法线 (nx, ny) 指向 a 被推离 b 的方向，depth 为推离量 */
@@ -302,12 +293,18 @@ function invert(c: Contact): Contact {
   return c.hit ? { hit: true, nx: -c.nx, ny: -c.ny, depth: c.depth } : c;
 }
 
-export function createCollisionSystem<T extends Collidable = Collidable>() {
+/** 碰撞系统事件路由：击碎 / 弹碰（由组装层绑定消费者） */
+export type CollisionRoutes = {
+  onBreak?: (payload: { id: EntityId; by: EntityId; points: number }) => void;
+  onBounce?: (payload: { id: EntityId; by: EntityId }) => void;
+};
+
+export function createCollisionSystem<T extends Collidable = Collidable>(routes?: CollisionRoutes) {
   // 移动池 + 静止池：配对只发生在移动实体侧，静止×静止不检测
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  const register = (props: {
+  const enter = (props: {
     moving?: boolean;
     shape?: Shape;
     enabled?: boolean;
@@ -339,13 +336,7 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
   };
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
-  const resolve = (
-    frame: FrameManager<T>,
-    emits: CollisionEmits,
-    idA: EntityId,
-    idB: EntityId,
-    bStatic: boolean,
-  ) => {
+  const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
     const a = frame(idA);
     const b = frame(idB);
     if (!a || !b) return;
@@ -366,9 +357,9 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
 
     // 静止实体：报告事实 + 反射/推离（障碍物原地不动）
     if (bStatic) {
-      // 可击碎实体：报告击碎事实（禁用/加分/加速由事件消费系统落地）
-      if (b.breakable) emits.break({ id: idB, by: idA, points: b.points });
-      else emits.bounce({ id: idB, by: idA });
+      // 可击碎实体：通过路由报告击碎事实（禁用/加分/加速由消费者落地）
+      if (b.breakable) routes?.onBreak?.({ id: idB, by: idA, points: b.points });
+      else routes?.onBounce?.({ id: idB, by: idA });
 
       frame(idA, (e) => {
         const dot = e.vx * contact.nx + e.vy * contact.ny;
@@ -404,22 +395,22 @@ export function createCollisionSystem<T extends Collidable = Collidable>() {
   };
 
   // update: 移动×移动去重配对 + 移动×静止全配对
-  const update = (frame: FrameManager<T>, _delta: number, emits: CollisionEmits) => {
+  const update = (frame: FrameManager<T>) => {
     const moves = Array.from(movePool);
     const statics = Array.from(staticPool);
 
     for (const [i, idA] of moves.entries()) {
       for (const idB of moves.slice(i + 1)) {
-        resolve(frame, emits, idA, idB, false);
+        resolve(frame, idA, idB, false);
       }
     }
 
     for (const idA of moves) {
       for (const idB of statics) {
-        resolve(frame, emits, idA, idB, true);
+        resolve(frame, idA, idB, true);
       }
     }
   };
 
-  return [register, update] as const;
+  return { enter, update };
 }

@@ -1,6 +1,6 @@
 # Kiaao ECS 框架设计文档
 
-**状态：** 设计讨论中（v2 迭代）
+**状态：** 设计讨论中（v3 迭代）
 **最后更新：** 2026-08-21
 **相关仓库：** [Himavanta/kiaao](https://github.com/Himavanta/kiaao)
 
@@ -26,554 +26,452 @@ Kiaao 的游戏扩展定位为 **"学习研究型游戏框架"**：
 - 适合：回合制 RPG、模拟经营、卡牌游戏、文字冒险
 - 不适合：3A 级 3D 大作、极致粒子优化
 
-### 1.3 v2 迭代主题
+### 1.3 设计哲学
 
-v2 讨论聚焦于**事件机制**与**实体生命周期**，解决两个问题：
+> **尽量少的 API，更简单透明的引擎模型，让使用者在完全符合直觉的情况下用 JS 处理游戏逻辑。**
 
-1. 系统之间的通信（"事实"如何在帧内流转）
-2. 实体的动态生灭（如何声明式地增删实体）
+引擎内核只有三样东西：
 
-结论概要：
+```
+实体池（Map<EntityId, EntitySignal>）  —— 数据在哪
+帧循环（系统流水线）                  —— 逻辑什么时候跑
+帧管理器（frame(id) / frame(id, fn)） —— 数据怎么读写
+useEntity（组件注册实体）             —— 实体怎么诞生
+```
 
-- **事件 = 带语义的瞬时事实**，通过帧内事件队列传输（广播，非订阅）
-- **两类系统**：更新系统（帧驱动，工厂形态）与事件系统（事件驱动，纯函数形态）
-- **实体生命周期声明式**：实体目录 = 数组信号，增删 = 数组操作，无需命令式 createEntity
-- **类型化事件总线**：领域词汇表 + Proxy emits 语法，发射与消费双侧类型安全
+其余全是"系统库"（movement/boundary/collision）和"游戏层"（规则/音效）——**没有事件机制、没有订阅表、没有 Proxy、没有魔法**：事件就是"系统闭包队列 + emit 方法调用"（纯 JS），实体就是"id + 信号"（纯数据），系统就是"工厂返回的对象"（纯函数式）。
+
+### 1.4 迭代历程
+
+- **v1**：硬 ECS 基础（实体池、帧管理器、系统工厂、双池、形状碰撞）
+- **v2**：事件机制探索（引擎级事件队列 → 系统级闭包队列的演进）
+- **v3**：API 定型（useEntity / enter / emit / update 系统对象形态）
 
 ---
 
-## 二、设计讨论历程
+## 二、核心设计决策
 
-### 2.1 核心设计决策
+| 决策点             | 结论                                                                              |
+| :----------------- | :-------------------------------------------------------------------------------- |
+| **数据存储方式**   | 硬 ECS——数据全局扁平存储（Map<EntityId, EntitySignal<T>>），系统通过 `frame` 读写 |
+| **实体标识**       | `Symbol`（天然唯一，全链路统一使用），挂在实体信号上（`entity.id`）               |
+| **数据快照策略**   | 延迟快照——只在写时创建副本，读直接返回信号值                                      |
+| **系统 pool 管理** | 系统闭包内私有管理（`Set<EntityId>`），框架不介入                                 |
+| **系统执行顺序**   | `createGame` 的参数顺序即执行顺序                                                 |
+| **系统形态**       | 工厂返回对象 `{ enter?, emit?, update }`——能力声明式                              |
+| **事件机制**       | 系统自持闭包队列（每事件类型一个），`emit` 方法绑定队列，`update` 中处理          |
+| **系统间连接**     | 组装层路由：工厂参数注入（routes / deps），生产者持消费者的 emit 引用             |
+| **实体生命周期**   | 声明式：数组信号 + Each keyed 挂载/卸载                                           |
+| **实体注册**       | `useEntity(ctx, ...enter)`——组件注册，返回 `EntitySignal<T>`（信号 + id）         |
 
-| 决策点             | 结论                                                                        |
-| :----------------- | :-------------------------------------------------------------------------- |
-| **数据存储方式**   | 硬 ECS——数据全局扁平存储（Map<EntityId, Signal<T>>），系统通过 `frame` 读写 |
-| **实体标识**       | `Symbol`（天然唯一，全链路统一使用）                                        |
-| **数据快照策略**   | 延迟快照——只在写时创建副本，读直接返回信号值                                |
-| **系统 pool 管理** | 系统闭包内私有管理（`Set<EntityId>`），框架不介入                           |
-| **系统执行顺序**   | `createGame` 的参数顺序即执行顺序                                           |
-| **跨系统通信**     | 帧内事件队列（累积区语义，消费时清空）                                      |
-| **系统形态**       | 更新系统 = 工厂（register + update）；事件系统 = 纯函数                     |
-| **实体生命周期**   | 声明式：数组信号 + Each keyed 挂载/卸载                                     |
-| **事件类型**       | 游戏层显式声明的领域词汇表（EventMap），createGame 泛型参数                 |
-| **类型系统**       | 使用者显式声明实体类型 `T`，系统通过泛型约束工作                            |
+---
 
-### 2.2 关键设计演进
+## 三、系统形态（v3 定稿）
 
-**从 defineSystem 到系统工厂**
+### 3.1 统一形态：工厂返回对象
 
-第一阶段：`defineSystem(update, init)` 返回 `{ update, init, pool }`
-第二阶段：系统工厂 `createSystem()` 返回 `[register, update]`
-最终形态：系统工厂函数，返回数组解构：
+所有系统是"更新系统的超集"——工厂返回纯 JS 对象，成员按需：
 
 ```ts
-const [register, update] = createMovementSystem<BoxEntity>();
+// 基础系统（单注册能力：enter 即函数）
+movement = { enter, update }
+boundary = { enter, update }
+collision = { enter, update }
+
+// 规则系统（多注册能力：enter 分组；事件系统：emit 分组）
+rules = {
+  enter: { state, paddle, brick },   // 实体进入接口
+  emit:  { break, out, launch, click, restart },  // 事件进入接口
+  update,                            // 帧逻辑
+}
+
+// 纯事件系统
+audio = { emit: { break, bounce, win, lose }, update }
 ```
 
-**从全量快照到延迟快照**
+**系统对象的成员 = 该系统对外能力的声明**——看一个系统对象就知道它能干什么（注册什么实体、接收什么事件、跑什么帧逻辑）。
 
-第一阶段：每帧全量浅拷贝所有实体（`new Map(...gamePool)`）
-第二阶段：按需创建副本（`get` 时拷贝）
-最终形态：**只读不拷贝，只有写才创建**
+### 3.2 分组判据
 
-**FrameManager 的双重签名设计**
+- **单成员 → 函数简写**（`movement.enter({x,y})`——单成员聚合是过度设计）
+- **多成员 → 对象分组**（`rules.enter.state(...)`——与 `rules.emit.break(...)` 对称）
+- `enter`（实体进入）与 `emit`（事件进入）是系统的两个"入口接口"，对称设计
+
+### 3.3 系统工厂签名
 
 ```ts
-// 读：只读，不拷贝
-const data = frame(id);
-// 写：写时拷贝，原地修改
-frame(id, (e) => {
-  e.x += e.vx * delta;
+// 基础系统
+function createMovementSystem<T>() {
+  const pool = new Set<EntityId>();
+  const enter = (props) => (id, ctx) => {
+    /* 池管理 + 数据切片 */
+  };
+  const update = (frame, delta) => {
+    /* 帧逻辑 */
+  };
+  return { enter, update };
+}
+```
+
+事件系统（规则系统）完整形态——多队列 + 多 emit + 实体池：
+
+```ts
+// payload 类型：各 emit 方法签名的参数（队列身份即类型）
+type BreakPayload = { id: EntityId; by: EntityId; points: number };
+type OutPayload = { id: EntityId };
+type LaunchPayload = Record<string, never>;
+
+function createRuleSystem<T>(deps: { win: (p: WinPayload) => void }) {
+  // 每事件类型一个闭包队列（像 pool 一样私有）
+  const breakQueue: BreakPayload[] = [];
+  const launchQueue: LaunchPayload[] = [];
+
+  // 实体池（注册即持有 id）
+  const statePool = new Set<EntityId>();
+
+  // enter：实体进入接口（多成员分组）
+  const enter = {
+    state: (props) => (id, ctx) => {
+      const { onMount, onUnmount } = ctx;
+      onMount(() => statePool.add(id));
+      onUnmount(() => statePool.delete(id));
+      return { balls: props.balls ?? [] /* ... */ };
+    },
+    // paddle / brick ...
+  };
+
+  // emit：事件进入接口（方法签名即类型契约）
+  const emit = {
+    break: (p: BreakPayload) => breakQueue.push(p),
+    launch: (p: LaunchPayload) => launchQueue.push(p),
+  };
+
+  // update：帧循环中处理各队列（链式事件：处理中可调 deps.win）
+  const update = (frame) => {
+    for (const e of breakQueue.splice(0)) onBreak(frame, e, deps);
+    for (const _e of launchQueue.splice(0)) onLaunch(frame);
+  };
+
+  return { enter, emit, update };
+}
+```
+
+---
+
+## 四、事件机制（v3 定稿）
+
+### 4.1 事件 = 系统闭包队列 + emit 方法
+
+**引擎零事件机制**——事件队列在事件系统的闭包内（像 pool 一样私有）：
+
+```
+事件系统内部：
+  每事件类型一个队列（breakQueue / outQueue / ...）
+  emit.break(p) → breakQueue.push(p)    —— 生产者调用（类型由签名锁定）
+  update()       → 处理各队列（splice 取批）—— 帧循环中触发
+
+队列生命周期 = 累积区：帧外（DOM 事件）随时可入队，update 处理即清空
+```
+
+**每事件类型一个队列的意义**：
+
+- 每个队列的 payload 类型不同（`BreakPayload` / `OutPayload` / `WinPayload`...）——**队列身份即类型**
+- `emit` 方法签名就是类型契约（`emit.break` 只能收 BreakPayload）
+- 不需要事件的 type 字段——无需判别联合、无需 switch 收窄
+- 消费端按队列处理（`onBreak` / `onOut`...），零过滤
+
+### 4.2 系统间连接：组装层路由
+
+**生产者持有消费者的 emit 引用**（组装时注入）——系统间连接集中在组装层：
+
+```ts
+// 游戏组装层（连接图一目了然）：
+const rules = createRuleSystem({ win: (p) => audio.emit.win(p), lose: (p) => audio.emit.lose(p) });
+const audio = createSoundSystem(play);
+
+const boundary = createBoundarySystem(config, { onOut: (p) => rules.emit.out(p) });
+const collision = createCollisionSystem({
+  onBreak: (p) => {
+    rules.emit.break(p);
+    audio.emit.break(p);
+  }, // 多消费者：各压一份
+  onBounce: (p) => audio.emit.bounce(p),
+});
+
+createGame([input, movement.update, boundary.update, collision.update, rules.update, audio.update]);
+```
+
+- **生产者零运行时耦合**（碰撞系统不知道消费者是谁——路由在工厂参数）
+- **链式事件**：规则系统处理中调用 `deps.win({})`（音效系统的 emit）→ 音效系统 update 排在后面 → 同帧处理
+- **广播精神保留**：一个事件可被多个消费者（break → 规则 + 音效）
+
+**链式事件的帧内时序**（击碎 → 加分 → 胜利，同帧完成）：
+
+```
+帧 N 的 update 阶段（按注册顺序）：
+  collision.update：检测击碎 → rules.emit.break(p) + audio.emit.break(p)
+  rules.update：处理 break 队列 → 加分 → 分数满 → deps.win({})（= audio.emit.win）
+  audio.update：处理 break 队列（击砖音）+ win 队列（胜利音）
+flush：提交分数/状态数据 → HUD 更新、覆盖层显示
+```
+
+事件链在同一帧内完整走完——玩家击碎最后一块砖的瞬间看到胜利画面，无需等待下一帧。
+
+### 4.3 事件 vs 回调 vs 数据（概念澄清）
+
+| 方式             | 语义                       | 时序                        | 耦合                         |
+| :--------------- | :------------------------- | :-------------------------- | :--------------------------- |
+| 回调             | 无（立即执行）             | 打乱帧时序                  | 生产者知道消费者             |
+| 数据（状态标记） | 丢失（只有新值）           | 中立                        | 知道"谁在读"，不知道"谁在意" |
+| 事件（闭包队列） | 完整（payload + 方法身份） | 消费者的 update（帧内）处理 | 组装层连接，运行时零耦合     |
+
+**事实 vs 状态（统一原则）**：
+
+> **事实 → emit 方法调用；持续状态 → 信号**
+
+- 瞬时事实（碰撞、点击、发球动作）→ 系统 `emit.xxx(payload)` 压入目标队列
+- 持续状态（方向键按住、坐标、血量）→ 信号/实体数据
+
+### 4.4 输入的两分
+
+- **瞬时动作**（点击、空格发球、Enter 重开）→ 直接调用系统 emit（组件持有系统引用）
+- **持续状态**（方向键按住）→ 信号 → 帧内更新系统读取写入实体数据
+
+```ts
+// 组件层：
+rules.emit.launch({});
+rules.emit.click({ x, y });
+// 持续状态：
+const dir = use(0); // 键盘事件写信号
+// 帧内输入系统读 dir 信号写挡板 vx
+```
+
+---
+
+## 五、实体（v3 定稿）
+
+### 5.1 useEntity：实体 = 信号 + id
+
+```ts
+const { useEntity } = createGame<T>([...updates]);
+
+// 组件注册实体：
+const paddle = useEntity(
+  ctx,
+  rules.enter.paddle(),
+  movement.enter({ x, y, vx, vy }),
+  boundary.enter({ w, h, bounds }),
+  collision.enter({ moving: false, shape: "rect", drive: 0.5 }),
+);
+
+// 实体信号 = 组件绑定句柄；id = 帧循环身份——id 挂在信号上
+paddle.id; // 帧内系统 frame(paddle.id, ...)
+use(paddle, () => `${paddle().x}px`); // 组件绑定
+```
+
+- `useEntity`——与 kiaao 的 `use` 同前缀："在组件里创建并绑定一个实体"
+- `EntitySignal<T> = Signal<T> & { id: EntityId }`——一个对象两个身份
+- 实体生命周期 = 组件生命周期（onMount 进池 / onUnmount 出池）
+
+### 5.2 实体生命周期：声明式（数组信号）
+
+**实体的增删 = 数组信号操作**，不提供命令式 createEntity API：
+
+```
+实体目录（真相源）            声明式增删                      框架自动反应
+entities: Signal<Data[]>  →  数组整体替换（push 新项）→  Each keyed 挂载组件 → useEntity 注册（进池）
+                            数组过滤（移除项）       →  Each 卸载组件 → onUnmount 清池（出池）
+```
+
+- **数组 = 出生证**（配置数据），**实体信号 = 运行时状态**（帧循环演化）
+- 数据单向流动：数组 → 组件 → 实体；销毁无需反向关联（onUnmount 自动清理）
+- 实体目录本身是数据——放入**状态实体**（一个承载全局状态的实体），规则系统通过 frame 读写
+
+### 5.3 嵌套数据纪律
+
+**实体数据里的嵌套结构（数组/对象）必须整体替换，不可原地修改**：
+
+```ts
+frame(stateId, (v) => {
+  v.balls = [...v.balls, createBall(...)];   // ✓ 整体替换（新引用）
+  // v.balls.push(...)                       // ✗ 原地修改（浅拷贝共享引用 → 信号不传播）
 });
 ```
 
-**从"回调/状态标记"到"帧内事件队列"（v2 核心）**
+- 帧管理器写时拷贝是**浅拷贝**（保护顶层对象，不保护嵌套结构）
+- 信号传播靠引用比较（原地修改不产生新引用 → 传播失效）
+- 这也是"实体数据以扁平标量为主"（x/y/vx/vy）是 ECS 自然形态的原因
 
-事件机制经历过三轮认知迭代：
+### 5.4 实体与数组项关联（dataId）
 
-1. **状态标记**：事件 = 数据变化（`enabled = false`）——零机制但丢失语义（被击碎 vs 被重置无法区分），且"谁消费"靠每帧扫描变化检测
-2. **组件派生副作用**：事件 = 组件订阅信号变化后执行逻辑——被证明是错误方向（游戏逻辑跑到帧循环外，时序失控：加分每帧执行、状态被覆盖）
-3. **帧内事件队列（定稿）**：事件 = 带语义的事实记录，入队 → 帧内统一消费 → 落地为数据
+动态实体（球）注册时带出生标识：
 
-### 2.3 概念澄清（v2 讨论的洞见）
+```ts
+const entity = useEntity(
+  ctx,
+  () => ({ dataId: data.id }),   // 关联实体目录数组项
+  movement.enter({ x: data.x, y: data.y, vx: data.vx, vy: data.vy }),
+  ...
+);
 
-**事件 vs 回调 vs 数据**
-
-| 方式             | 语义                   | 时序             | 耦合                         |
-| :--------------- | :--------------------- | :--------------- | :--------------------------- |
-| 回调             | 无（立即执行）         | 打乱帧时序       | 生产者知道消费者             |
-| 数据（状态标记） | 丢失（只有新值）       | 中立             | 知道"谁在读"，不知道"谁在意" |
-| 事件（队列）     | 完整（type + payload） | 帧内固定位置处理 | 生产者完全不知道消费者       |
-
-**事实 vs 状态（统一原则）**
-
-> **事实 → 事件；持续状态 → 信号**
-
-- 瞬时事实（碰撞、点击、拾取、发球动作）→ `emits` 入队
-- 持续状态（坐标、方向键按住、血量）→ 信号/实体数据
-
-**广播 vs 订阅**
-
-- 事件带 type 是"广播频道"，不是"注册 key"
-- 生产者零耦合：新增消费者无需改任何现有代码
-- 队列完整可见：调试友好（事件可视化、回放的基础）
-
-**系统 = 唯一逻辑形态**
-
-事件机制不是"特殊的系统类型"，而是"系统之间的通信协议"：
-
-- 队列（数据暂存区）+ 通道（emits 入队 / 事件阶段分发）+ 消费系统（普通逻辑函数）
-- 事件消费系统与更新系统**同源**（都是处理数据的函数），区别在执行模式（帧驱动 vs 事件驱动），而非类型
+// 规则系统出界处理：frame(id).dataId → 过滤数组（声明式销毁）
+// 无需实体 id → 数组项的映射表——数据驱动
+```
 
 ---
 
-## 三、最终架构设计
-
-### 3.1 核心概念
-
-| 概念          | 说明                                                   |
-| :------------ | :----------------------------------------------------- |
-| **实体**      | `Symbol` 标识，无实际结构                              |
-| **组件/数据** | 由 `register` 函数返回的数据切片合并而成               |
-| **更新系统**  | 帧驱动：每帧扫描自己的池，推进世界状态（工厂形态）     |
-| **事件系统**  | 事件驱动：队列有货才处理，落地事实为数据（纯函数形态） |
-| **事件**      | 带语义的瞬时事实：`{ type, payload }`                  |
-| **帧管理器**  | 延迟快照，统一读写接口                                 |
-| **事件队列**  | 帧内暂存区（累积区语义），事件阶段消费即清空           |
-
-### 3.2 架构层次
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   View Layer                       │
-│   (Kiaao 组件 + Signal：注册实体、绑定 DOM、订阅数据) │
-│   （DOM 事件 → emits 发射瞬时事实；方向等 → 信号）   │
-├─────────────────────────────────────────────────────┤
-│                 Assembly Layer                     │
-│    useGame(ctx, ...registerFns) → Signal<T>        │
-│    emits.key(payload) → 帧外事实入口（Proxy）       │
-├─────────────────────────────────────────────────────┤
-│                 Scheduling Layer                   │
-│    createGame<T, EM>(updates, eventSystems)        │
-│    更新阶段 → 事件阶段（while 队列非空）→ flush     │
-├─────────────────────────────────────────────────────┤
-│                   Data Layer                       │
-│    gamePool: Map<EntityId, Signal<T>>              │
-│    FrameManager: 延迟快照 + 脏数据追踪             │
-│    EventQueue: 帧内事件管道（累积区）               │
-├─────────────────────────────────────────────────────┤
-│                   System Layer                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────┐      │
-│  │ Movement │ │ Boundary │ │ Event Systems│      │
-│  │ System   │ │ System   │ │ (纯函数)      │      │
-│  └──────────┘ └──────────┘ └──────────────┘      │
-│  更新系统：私有 pool + register(id,ctx) + update  │
-│  事件系统：无池，消费事件 + 落地数据               │
-└─────────────────────────────────────────────────────┘
-```
-
-### 3.3 帧循环流程（v2）
+## 六、帧循环流程（v3）
 
 ```
 每一帧：
   1. 创建 FrameManager（延迟快照）
-  2. 更新阶段：按注册顺序执行所有更新系统：
-     - frame(id, mutate) → 写时拷贝，原地修改
-     - emits.key(payload) → 产生事件（入队）
-  3. 事件阶段：while (队列非空) {
-      取出本批事件
-      按序分发给所有事件系统（可再 emits，进入下一轮）
-     }
-  4. flush() → 提交所有脏数据到信号
-  5. 等待下一帧
+  2. 按序执行所有系统的 update：
+     - 普通系统：遍历自己的池，frame(id, mutate) 变换数据
+     - 事件系统：处理自己的闭包队列（splice 取批 → 落地为数据）
+     - 系统间通过组装层注入的 emit 引用产生事件（压入目标队列）
+  3. flush() → 提交所有脏数据到信号
+  4. 等待下一帧
 ```
 
 要点：
 
-- 队列为**累积区**语义：帧外（用户输入、异步回调）随时可入队，事件阶段消费即清空
-- 帧外入队的事件在**下一帧**被消费（延迟 ≤ 1 帧 ≈ 16ms，输入延迟一帧是标准做法）
-- JS 单线程保证帧循环执行期间无帧外代码插入，入队与消费无并发问题
-- 链式事件（击砖 → 加分 → 分数满 → 胜利）同一帧内完成：事件系统处理时发射的新事件进入下一轮分发
+- **没有事件阶段**——事件处理就是事件系统的 update（排在其后系统的 update 可读到落地结果）
+- 链式事件（击碎 → 加分 → 胜利音）依赖系统顺序：规则系统在音效系统之前
+- 帧外 emit（DOM 事件）随时入队，下一帧该系统的 update 处理（延迟 ≤ 1 帧）
+- **`delta` 为秒**（`Math.min((now - prev) / 1000, 0.05)`，上限 50ms 防跳帧）
+- **读优先纪律**：`frame(id)` 只读不拷贝（零分配）；写才走写时拷贝（延迟快照）
+- **无越界不写**：boundary 等系统先读判断、有变更才写——避免无谓的信号传播（每一帧的对象引用变化都会触发订阅者重算）
 
 ---
 
-## 四、API 参考
-
-### 4.1 系统工厂（更新系统）
-
-```ts
-function createMovementSystem<T extends Movable>() {
-  const pool = new Set<EntityId>();
-
-  const register = (props: { x?: number; y?: number; vx?: number; vy?: number }) => {
-    return (id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      onMount(() => pool.add(id));
-      onUnmount(() => pool.delete(id));
-      return { x: props.x ?? 0, y: props.y ?? 0, vx: props.vx ?? 0, vy: props.vy ?? 0 };
-    };
-  };
-
-  // 更新系统签名：可发射事件
-  const update = (frame: FrameManager<T>, delta: number, emits: Emits<EM>) => {
-    for (const id of pool) {
-      frame(id, (e) => {
-        e.x += e.vx * delta;
-        e.y += e.vy * delta;
-      });
-    }
-  };
-
-  return [register, update] as const;
-}
-```
-
-### 4.2 事件系统（纯函数）
-
-事件系统**不需要工厂**——无池、无 register，直接是消费事件的函数：
-
-```ts
-type EventSystem<T, EM> = (
-  frame: FrameManager<T>,
-  events: GameEvent<EM>[], // 本批事件（判别联合）
-  emits: Emits<EM>, // 链式事件：处理时也能再发射
-) => void;
-
-// 打砖块规则系统示例：
-const onRule: EventSystem<Entity, Events> = (frame, events) => {
-  for (const e of events) {
-    switch (e.type) {
-      case "brickHit":
-        frame(scoreId, (s) => {
-          s.points += e.payload.points;
-        });
-        break;
-      case "ballOut":
-        frame(ballId, (b) => {
-          b.out = false;
-        });
-        break;
-    }
-  }
-};
-```
-
-事件系统可用闭包持有自己的状态（无需框架 register 机制）。
-
-### 4.3 游戏引擎（v2）
+## 七、游戏引擎 API（v3 定稿）
 
 ```ts
 type EntityId = symbol;
+type EntitySignal<T> = Signal<T> & { id: EntityId };
 
 type FrameManager<T> = {
   (id: EntityId): Readonly<T> | undefined;
   (id: EntityId, mutate: (value: T) => void): void;
 };
 
-type Update<T, EM> = (frame: FrameManager<T>, delta: number, emits: Emits<EM>) => void;
-type EventSystem<T, EM> = (
-  frame: FrameManager<T>,
-  events: GameEvent<EM>[],
-  emits: Emits<EM>,
-) => void;
+type Update<T> = (frame: FrameManager<T>, delta: number) => void;
 
-function createGame<T, EM extends EventMap>(
-  updates: Update<T, EM>[],
-  eventSystems: EventSystem<T, EM>[],
-) {
-  const gamePool = new Map<EntityId, Signal<T>>();
-  const eventQueue: GameEvent<EM>[] = [];
-
-  // Proxy emits：属性访问即发射函数（零样板、类型安全）
-  const emits = new Proxy({} as Emits<EM>, {
-    get: (_, key: string) => {
-      return (payload: unknown) => eventQueue.push({ type: key, payload });
-    },
-  });
-
-  function loop() {
-    const { frame, flush } = createFrameManager(gamePool);
-
-    // 更新阶段：所有更新系统按序执行（可 emits 发射）
-    for (const update of updates) {
-      update(frame, delta, emits);
-    }
-
-    // 事件阶段：循环分发直到队列空（链式事件同帧完成）
-    while (eventQueue.length > 0) {
-      const batch = eventQueue.splice(0);
-      for (const eventSystem of eventSystems) {
-        eventSystem(frame, batch, emits);
-      }
-    }
-
-    flush();
-    requestAnimationFrame(loop);
-  }
-
-  const useGame = (ctx, ...registers) => {
-    /* 同 v1 */
-  };
-
-  return { useGame, emits, dispose: () => cancelAnimationFrame(rafId) };
+function createGame<T>(updates: Array<Update<T>>) {
+  // 实体池 + 帧循环（纯流水线）
+  return { useEntity, dispose };
 }
 ```
 
-**导出面（定稿）**：`{ useGame, emits, dispose }`——注册、事实、生命周期管理，无命令式实体 API。
-
-### 4.4 组件使用
-
-```ts
-const [regMove, updMove] = createMovementSystem<BoxEntity>();
-const [regBound, updBound] = createBoundarySystem<BoxEntity>();
-const [regColl, updColl] = createCollisionSystem<BoxEntity>();
-
-const { useGame, emits, dispose } = createGame<BoxEntity, GameEvents>(
-  [updMove, updBound, updColl],
-  [onRule, playSound],
-);
-
-function Box({ x, y, vx, vy, color }: BoxProps, ctx: Context) {
-  const entity = useGame(ctx, regMove({ x, y, vx, vy }), regBound({ w: 80, h: 80 }), regColl());
-  // ...
-}
-
-// 组件层绑定 DOM 事件 → 发射事实：
-<div onClick={(e) => emits.click({ x: e.clientX, y: e.clientY })} />
-```
+**导出面（定稿）**：`{ useEntity, dispose }`——实体注册 + 生命周期管理。无事件 API（事件是系统能力）。
 
 ---
 
-## 五、事件系统设计（v2 完整版）
+## 八、设计决策记录
 
-### 5.1 事件类型 = 领域词汇表（EventMap）
+### 8.1 为什么事件用"系统闭包队列 + emit 方法"而非引擎级事件队列？
 
-事件类型是游戏的领域词汇，**独立显式声明**，不从事件系统推导：
+迭代历程（v2 → v3）：
 
-- 生产者集合 ≠ 消费者集合（`emits` 需要全集，事件系统只声明子集）
-- 显式声明 = 单一真相源，双侧（发射/消费）校验同一个表
+1. **引擎级队列 + type 字段**：事件 = `{ type, payload }` 统一入队，消费端 switch——引擎多机制、消费端要收窄
+2. **Proxy emits 语法**：`emits.break(payload)`——类型安全但引擎机制多（Proxy、路由）
+3. **系统闭包队列（定稿）**：每事件类型一个队列在系统闭包内，emit 方法签名即类型契约——**引擎零事件机制**，事件 = 纯 JS
 
-```ts
-/** 打砖块事件词汇表 */
-type BreakoutEvents = {
-  brickHit: { id: EntityId; points: number };
-  ballOut: {};
-  click: { x: number; y: number };
-  launch: {};
-};
+关键洞察：**事件的身份从"数据字段"（type）提升为"结构身份"（队列 + emit 方法）**——与实体进入系统的池（enter）对称。
 
-/** 事件统一形态：判别联合（消费端 switch 自动收窄 payload） */
-type GameEvent<EM> = { [K in keyof EM]: { type: K; payload: EM[K] } }[keyof EM];
+### 8.2 为什么生产者持有消费者的 emit 引用（点对点）而非广播？
 
-/** emits 句柄：事件名即方法，payload 自动校验 */
-type Emits<EM> = { [K in keyof EM]: (payload: EM[K]) => void };
-```
+- 广播（统一队列 + 订阅）需要引擎维护队列和分发——机制多
+- 点对点 + 组装层路由：**连接显式可见**（组装层即路由图）、引擎零机制
+- 生产者运行时仍零耦合（路由在工厂参数，不在系统内部）
+- 多消费者 = 组装层多调一个 emit（各压一份）
+- 调试：队列分散在系统闭包内（各自可见）
 
-### 5.2 Proxy emits 语法
+### 8.3 为什么每事件类型一个队列？
 
-```ts
-emits.brickHit({ id, points }); // ✓ payload 类型校验 + 自动补全
-emits.click({ x: 100, y: 200 }); // ✓
-emits.launch({}); // ✓
-```
+- 每个队列 payload 类型不同——**队列身份即类型**，emit 方法签名锁定
+- 消费端零过滤、零 switch——按队列处理函数分派
+- 不需要 type 字段、不需要判别联合收窄
 
-- 类型层面：映射类型 `Emits<EM>`——属性名即事件名（camelCase 命名约定）
-- 运行时：Proxy get 陷阱返回发射函数（首次访问创建，入队 `{ type, payload }`）
-- 游戏层零样板：事件名即方法，无需手动定义包装函数
+### 8.4 为什么系统形态是"工厂返回对象"？
 
-### 5.3 消费端
+- 能力声明式：`{ enter, emit, update }` 即系统接口
+- 多注册能力天然支持（`rules.enter.state / paddle / brick`）
+- 可扩展：未来可加 pool 暴露、多 update 等成员
+- 单成员简写（enter 即函数）、多成员分组（enter/emit 对象）——与事件接口对称
 
-```ts
-const onRule = (frame, events, emits) => {
-  for (const e of events) {
-    switch (e.type) {
-      case "brickHit":
-        e.payload.id;
-        e.payload.points; // TS 自动收窄
-      case "click":
-        e.payload.x; // 收窄为 { x, y }
-    }
-  }
-};
-```
+### 8.5 为什么 useEntity 返回 `Signal & { id }`？
 
-### 5.4 事件的来源与边界
+发现过程：早期 useGame 只返回信号、不暴露 id——组件需要 id 给帧内系统（frame 读写）时，只能利用"注册函数第一个参数就是 id"的内部契约包一层收集（`(id, c) => { paddleId = id; return reg(id, c); }`）——这是 API 设计问题的补丁证据。
 
-| 来源                       | 通道                               | 消费时机       |
-| :------------------------- | :--------------------------------- | :------------- |
-| 更新系统（碰撞、边界检测） | `emits`（帧内）                    | 同帧事件阶段   |
-| 用户操作（点击、按键动作） | `emits`（帧外，组件绑定 DOM 事件） | 下一帧事件阶段 |
-| 异步回调（资源完成、网络） | `emits`（帧外）                    | 下一帧事件阶段 |
+定稿：
 
-**输入的两分**（事实 vs 状态）：
+- 实体 = 信号（组件绑定）+ id（帧循环身份）——一个对象两个身份，概念内聚
+- `entity.id` 直取——消灭注册包装技巧
+- 命名与 kiaao 的 `use` 同前缀："在组件里创建并绑定一个实体"
+- 同时发现 useGame 的语义问题：它是 createGame 返回的方法，干的却是"创建实体"——"创建游戏"与"创建实体"两个概念绑在一个返回值上——改名 useEntity 后各归其位
 
-- 瞬时动作（点击、空格发球、Enter 重开）→ `emits` 事件
-- 持续状态（方向键按住）→ 信号，帧内更新系统读取
+### 8.6 为什么实体生命周期用数组信号（声明式）？
 
-### 5.5 UI 边界与表现系统
-
-**组件只订阅数据，不订阅事件**：
-
-- 事件在帧内被消费、落地为数据变化（分数实体、enabled 字段）
-- UI 订阅数据：HUD 显示分数、砖块订阅 enabled 隐藏
-- 组件不需要知道"发生了什么"，只需要知道"现在是什么"——避免事件错过问题（组件挂载晚于事件）
-
-**表现系统（音效、动画）**：
-
-- 音效不是"UI 组件职责"，是**事件驱动的表现系统**（带副作用，调用 AudioContext）
-- 注册进事件系统列表，消费事件匹配类型播放：
-  - `brickHit` → 击砖音；`ballOut` → 失败音
-- 传统 ECS 中"渲染系统"就是有副作用的系统——kiaao 里 DOM 渲染被信号接管，声音等"数据之外的输出"仍由表现系统承载
-
-```
-碰撞系统 emits("brickHit")
-  → 规则系统消费：加分 + enabled=false（数据落地 → HUD/砖块组件订阅）
-  → 音效系统消费：播放击砖音（副作用）
-```
-
----
-
-## 六、实体生命周期（v2 定稿）
-
-### 6.1 声明式：数组信号即实体目录
-
-**实体的增删 = 数组信号操作**，不提供命令式 createEntity API：
-
-```
-实体目录（真相源）            声明式增删                      框架自动反应
-entities: Signal<Data[]>  →  数组追加（push 新项）   →  Each keyed 挂载组件 → useGame 注册实体（进池）
-                            数组过滤（移除项）       →  Each 卸载组件 → onUnmount 清池（出池）
-```
-
-- **数组 = 出生证**（配置数据：位置、尺寸、颜色），**实体信号 = 运行时状态**（帧循环演化）
-- 数据单向流动：数组 → 组件 → 实体；销毁无需反向关联（onUnmount 自动清理）
-- 静态实体（砖块网格、挡板）同样声明：数组初始值 + 组件挂载即注册
-
-### 6.2 数组信号进实体数据
-
-"实体目录"本身是数据——放入**游戏状态实体**（一个承载全局状态的实体），事件系统通过 frame 读写：
-
-```ts
-type GameStateEntity = {
-  balls: BallData[]; // 实体目录（数组信号字段）
-  score: number;
-  lives: number;
-  state: "ready" | "running" | "win" | "lose";
-};
-
-// 事件系统处理"点击生成球"：
-const onSpawn = (frame, events, emits) => {
-  for (const e of events) {
-    if (e.type === "click") {
-      frame(stateId, (s) => {
-        s.balls.push(randomBall(e.payload.x, e.payload.y));
-      });
-    }
-  }
-};
-```
-
-- 一切游戏状态（含实体目录）都是实体数据——保持"数据驱动"的纯粹
-- UI 侧：`Each value={use(stateEntity, () => stateEntity().balls)}` 订阅渲染
-
-### 6.3 为什么不要命令式 createEntity
-
-| 维度         | 命令式 createEntity          | 声明式数组信号                     |
-| :----------- | :--------------------------- | :--------------------------------- |
-| 引擎 API     | 多一个概念                   | 零新增（useGame/emits/dispose）    |
-| 渲染绑定     | 实体与组件脱节（谁渲染它？） | 挂载即渲染、卸载即清理（天然绑定） |
-| 生命周期清理 | 引擎要管理销毁               | onUnmount 自动清池                 |
-| 心智模型     | "命令世界"                   | "数据流"（与信号哲学一致）         |
-
----
-
-## 七、设计决策记录
-
-### 7.1 为什么不用全量快照？
-
-- 全量快照每帧 O(n) 内存分配
-- 延迟快照只在写时才创建副本
-- 适合"读取多、修改少"的典型游戏场景
-
-### 7.2 为什么系统 pool 私有？
-
-- 保持系统封装性
-- 避免跨系统直接耦合
-- 系统只通过 `frame` 共享数据
-
-### 7.3 为什么用 Symbol 做 EntityId？
-
-- 天然唯一，无需 `crypto.randomUUID()` 开销
-- 全链路统一使用（从创建到销毁）
-
-### 7.4 为什么不用微任务批处理？
-
-- Kiaao 核心设计原则：立即推送 DOM
-- 游戏循环中"帧末统一提交"已覆盖批处理需求
-- 保持调试透明度
-
-### 7.5 为什么事件队列是"累积区"而非"帧末清空"？（v2）
-
-- 帧外来源（用户输入、异步回调）需要随时入队
-- 消费时清空（drain 即空）：事件在"某一帧"被处理，而非"某一刻"——确定性粒度 = 帧
-- 帧外入队的事件自然进入下一帧消费（延迟 ≤ 1 帧，标准输入延迟）
-
-### 7.6 为什么事件不用 register 绑定系统？（v2）
-
-- 广播 vs 订阅：绑定 = 路由表把生产者和消费者绑死（新增消费者要改注册）；广播 = 生产者零耦合
-- register 是"实体注册"（实体进池），事件不是实体——事件是"流"，消费者是"流的读取者"，概念本质不同
-- 调试：统一队列完整可见（事件可视化、回放的基础）
-- "按类型绑定"的合理变体：事件系统在消费端按 type 过滤——编译期由 EventMap 保证
-
-### 7.7 为什么事件系统不需要工厂？（v2）
-
-- 更新系统需要池（实体注册、遍历）→ register 是必需形态
-- 事件系统无池（处理的是"事件携带的 id"）→ 纯函数 + 闭包状态即可
-- 两组分离传参 = 结构即时序：引擎强制"更新阶段 → 事件阶段"，不靠注册顺序约定
-
-### 7.8 为什么事件类型不从事件系统推导？（v2）
-
-- 生产者集合 ≠ 消费者集合：`emits` 需要词汇表全集，事件系统只声明消费子集
-- 从消费者反推会漏掉"暂无消费者"的事件（如规则系统未写，输入已在发射）
-- 领域词汇表独立声明 = 单一真相源
-
-### 7.9 为什么实体生命周期用数组信号？（v2）
-
-- 声明式数据流与 kiaao 信号哲学一致（对比：命令式 API 是"命令世界"）
+- 声明式数据流与 kiaao 信号哲学一致（对比：命令式 createEntity 是"命令世界"）
 - 实体生灭天然绑定渲染（挂载即注册、卸载即清理）
-- 引擎零新增 API；"实体目录"本身是数据（游戏状态实体的字段），任何系统可读写
+- 引擎零新增 API；"实体目录"本身是数据（状态实体的字段），任何系统可读写
 
-### 7.10 为什么 UI 不订阅事件？（v2）
+### 8.7 为什么 UI 只订阅数据，不接收事件？
 
 - UI 的职责是"把数据翻译成视觉/听觉"，只需知道"现在是什么"
 - 订阅事件要处理"事件错过"（组件挂载晚于事件）与瞬时性
-- 音效/动画等"数据之外的输出"由表现系统承载（事件驱动的副作用系统）
+- 音效/动画等"数据之外的输出"由表现系统承载（事件系统的 update 副作用）
 
-### 7.11 事件 vs 数据修改的分离（保留 v1 结论）
+### 8.8 为什么实体注册方法叫 `enter`（而非 register/join/slice）？
 
-- 数据修改是"命令"（即将执行的动作）
-- 事件是"事实"（已经发生的事情）
-- 合并会带来语义混淆、性能开销和调试困难
+候选与取舍：
+
+| 候选              | 优点                                | 缺点                                                         |
+| :---------------- | :---------------------------------- | :----------------------------------------------------------- |
+| register          | 语义最完整（加入池 + 提供初始数据） | 长（8 字母）                                                 |
+| reg               | 短                                  | 缩写感，不优雅                                               |
+| join              | 短、与"池"呼应                      | Array.join 心智歧义；主语偏斜（系统调用 join，加入者是实体） |
+| slice             | 与"数据切片"概念呼应                | 只表达"提供切片"，丢"进池"语义                               |
+| **enter（定稿）** | 短、"进入（系统）"动感准确          | 与"进入模式"（enterFullscreen）轻微歧义                      |
+
+定稿理由：`enter` 与 `emit`（事件进入）对称——系统的两个"入口接口"：**实体进入（enter）/ 事件进入（emit）**。一对 4 字母动词，读作"实体进入移动系统"、"事件进入规则系统"。
+
+### 8.9 为什么系统变量用职责名（movement/rules/audio）？
+
+候选：`moveSys`（sys 后缀）、`systemMove`（system 前缀）、`movementSystem`（完整）、**职责名（定稿）**。
+
+- `systemMove` 读作"系统移动"——主语错位；所有系统变量以 system 开头，排序时是噪音
+- 职责名（movement/boundary/collision/rules/audio）：**变量名表达职责，工厂名表达形态**（createXxxSystem）——`rules.emit.launch({})` 读作"规则系统发射发球"，主语是职责
+- 与引擎概念呼应："系统"是工厂的产物，变量名只需要说它负责什么
+
+### 8.10 保留的 v1/v2 决策
+
+- 延迟快照（读多写少场景）
+- 系统池私有（封装性）
+- Symbol 实体标识（唯一性）
+- 不用微任务批处理（帧末统一提交已覆盖）
+- 事件 vs 数据修改分离（数据修改是命令，事件是事实）
+- 广播的调试性：组装层路由图即事件流图
 
 ---
 
-## 八、后续可探索方向
+## 九、后续可探索方向
 
-1. **多系统协作**：一个实体同时注册到多个系统（已实现）
-2. **实体生成与销毁**：声明式数组信号（v2 定稿，见第六章）
-3. **事件调试工具**：帧内事件可视化、事件回放（统一队列是基础）
-4. **性能优化**：空间哈希、四叉树（当实体数量增长时）
-5. **更丰富的系统示例**：输入系统、AI 系统、动画系统、表现系统（音效）
-6. **事件优先级/过滤**：事件系统的选择性消费（当前为全量分发）
-7. **Proxy emits 的类型边界**：非法事件名（非 EM 键）的运行时防御
+1. **系统对象扩展**：pool 暴露（调试/查询）、多 update（多阶段帧逻辑）
+2. **调试工具**：帧内事件可视化（各系统队列）、实体状态面板
+3. **性能优化**：空间哈希、四叉树（当实体数量增长时）
+4. **更丰富的系统示例**：AI 系统、动画系统、回合制事件系统
+5. **事件 payload 的联合消费**：多队列合并处理（当多个事件共享处理逻辑时）
+
+> 命名已定稿：useEntity / enter（实体进入）/ emit（事件进入）/ update（帧逻辑）/ 职责名变量
 
 ---
 
 ## 附录：参考实现
 
 - v1 原型：`packages/example/src/worlds/bouncing-boxes/index.tsx`、`gravity-balls/index.tsx`
-- v2 重构目标：`packages/example/src/worlds/breakout/`（事件机制 + 声明式生命周期的落地示例）
-- 引擎核心：`packages/example/src/worlds/engine/`（EntityId / FrameManager / createGame / 系统库）
+- v3 落地：`packages/example/src/worlds/breakout/`（事件系统 + 声明式生命周期的完整示例）
+- 引擎核心：`packages/example/src/worlds/engine/`（EntityId / EntitySignal / FrameManager / createGame / 系统库）
 
-_文档整理于讨论过程中，v2 更新于事件机制与实体生命周期的专题讨论，供后续开发参考。_
+_文档整理于讨论过程中，v3 更新于 API 定型与事件机制定稿，供后续开发参考。_

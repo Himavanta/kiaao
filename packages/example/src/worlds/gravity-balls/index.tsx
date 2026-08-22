@@ -1,6 +1,6 @@
 import { Each, use, type Context } from "kiaao";
 
-import { createGame, type EngineEvents, type EntityId, type FrameManager } from "../engine";
+import { createGame, type EntityId, type FrameManager } from "../engine";
 import { StyleMemo } from "../engine/directives";
 import {
   createBoundarySystem,
@@ -21,7 +21,7 @@ type Gravitable = Movable & { gravity: number };
 function createGravitySystem<T extends Gravitable = Gravitable>() {
   const pool = new Set<EntityId>();
 
-  const register = (props: { gravity?: number }) => {
+  const enter = (props: { gravity?: number }) => {
     return (id: EntityId, ctx: Context) => {
       const { onMount, onUnmount } = ctx;
       onMount(() => {
@@ -45,7 +45,7 @@ function createGravitySystem<T extends Gravitable = Gravitable>() {
     }
   };
 
-  return [register, update] as const;
+  return { enter, update };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -69,13 +69,18 @@ type BallEntity = {
   points: number;
 };
 
-const [regMove, updMove] = createMovementSystem<BallEntity>();
-const [regBound, updBound] = createBoundarySystem<BallEntity>();
-const [regColl, updColl] = createCollisionSystem<BallEntity>();
-const [regGrav, updGrav] = createGravitySystem<BallEntity>();
+const movement = createMovementSystem<BallEntity>();
+const boundary = createBoundarySystem<BallEntity>();
+const collision = createCollisionSystem<BallEntity>();
+const gravity = createGravitySystem<BallEntity>();
 
 // 帧内执行顺序：重力 → 移动 → 边界 → 碰撞
-const { useGame } = createGame<BallEntity, EngineEvents>([updGrav, updMove, updBound, updColl]);
+const { useEntity } = createGame<BallEntity>([
+  gravity.update,
+  movement.update,
+  boundary.update,
+  collision.update,
+]);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 3. 弹球组件
@@ -92,16 +97,16 @@ type BallProps = {
   onRemove: () => void;
 };
 
-function Ball({ x, y, vx, vy, size, color, gravity, onRemove }: BallProps, ctx: Context) {
+function Ball({ x, y, vx, vy, size, color, gravity: accel, onRemove }: BallProps, ctx: Context) {
   const { use } = ctx;
 
   // 复用基础系统 + 自定义重力系统；注册顺序决定帧内执行顺序（重力→移动→边界→碰撞）
-  const entity = useGame(
+  const entity = useEntity(
     ctx,
-    regMove({ x, y, vx, vy }),
-    regBound({ w: size, h: size }),
-    regColl({ moving: true, shape: "circle" }),
-    regGrav({ gravity }),
+    movement.enter({ x, y, vx, vy }),
+    boundary.enter({ w: size, h: size }),
+    collision.enter({ moving: true, shape: "circle" }),
+    gravity.enter({ gravity: accel }),
   );
 
   return (
@@ -135,11 +140,11 @@ function Block({ x, y, size, color }: BlockProps, ctx: Context) {
   const { use } = ctx;
 
   // 静止实体：注册到移动/碰撞的静止池，参与碰撞但不移动
-  const entity = useGame(
+  const entity = useEntity(
     ctx,
-    regMove({ x, y, moving: false }),
-    regBound({ w: size, h: size }),
-    regColl({ moving: false }),
+    movement.enter({ x, y, moving: false }),
+    boundary.enter({ w: size, h: size }),
+    collision.enter({ moving: false }),
   );
 
   return (
