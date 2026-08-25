@@ -40,10 +40,19 @@ function createPlayer(ctx: AudioContext, sounds: Record<SoundName, AudioBuffer>)
 }
 
 /**
- * 预加载全部资源。
+ * 预加载全部资源（模块级单例：多次调用共享同一 Promise）。
  * 由异步组件中 await 调用：resolve 后游戏即可渲染（加载期间为占位符）。
  */
-export async function loadAssets(): Promise<Assets> {
+let cachedAssets: Promise<Assets> | null = null;
+
+export function loadAssets(): Promise<Assets> {
+  if (!cachedAssets) {
+    cachedAssets = doLoadAssets();
+  }
+  return cachedAssets;
+}
+
+async function doLoadAssets(): Promise<Assets> {
   const ctx = new AudioContext();
   const [bg, hit, paddle, lose, win] = await Promise.all([
     loadImage("/breakout/bg.svg"),

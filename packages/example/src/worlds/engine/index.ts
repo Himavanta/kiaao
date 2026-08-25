@@ -80,13 +80,14 @@ export type Update<T extends Record<string, any> = Record<string, any>> = (
  */
 export function createGame<T extends Record<string, any> = Record<string, any>>(
   updates: Array<Update<T>>,
+  options?: { autostart?: boolean },
 ) {
-  // 主数据池：id → Signal
   // 主数据池：id → Signal
   const gamePool = new Map<EntityId, Signal<T>>();
 
   let prevTime = performance.now();
   let rafId = 0;
+  let running = false;
 
   function loop() {
     const now = performance.now();
@@ -107,7 +108,22 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
     rafId = requestAnimationFrame(loop);
   }
 
-  rafId = requestAnimationFrame(loop);
+  // start/stop：帧循环开关（幂等）——stop 即暂停（帧循环无状态，状态保留在数据里）
+  const start = () => {
+    if (running) return;
+    running = true;
+    // 重置时间基准：恢复时不把暂停时长计入 delta
+    prevTime = performance.now();
+    rafId = requestAnimationFrame(loop);
+  };
+
+  const stop = () => {
+    if (!running) return;
+    running = false;
+    cancelAnimationFrame(rafId);
+  };
+
+  if (options?.autostart !== false) start();
 
   // ─── useEntity: 组件注册实体 ─────────────────────────
   // 实体 = 信号（组件绑定句柄）+ id（帧循环身份）——id 挂在信号上，一个对象两个身份
@@ -144,7 +160,14 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
 
   return {
     useEntity,
-    // 销毁：停止帧循环（组件卸载、游戏结束等场景）
-    dispose: () => cancelAnimationFrame(rafId),
+    // 开始/恢复帧循环（幂等；恢复时重置时间基准，不跳帧）
+    start,
+    // 停止/暂停帧循环（幂等；状态保留在数据中，start 可恢复）
+    stop,
+    // 销毁：停止帧循环并清空实体池（一去不回）
+    dispose: () => {
+      stop();
+      gamePool.clear();
+    },
   };
 }

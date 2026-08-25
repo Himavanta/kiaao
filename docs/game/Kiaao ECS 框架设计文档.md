@@ -51,18 +51,20 @@ useEntity（组件注册实体）             —— 实体怎么诞生
 
 ## 二、核心设计决策
 
-| 决策点             | 结论                                                                              |
-| :----------------- | :-------------------------------------------------------------------------------- |
-| **数据存储方式**   | 硬 ECS——数据全局扁平存储（Map<EntityId, EntitySignal<T>>），系统通过 `frame` 读写 |
-| **实体标识**       | `Symbol`（天然唯一，全链路统一使用），挂在实体信号上（`entity.id`）               |
-| **数据快照策略**   | 延迟快照——只在写时创建副本，读直接返回信号值                                      |
-| **系统 pool 管理** | 系统闭包内私有管理（`Set<EntityId>`），框架不介入                                 |
-| **系统执行顺序**   | `createGame` 的参数顺序即执行顺序                                                 |
-| **系统形态**       | 工厂返回对象 `{ enter?, emit?, update }`——能力声明式                              |
-| **事件机制**       | 系统自持闭包队列（每事件类型一个），`emit` 方法绑定队列，`update` 中处理          |
-| **系统间连接**     | 组装层路由：工厂参数注入（routes / deps），生产者持消费者的 emit 引用             |
-| **实体生命周期**   | 声明式：数组信号 + Each keyed 挂载/卸载                                           |
-| **实体注册**       | `useEntity(ctx, ...enter)`——组件注册，返回 `EntitySignal<T>`（信号 + id）         |
+| 决策点             | 结论                                                                                    |
+| :----------------- | :-------------------------------------------------------------------------------------- |
+| **数据存储方式**   | 硬 ECS——数据全局扁平存储（Map<EntityId, EntitySignal<T>>），系统通过 `frame` 读写       |
+| **实体标识**       | `Symbol`（天然唯一，全链路统一使用），挂在实体信号上（`entity.id`）                     |
+| **数据快照策略**   | 延迟快照——只在写时创建副本，读直接返回信号值                                            |
+| **系统 pool 管理** | 系统闭包内私有管理（`Set<EntityId>`），框架不介入                                       |
+| **系统执行顺序**   | `createGame` 的参数顺序即执行顺序                                                       |
+| **系统形态**       | 工厂返回对象 `{ enter?, emit?, update }`——能力声明式                                    |
+| **事件机制**       | 系统自持闭包队列（每事件类型一个），`emit` 方法绑定队列，`update` 中处理                |
+| **系统间连接**     | 组装层路由：工厂参数注入（routes / deps），生产者持消费者的 emit 引用                   |
+| **实体生命周期**   | 声明式：数组信号 + Each keyed 挂载/卸载                                                 |
+| **实体注册**       | `useEntity(ctx, ...enter)`——组件注册（实体归属 = 注册它的组件），返回 `EntitySignal<T>` |
+| **实例生命周期**   | 模块级实例 + `start/stop/dispose`（`autostart: false`）——组件是运行窗口，实例是状态容器 |
+| **全局状态**       | 非实体数据（分数/生命/状态机/目录）= 模块级信号（事件处理的产物），deps 注入系统        |
 
 ---
 
@@ -317,36 +319,73 @@ use(paddle, () => `${paddle().x}px`); // 组件绑定
 - `EntitySignal<T> = Signal<T> & { id: EntityId }`——一个对象两个身份
 - 实体生命周期 = 组件生命周期（onMount 进池 / onUnmount 出池）
 
-### 5.2 实体生命周期：声明式（数组信号）
+### 5.2 实体归属：注册在拥有它的组件里
 
-**实体的增删 = 数组信号操作**，不提供命令式 createEntity API：
+**实体注册的位置 = 实体的归属**：
 
-```
-实体目录（真相源）            声明式增删                      框架自动反应
-entities: Signal<Data[]>  →  数组整体替换（push 新项）→  Each keyed 挂载组件 → useEntity 注册（进池）
-                            数组过滤（移除项）       →  Each 卸载组件 → onUnmount 清池（出池）
-```
+- 球 → Ball 组件（Each 数据驱动）
+- 砖块 → Brick 组件（Each 数据驱动）
+- 挡板 → PaddleView 组件（注册 + 渲染同处）
+- 输入系统监听 → 借用挡板实体的 ctx 钩子（随游戏运行窗口挂/卸）
 
-- **数组 = 出生证**（配置数据），**实体信号 = 运行时状态**（帧循环演化）
-- 数据单向流动：数组 → 组件 → 实体；销毁无需反向关联（onUnmount 自动清理）
-- 实体目录本身是数据——放入**状态实体**（一个承载全局状态的实体），规则系统通过 frame 读写
+实体生命周期 = 注册它的组件的生命周期——组件卸载实体自动清池，无需手动销毁。
 
-### 5.3 嵌套数据纪律
+### 5.3 全局状态 ≠ 实体（实体 vs 信号尺子）
 
-**实体数据里的嵌套结构（数组/对象）必须整体替换，不可原地修改**：
+> **被系统池处理、被帧循环变换的数据 → 实体；被事件更新、被组件订阅的全局状态 → 信号**
+
+| 数据                     | 性质                          | 承载                  |
+| :----------------------- | :---------------------------- | :-------------------- |
+| 球/挡板/砖块的 x/y/vx/vy | 被 movement 每帧变换          | 实体 ✓                |
+| 分数/生命/状态机         | 被 break/out/restart 事件更新 | **信号**（deps 注入） |
+| 球目录（balls）          | Each 订阅的出生数据           | **信号**（数组信号）  |
 
 ```ts
-frame(stateId, (v) => {
+// game-instance.ts：全局状态 = 模块级信号（事件处理的产物）
+export const gameState = {
+  balls: use<BallData[]>([]),
+  score: use(0),
+  lives: use(LIVES),
+  state: use<GameState>("ready"),
+};
+
+// 规则系统 deps 注入（事件处理直接写信号）：
+export const rules = createRuleSystem<BreakoutEntity>({
+  ...gameState,
+  dir: input.dir,
+  win: (p) => audio.emit.win(p),
+  lose: (p) => audio.emit.lose(p),
+});
+
+// 事件处理（break 加分）：
+deps.score(deps.score() + payload.points);
+if (deps.score() >= MAX_SCORE && deps.state() !== "win") {
+  deps.state("win");
+  deps.win({});
+}
+```
+
+**两条写入路径的纪律**：实体的运动数据走 frame（帧管理器）；全局状态走信号（直接写，整体替换）——`input.dir` 是先例。
+
+### 5.4 嵌套数据纪律
+
+**实体数据里的嵌套结构（数组/对象）必须整体替换，不可原地修改**（信号同理）：
+
+```ts
+// 实体（frame 写）：整体替换 ✓
+frame(id, (v) => {
   v.balls = [...v.balls, createBall(...)];   // ✓ 整体替换（新引用）
   // v.balls.push(...)                       // ✗ 原地修改（浅拷贝共享引用 → 信号不传播）
 });
+// 全局状态信号（直接写）：同样整体替换 ✓
+deps.balls([...deps.balls(), createBall(...)]);
 ```
 
 - 帧管理器写时拷贝是**浅拷贝**（保护顶层对象，不保护嵌套结构）
 - 信号传播靠引用比较（原地修改不产生新引用 → 传播失效）
 - 这也是"实体数据以扁平标量为主"（x/y/vx/vy）是 ECS 自然形态的原因
 
-### 5.4 实体与数组项关联（dataId）
+### 5.5 实体与数组项关联（dataId）
 
 动态实体（球）注册时带出生标识：
 
@@ -385,6 +424,7 @@ const entity = useEntity(
 - **`delta` 为秒**（`Math.min((now - prev) / 1000, 0.05)`，上限 50ms 防跳帧）
 - **读优先纪律**：`frame(id)` 只读不拷贝（零分配）；写才走写时拷贝（延迟快照）
 - **无越界不写**：boundary 等系统先读判断、有变更才写——避免无谓的信号传播（每一帧的对象引用变化都会触发订阅者重算）
+- **start/stop**：帧循环开关（幂等）——stop 即暂停（帧循环无状态，状态保留在数据里）；start 重置时间基准（恢复不跳帧）；dispose 永久销毁（停循环 + 清空实体池）
 
 ---
 
@@ -401,13 +441,21 @@ type FrameManager<T> = {
 
 type Update<T> = (frame: FrameManager<T>, delta: number) => void;
 
-function createGame<T>(updates: Array<Update<T>>) {
+function createGame<T>(updates: Array<Update<T>>, options?: { autostart?: boolean }) {
   // 实体池 + 帧循环（纯流水线）
-  return { useEntity, dispose };
+  return { useEntity, start, stop, dispose };
 }
 ```
 
-**导出面（定稿）**：`{ useEntity, dispose }`——实体注册 + 生命周期管理。无事件 API（事件是系统能力）。
+**导出面（定稿）**：
+
+- `useEntity(ctx, ...enters)`——组件注册实体（实体归属 = 注册它的组件）
+- `start()`——开始/恢复帧循环（幂等；恢复时重置时间基准，不跳帧）
+- `stop()`——停止/暂停帧循环（幂等；状态保留在数据中，start 可恢复）
+- `dispose()`——永久销毁（停循环 + 清空实体池，一去不回）
+- `{ autostart: false }`——创建不启动（模块级实例：运行窗口由组件控制）
+
+无事件 API（事件是系统能力）。
 
 ---
 
@@ -498,7 +546,26 @@ function createGame<T>(updates: Array<Update<T>>) {
 - **持续状态住系统**：dir 信号由输入系统创建并暴露（它收到 keydown/keyup，自然维护档位）——状态与逻辑内聚；外部只读
 - 路由回调引用系统自身（`input.dir`）安全：闭包延迟执行
 
-### 8.11 保留的 v1/v2 决策
+### 8.12 为什么实例是模块级 + start/stop（而非组件内创建）？
+
+迭代过程：
+
+1. **组件内创建**：生命周期自然（组件卸载 dispose）——但子组件要逐层传 props 拿系统/useEntity
+2. **context 查询**（useGame(ctx) 沿 owner 链）：零 props——但 kiaao 的 owner.parent 绑定发生在组件运行结束后（adoptResult 阶段）——组件运行时读不到父链——此方案在框架内不可行（改框架不值）
+3. **模块级实例 + start/stop（定稿）**：代码管理最优（零传递、直接 import）；生命周期由 `autostart: false` + `start/stop` 显式控制（组件是运行窗口：onMount start / onUnmount stop）；实例是状态容器（常驻，再次进入状态保留，由游戏状态机/restart 重置）
+
+**关键性质**：帧循环无状态——stop 即暂停（数据冻结），start 恢复（重置时间基准）——pause 不需要独立 API；dispose 才是一去不回。
+
+**代价（诚实记录）**：模块级 = 单例（多实例不可能）；但 kiaao 无 context 机制、owner 链运行时不可读——"零传递"在框架内只有模块级一条路。若未来提供 provide/consume，createGame 可用它承载（同构通道）。
+
+### 8.13 为什么全局状态不是实体（分数/生命/状态机/目录）？
+
+- 判据：**被系统池处理、被帧循环变换的数据 → 实体；被事件更新、被组件订阅的全局状态 → 信号**——分数被 break/restart 事件更新、被 HUD 订阅，没有系统池处理它
+- 信号承载（模块级创建 + deps 注入规则系统）——`input.dir` 先例
+- 代价：两条写入路径（实体走 frame、全局状态走信号）——纪律化即可
+- 收益："状态实体"概念消失（balls/score/lives/state 本无一是真实体）；enter.state/statePool 删除；实体归属回归组件（注册在拥有它的组件里）
+
+### 8.14 保留的 v1/v2 决策
 
 - 延迟快照（读多写少场景）
 - 系统池私有（封装性）

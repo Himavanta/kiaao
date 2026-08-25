@@ -90,8 +90,16 @@ export type LosePayload = Record<string, never>;
 // 规则系统（事件系统：更新系统的超集）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 规则系统的外部依赖：链式事件的目标（音效系统的 emit，组装时注入）与方向信号 */
+/** 规则系统的外部依赖：全局状态信号（事件处理的产物）+ 链式事件目标 + 方向信号 */
 export type RuleDeps = {
+  /** 球实体目录（声明式生命周期数据源） */
+  balls: Signal<BallData[]>;
+  /** 分数（break 加分 / restart 清零） */
+  score: Signal<number>;
+  /** 生命（out 减一 / restart 重置） */
+  lives: Signal<number>;
+  /** 游戏状态机（ready / running / win / lose） */
+  state: Signal<GameState>;
   /** 持续输入状态：方向信号（-1 左 / 0 停 / 1 右）——挡板跟随每帧读取 */
   dir: Signal<number>;
   win: (payload: WinPayload) => void;
@@ -101,7 +109,8 @@ export type RuleDeps = {
 /**
  * 规则系统：内部维护多个闭包事件队列（每事件类型一个），
  * emit 方法绑定各队列（类型由签名锁定），update 在帧循环中处理队列。
- * 状态/挡板/砖块实体注册进本系统的池（像普通系统的 pool 一样持有实体）。
+ * 挡板/砖块实体注册进本系统的池（像普通系统的 pool 一样持有实体）；
+ * 全局状态（分数/生命/状态机/球目录）不在实体中——是事件处理的产物，由 deps 注入的信号承载。
  */
 export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
   // 闭包事件队列（每类型一个）
@@ -112,7 +121,6 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
   const restartQueue: RestartPayload[] = [];
 
   // 实体池（注册即持有 id）
-  const statePool = new Set<EntityId>();
   const paddlePool = new Set<EntityId>();
   const brickPool = new Set<EntityId>();
 
@@ -127,24 +135,6 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
 
   // enter：实体进入接口（与 emit 对称——实体进入 / 事件进入）
   const enter = {
-    // 状态实体（提供状态字段初始值）
-    state: (props: { balls?: BallData[]; score?: number; lives?: number; state?: GameState }) => {
-      return (id: EntityId, ctx: Context) => {
-        const { onMount, onUnmount } = ctx;
-        onMount(() => {
-          statePool.add(id);
-        });
-        onUnmount(() => {
-          statePool.delete(id);
-        });
-        return {
-          balls: props.balls ?? [],
-          score: props.score ?? 0,
-          lives: props.lives ?? 0,
-          state: props.state ?? "ready",
-        };
-      };
-    },
     // 挡板（供发球时读取位置）
     paddle: () => {
       return (id: EntityId, ctx: Context) => {
@@ -178,8 +168,6 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
 
   // update：挡板跟随（方向信号 → 挡板速度）+ 处理各队列（链式事件：处理中向 deps 发射）
   const update = (frame: FrameManager<T>) => {
-    if (statePool.size === 0) return;
-    const [stateId] = statePool;
     const [paddleId] = paddlePool;
 
     // 挡板跟随：持续输入状态 → 实体数据（仅在变化时写入）
@@ -191,23 +179,18 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
       lastDir = d;
     }
 
-    for (const e of breakQueue.splice(0)) onBreak(frame, e, stateId, deps);
-    for (const e of outQueue.splice(0)) onOut(frame, e, stateId, deps);
-    for (const _e of launchQueue.splice(0)) onLaunch(frame, stateId, paddleId);
-    for (const e of clickQueue.splice(0)) onClick(frame, e, stateId);
-    for (const _e of restartQueue.splice(0)) onRestart(frame, stateId, brickPool);
+    for (const e of breakQueue.splice(0)) onBreak(frame, e, deps);
+    for (const e of outQueue.splice(0)) onOut(frame, e, deps);
+    for (const _e of launchQueue.splice(0)) onLaunch(frame, paddleId, deps);
+    for (const e of clickQueue.splice(0)) onClick(e, deps);
+    for (const _e of restartQueue.splice(0)) onRestart(frame, brickPool, deps);
   };
 
   return { enter, emit, update };
 }
 
 /** 击碎：禁用砖块 + 球加速 + 加分；分数满则胜利（链式发射 win） */
-function onBreak(
-  frame: FrameManager<BreakoutEntity>,
-  payload: BreakPayload,
-  stateId: EntityId,
-  deps: RuleDeps,
-) {
+function onBreak(frame: FrameManager<BreakoutEntity>, payload: BreakPayload, deps: RuleDeps) {
   const b = frame(payload.id);
   if (!b || !b.enabled) return; // 幂等：已被击碎（同帧多球撞击）
 
@@ -219,93 +202,76 @@ function onBreak(
     v.vy *= 1.02;
   });
 
-  frame(stateId, (s) => {
-    s.score += payload.points;
-    if (s.score >= MAX_SCORE && s.state !== "win") {
-      s.state = "win";
-      deps.win({});
-    }
-  });
+  // 全局状态（信号）：分数是事件处理的产物，不在实体中
+  deps.score(deps.score() + payload.points);
+  if (deps.score() >= MAX_SCORE && deps.state() !== "win") {
+    deps.state("win");
+    deps.win({});
+  }
 }
 
 /** 出界：按 dataId 声明式销毁该球；球全没则减命，生命耗尽失败（链式发射 lose） */
-function onOut(
-  frame: FrameManager<BreakoutEntity>,
-  payload: OutPayload,
-  stateId: EntityId,
-  deps: RuleDeps,
-) {
-  const s = frame(stateId);
-  if (!s || s.state !== "running") return; // 非运行状态不处理出界
+function onOut(frame: FrameManager<BreakoutEntity>, payload: OutPayload, deps: RuleDeps) {
+  if (deps.state() !== "running") return; // 非运行状态不处理出界
 
   const b = frame(payload.id);
   if (!b) return;
 
-  frame(stateId, (v) => {
-    // 数组整体替换（写时拷贝是浅拷贝：原地修改不产生新引用，信号不传播）
-    v.balls = v.balls.filter((item) => item.id !== b.dataId);
-    if (v.balls.length === 0) {
-      v.lives -= 1;
-      if (v.lives <= 0) {
-        v.state = "lose";
-        deps.lose({});
-      } else {
-        v.state = "ready";
-      }
+  // 数组整体替换（写时拷贝是浅拷贝：原地修改不产生新引用，信号不传播）
+  deps.balls(deps.balls().filter((item) => item.id !== b.dataId));
+  if (deps.balls().length === 0) {
+    deps.lives(deps.lives() - 1);
+    if (deps.lives() <= 0) {
+      deps.state("lose");
+      deps.lose({});
+    } else {
+      deps.state("ready");
     }
-  });
+  }
 }
 
 /** 发球：ready 且无球时，从挡板上方生成第一个球 */
-function onLaunch(frame: FrameManager<BreakoutEntity>, stateId: EntityId, paddleId?: EntityId) {
+function onLaunch(
+  frame: FrameManager<BreakoutEntity>,
+  paddleId: EntityId | undefined,
+  deps: RuleDeps,
+) {
   if (!paddleId) return;
-  const s = frame(stateId);
-  if (!s || s.state !== "ready" || s.balls.length > 0) return;
+  if (deps.state() !== "ready" || deps.balls().length > 0) return;
 
   const p = frame(paddleId);
   if (!p) return;
   const angle = (Math.random() - 0.5) * (Math.PI / 3);
 
-  frame(stateId, (v) => {
-    v.balls = [
-      ...v.balls,
-      createBall(
-        p.x + (p.w - BALL_SIZE) / 2,
-        p.y - BALL_SIZE - 2,
-        Math.sin(angle) * BALL_SPEED,
-        -Math.cos(angle) * BALL_SPEED,
-      ),
-    ];
-    v.state = "running";
-  });
+  deps.balls([
+    ...deps.balls(),
+    createBall(
+      p.x + (p.w - BALL_SIZE) / 2,
+      p.y - BALL_SIZE - 2,
+      Math.sin(angle) * BALL_SPEED,
+      -Math.cos(angle) * BALL_SPEED,
+    ),
+  ]);
+  deps.state("running");
 }
 
 /** 点击：运行中生成一个奖励球（多球玩法，演示声明式实体创建） */
-function onClick(frame: FrameManager<BreakoutEntity>, payload: ClickPayload, stateId: EntityId) {
-  const s = frame(stateId);
-  if (!s || s.state !== "running") return;
+function onClick(payload: ClickPayload, deps: RuleDeps) {
+  if (deps.state() !== "running") return;
 
   const angle = Math.random() * Math.PI * 2;
-  frame(stateId, (v) => {
-    v.balls = [
-      ...v.balls,
-      createBall(payload.x, payload.y, Math.cos(angle) * BALL_SPEED, Math.sin(angle) * BALL_SPEED),
-    ];
-  });
+  deps.balls([
+    ...deps.balls(),
+    createBall(payload.x, payload.y, Math.cos(angle) * BALL_SPEED, Math.sin(angle) * BALL_SPEED),
+  ]);
 }
 
-/** 重开：重置状态实体 + 遍历砖块池恢复 enabled */
-function onRestart(
-  frame: FrameManager<BreakoutEntity>,
-  stateId: EntityId,
-  brickPool: Set<EntityId>,
-) {
-  frame(stateId, (v) => {
-    v.balls = [];
-    v.score = 0;
-    v.lives = LIVES;
-    v.state = "ready";
-  });
+/** 重开：重置全局状态 + 遍历砖块池恢复 enabled */
+function onRestart(frame: FrameManager<BreakoutEntity>, brickPool: Set<EntityId>, deps: RuleDeps) {
+  deps.balls([]);
+  deps.score(0);
+  deps.lives(LIVES);
+  deps.state("ready");
   for (const id of brickPool) {
     frame(id, (b) => {
       b.enabled = true;

@@ -1,9 +1,8 @@
 import { type Context } from "kiaao";
 
-import type { EntityId, EntitySignal } from "../engine";
 import { StyleMemo } from "../engine/directives";
-import type { Bounds, Shape } from "../engine/systems";
-import type { BreakoutEntity } from "./systems";
+import type { Bounds } from "../engine/systems";
+import { boundary, collision, movement, rules, useEntity } from "./game-instance";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 砖块布局
@@ -49,63 +48,17 @@ export function createBrickGrid(
   return bricks;
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 注册函数集合（由游戏模块创建并传入）
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/** useEntity 句柄：组件注册实体的入口（返回实体信号，id 挂在信号上） */
-export type UseEntity = (
-  ctx: Context,
-  ...enters: Array<(id: EntityId, ctx: Context) => Partial<BreakoutEntity>>
-) => EntitySignal<BreakoutEntity>;
-
-export type GameSystems = {
-  movement: {
-    enter: (props: {
-      x?: number;
-      y?: number;
-      vx?: number;
-      vy?: number;
-      moving?: boolean;
-    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-  };
-  boundary: {
-    enter: (props: {
-      w?: number;
-      h?: number;
-      bounds?: Partial<Bounds>;
-    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-  };
-  collision: {
-    enter: (props: {
-      moving?: boolean;
-      shape?: Shape;
-      enabled?: boolean;
-      breakable?: boolean;
-      drive?: number;
-      points?: number;
-    }) => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-  };
-  rules: {
-    enter: {
-      brick: () => (id: EntityId, ctx: Context) => Partial<BreakoutEntity>;
-    };
-  };
-};
-
 // 砖块尺寸与边界（全 pass：不参与边界系统处理）
 export const BRICK_W = 84;
 export const BRICK_H = 26;
 export const PASS_BOUNDS: Bounds = { left: "pass", right: "pass", top: "pass", bottom: "pass" };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 砖块组件
+// 砖块组件（模块级游戏实例：直接 import 引用系统与注册入口）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 type BrickProps = {
   data: BrickData;
-  systems: GameSystems;
-  useEntity: UseEntity;
 };
 
 /**
@@ -113,15 +66,15 @@ type BrickProps = {
  * 击碎事实由碰撞系统经路由发射、规则系统落地（enabled 置 false）；
  * 组件只订阅实体数据隐藏，不承载任何游戏逻辑。
  */
-function Brick({ data, systems, useEntity }: BrickProps, ctx: Context) {
+function Brick({ data }: BrickProps, ctx: Context) {
   const { use } = ctx;
 
   const entity = useEntity(
     ctx,
-    systems.movement.enter({ x: data.x, y: data.y, moving: false }),
-    systems.boundary.enter({ w: BRICK_W, h: BRICK_H, bounds: PASS_BOUNDS }),
-    systems.collision.enter({ moving: false, enabled: true, breakable: true, points: data.points }),
-    systems.rules.enter.brick(),
+    movement.enter({ x: data.x, y: data.y, moving: false }),
+    boundary.enter({ w: BRICK_W, h: BRICK_H, bounds: PASS_BOUNDS }),
+    collision.enter({ moving: false, enabled: true, breakable: true, points: data.points }),
+    rules.enter.brick(),
   );
 
   return (
