@@ -135,6 +135,34 @@ const done = use(todo, () => todo().done);
 <span>{count}</span>
 ```
 
+## ❌ 模块级实例 / Module-Level Instance
+
+"组件只运行一次"容易诱发一种错误直觉：既然实例只创建一次，放模块级与放组件内看起来没区别。但**模块级 = 应用级共享**：信号不随组件卸载清理，同页多实例互相串状态，SSR 下跨请求共享数据。模块级只适合真正的全局状态（主题、语言）。
+
+| 场景                | 做法                                                           |
+| ------------------- | -------------------------------------------------------------- |
+| 真全局（主题/语言） | 模块级 `use`（`import { use }`），应用生命周期共享             |
+| 每实例独立状态      | 组件内 `context.use` 创建，实例对象经 props 传给需要它的子组件 |
+
+```jsx
+// ❌ 无论渲染多少个 Game，都是同一份状态；SSR 下请求间串数据
+const game = createGame(); // module scope
+
+function Game() {
+  return <Board />; // Board 内部 import { game }
+}
+```
+
+```jsx
+// ✅ 每实例独立：信号在组件内用 context.use 创建，实例经 props 传给子组件
+function Game(_: Record<string, never>, { use }: Context) {
+  const state = use(createGameState()); // 每实例一份，随卸载清理
+  return <Board state={state} />; // Board 保持独立导出，依赖显式传入
+}
+```
+
+**为什么**：模块级与组件级的唯一区别是所有权与生命周期——模块级信号由模块拥有、应用级共享、不清理；`context.use` 创建的信号由组件拥有、卸载时清理（见 `guide/reactivity.md` 的 "Module-Level vs Component-Level `use`"）。需要实例隔离时用后者，不需要任何新机制。
+
 ## 关键术语 / Key Terminology
 
 回答时优先用 kiaao 的术语和机制：
@@ -147,3 +175,4 @@ const done = use(todo, () => todo().done);
 - **零虚拟 DOM**：DOM 精确更新，不做 diff/patch
 - **没有"只读信号"**：所有信号都可写，"逻辑只读"通过派生包装实现
 - **状态值在模板里直接传引用**：`{count}` 而非 `{count()}`
+- **模块级 = 应用级共享**：模块级 `use` 的信号不随组件卸载清理，多实例 / SSR 下共用；需要每实例独立状态时用 `context.use`，实例对象经 props 传递

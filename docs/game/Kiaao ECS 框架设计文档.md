@@ -556,7 +556,9 @@ function createGame<T>(updates: Array<Update<T>>, options?: { autostart?: boolea
 
 **关键性质**：帧循环无状态——stop 即暂停（数据冻结），start 恢复（重置时间基准）——pause 不需要独立 API；dispose 才是一去不回。
 
-**代价（诚实记录）**：模块级 = 单例（多实例不可能）；但 kiaao 无 context 机制、owner 链运行时不可读——"零传递"在框架内只有模块级一条路。若未来提供 provide/consume，createGame 可用它承载（同构通道）。
+**代价（诚实记录）**：模块级 = 单例（多实例不可能）；但 kiaao 无 context 机制、owner 链运行时不可读——"零传递"在框架内只有模块级一条路。
+
+> **2026-09-21 更新**：原记"若未来提供 provide/consume，createGame 可用它承载"已作废——结论为**不引入 provide/consume**（会让框架同时拥有词法作用域与动态作用域两套模型）。模块级实例是"零传递"的合法默认；需要每实例独立状态时，既有原语已足够：在组件内用 `context.use` 创建、实例对象经 props 传递，不需要新机制。详见《依赖注入 API 设计讨论》第五节与 5.9 节。
 
 ### 8.13 为什么全局状态不是实体（分数/生命/状态机/目录）？
 
