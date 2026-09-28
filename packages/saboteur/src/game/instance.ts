@@ -10,9 +10,16 @@
 import { use } from "kiaao";
 
 import { createGame } from "../engine";
+import { manor, parseLevel } from "../world";
 import { createFrameSystem } from "./systems/frame";
 import { createScaffoldSystem } from "./systems/scaffold";
 import type { ActorEntity } from "./types";
+
+// ── 关卡（模块级单例：地图静态，解析一次）────────────────
+
+// 解析结果作为模块常量——地图在关卡生命周期内不变，
+// 重置新一局时只替换实体目录，网格无需重建（规划文档 4.6）
+export const level = parseLevel(manor);
 
 // ── 帧统计（开发期可见帧率与实体数）────────────────────
 

@@ -1,5 +1,5 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 根组件样式：外层居中壳与状态提示
+// 根组件样式：外层居中壳、画布与状态提示
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 .shell {
@@ -7,6 +7,13 @@
   align-items: center;
   justify-content: center;
   height: 100%;
+}
+
+.tilemap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
 }
 
 .hint {
