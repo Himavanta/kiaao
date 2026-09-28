@@ -20,10 +20,16 @@ export type BehaviourSystem = {
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
 };
 
-/** 各行为的持续时长范围（秒） */
+/**
+ * 各行为的持续时长范围（秒）。
+ *
+ * `panic` 的时长由 alarm 设定（`PANIC_DURATION`），此处的值只是类型完整性
+ * 所需——行为系统在 `witnessed` 为真时直接早退，不会用到它。
+ */
 const DURATION: Record<Mood, { min: number; max: number }> = {
   wander: { min: 6, max: 18 },
   linger: { min: 2, max: 6 },
+  panic: { min: 30, max: 30 },
 };
 
 export function createBehaviourSystem(options: { random: Random }): BehaviourSystem {
@@ -63,6 +69,10 @@ export function createBehaviourSystem(options: { random: Random }): BehaviourSys
 
     // 死者不再有行为：尸体不入状态机
     if (entity.dead) return;
+
+    // 恐慌者的 mood 归 alarm 管：状态机不再切换它，否则逃到一半
+    // 会被切回 wander 而停下
+    if (entity.witnessed) return;
 
     const moodLeft = entity.moodLeft - delta;
     if (moodLeft > 0) {

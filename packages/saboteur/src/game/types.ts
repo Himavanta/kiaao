@@ -71,10 +71,16 @@ export type ActorEntity = {
   visibleIds: EntityId[];
 
   // ── behaviour 切片 ──
-  /** 【behaviour 写】当前行为与计时。M6 将扩展为恐慌 / 逃离 */
+  /** 【behaviour 写】当前行为与计时 */
   mood: Mood;
   /** 【behaviour 写】当前行为的剩余时长（秒） */
   moodLeft: number;
+
+  // ── alarm 切片 ──
+  /** 【alarm 写】是否已目击到异常（尸体或恐慌者）；panic 一旦置位不再清除 */
+  witnessed: boolean;
+  /** 【alarm 写】恐慌时逃离的参照点（目击位置，世界坐标） */
+  fleeFrom: Cell | null;
 
   // ── 跨系统共享字段 ──
   /**
@@ -110,7 +116,12 @@ export type ItemKind = "booze";
 export type PropEntityKind = "booze";
 
 /**
- * NPC 行为。M3 只有闲游与驻足；M5/M6 会加入饮酒、目击、恐慌、逃离。
- * 行为的**效果**体现在 navigation 的目标选择上（navigation 读 mood 决定去哪）。
+ * NPC 行为。mood 决定 navigation 的目标选择策略：
+ *
+ * - `wander` / `linger`：随机游荡与驻足（M3）
+ * - `panic`：目击尸体或恐慌者后逃离现场（M6）
+ *
+ * 行为不直接指挥移动，而是影响 navigation 挑目的地——这样 locomotion
+ * 与意图来源都不知道「状态机」存在，行为切换只改一处。
  */
-export type Mood = "wander" | "linger";
+export type Mood = "wander" | "linger" | "panic";

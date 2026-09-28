@@ -36,3 +36,13 @@
   color: var(--c-text);
   opacity: 0.85;
 }
+
+// 警报等级配色：50 起提示、100 满值时告警
+.warning {
+  color: #e0a34a;
+}
+
+.critical {
+  color: var(--c-danger);
+  font-weight: 700;
+}

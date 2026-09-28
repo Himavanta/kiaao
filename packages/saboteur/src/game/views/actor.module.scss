@@ -46,3 +46,17 @@
   box-shadow: 0 0 4px #7ddc8a;
   transform: translateX(-50%);
 }
+
+// 恐慌标记：头顶的橙红感叹点。与中毒标记同位置、不同色——
+// 两者可能同时存在（中毒者也可能目击过别人）。
+.panicMark {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: #e0653a;
+  border-radius: 50%;
+  box-shadow: 0 0 4px #e0653a;
+  transform: translateX(-50%) translateX(6px);
+}

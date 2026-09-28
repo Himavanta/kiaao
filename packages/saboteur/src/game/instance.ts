@@ -12,6 +12,7 @@ import { use } from "kiaao";
 import { createGame } from "../engine";
 import { createRandom, manor, parseLevel } from "../world";
 import { playerEntity } from "./state";
+import { createAlarmSystem } from "./systems/alarm";
 import { createBehaviourSystem } from "./systems/behaviour";
 import { createFrameSystem } from "./systems/frame";
 import { createInputSystem, readDirection } from "./systems/input";
@@ -52,6 +53,7 @@ export const locomotion = createLocomotionSystem(level.grid);
 export const navigation = createNavigationSystem({ grid: level.grid, random });
 export const behaviour = createBehaviourSystem({ random });
 export const perception = createPerceptionSystem({ grid: level.grid });
+export const alarm = createAlarmSystem();
 
 // 交互：读玩家实体信号（同时需要位置 / 朝向与 id）
 export const interaction = createInteractionSystem({
@@ -78,6 +80,7 @@ locomotion.setIntent("guest", (entity) => pathIntent(entity));
 // interaction 先处理玩家意图（拾取 / 下药，含中毒倒计时）
 // → behaviour 决定状态 → navigation 规划路径 → locomotion 推进位置
 // → perception 判定谁看见了谁（放在移动之后，保证判定的是本帧位置）
+// → alarm 消费本轮的 visibleIds 产生恐慌（必须紧跟 perception）
 // → frame 统计放最后（它只计数，无数据依赖）
 export const game = createGame<ActorEntity>(
   [
@@ -86,6 +89,7 @@ export const game = createGame<ActorEntity>(
     navigation.update,
     locomotion.update,
     perception.update,
+    alarm.update,
     frameSystem.update,
   ],
   { autostart: false },

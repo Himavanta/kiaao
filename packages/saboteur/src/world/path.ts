@@ -155,6 +155,23 @@ export function toWaypoints(path: Cell[]): Vec2[] {
   return path.map(cellCenter);
 }
 
+/**
+ * 从候选集中挑出距 `away` 最远的若干格。
+ *
+ * 用于恐慌逃离：逃离点选「离威胁最远的地方」。返回不超过 `count` 个
+ * 候选，调用方再从中随机取一——纯取最远点会让所有目击者挤向同一角落。
+ */
+export function furthestCells(candidates: readonly Cell[], away: Cell, count: number): Cell[] {
+  const scored = candidates.map((cell) => ({
+    cell,
+    // 曼哈顿距离足够：与寻路的 4 邻域同尺度，避免开方
+    d: Math.abs(cell.col - away.col) + Math.abs(cell.row - away.row),
+  }));
+
+  scored.sort((a, b) => b.d - a.d);
+  return scored.slice(0, Math.max(0, count)).map((s) => s.cell);
+}
+
 /** 收集所有可通行格：随机目的地的候选集 */
 export function collectWalkable(grid: Grid): Cell[] {
   const cells: Cell[] = [];

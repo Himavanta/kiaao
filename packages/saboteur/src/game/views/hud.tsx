@@ -7,7 +7,7 @@
 
 import type { Context } from "kiaao";
 
-import { interaction } from "../instance";
+import { alarm, interaction } from "../instance";
 
 import style from "./hud.module.scss";
 
@@ -23,11 +23,30 @@ export function Hud(_: Record<string, never>, ctx: Context) {
 
   const hint = use(interaction.hint, () => interaction.hint());
 
+  const alarmValue = use(alarm.alarm, () => Math.round(alarm.alarm()));
+  const witnesses = use(alarm.witnessCount, () => alarm.witnessCount());
+
+  // 警报等级：越接近满值越紧张，用于切换配色
+  const level = use(alarm.alarm, () => {
+    const v = alarm.alarm();
+    if (v >= 100) return style.critical;
+    if (v >= 50) return style.warning;
+    return "";
+  });
+
   return (
     <div class={style.hud}>
       <div class={style.row}>
         <span class={style.label}>持有</span>
         <span class={style.value}>{held}</span>
+      </div>
+      <div class={style.row}>
+        <span class={style.label}>目击</span>
+        <span class={style.value}>{witnesses}</span>
+      </div>
+      <div class={style.row}>
+        <span class={style.label}>警报</span>
+        <span class={[style.value, level].join(" ")}>{alarmValue}</span>
       </div>
       <div class={style.hint}>{hint}</div>
     </div>

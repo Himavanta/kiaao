@@ -14,7 +14,15 @@
 import type { Context } from "kiaao";
 
 import type { EntityId, FrameManager } from "../../engine/types";
-import { cellAt, cellCenter, collectWalkable, findPath, type Cell, type Grid } from "../../world";
+import {
+  cellAt,
+  cellCenter,
+  collectWalkable,
+  findPath,
+  furthestCells,
+  type Cell,
+  type Grid,
+} from "../../world";
 import type { Random } from "../../world/random";
 import type { ActorEntity } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
@@ -33,6 +41,9 @@ const STUCK_TIMEOUT = 4;
 /** 停留时长范围（秒）：到达后歇一会，避免 NPC 像弹球一样永动 */
 const IDLE_MIN = 0.8;
 const IDLE_MAX = 3.5;
+
+/** 逃跑候选点数：取最远的前 N 个再随机选一，避免所有目击者挤向同一角落 */
+const FLEE_CANDIDATES = 12;
 
 export type NavigationSystem = {
   enter: (props?: {
@@ -81,7 +92,7 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
     };
 
   /** 随机挑一个可通行格作为目的地（避开当前格） */
-  const pickGoal = (from: Cell): Cell | undefined => {
+  const pickRandomGoal = (from: Cell): Cell | undefined => {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const candidate = random.pick(walkable);
       if (candidate && (candidate.col !== from.col || candidate.row !== from.row)) {
@@ -91,7 +102,27 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
     return undefined;
   };
 
-  /** 为单个实体规划路径；不可达时清空路径，留待下次重试 */
+  /**
+   * 挑目的地：**按 mood 分派策略**。
+   *
+   * 恐慌者反向逃跑——朝远离威胁处跑；其余人随机游荡。这样「去哪」的
+   * 决策全在本系统内，alarm 只需置状态（mood / fleeFrom），不必碰路径与移动。
+   * 与 locomotion 按 role 分派意图来源是同一形态。
+   */
+  const pickGoal = (from: Cell, entity: Readonly<ActorEntity>): Cell | undefined => {
+    if (entity.mood === "panic" && entity.fleeFrom) {
+      return random.pick(furthestCells(walkable, entity.fleeFrom, FLEE_CANDIDATES));
+    }
+    return pickRandomGoal(from);
+  };
+
+  /**
+   * 为单个实体规划路径。
+   *
+   * **目的地来源有两处**：`goal` 已有值时用它（alarm 在恐慌时写入），
+   * 否则随机挑一个。这样 panic 只需给出「去哪」，不必碰路径与移动；
+   * 而 wander 的随机目的地仍由本系统决定。
+   */
   const plan = (frame: FrameManager<ActorEntity>, id: EntityId) => {
     const entity = frame(id);
     if (!entity || entity.dead) return;
@@ -100,14 +131,18 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
     // 无有效位置（如尚未写出 x/y）时不规划，下一帧再试
     if (!from) return;
 
-    const goal = pickGoal(from);
+    // 恐慌时忽略既有 goal：威胁点可能已变，每次重规划都用最新的 fleeFrom
+    const goal =
+      entity.mood === "panic" ? pickGoal(from, entity) : (entity.goal ?? pickGoal(from, entity));
     if (!goal) return;
 
     const path = findPath(grid, from, goal);
 
     frame(id, (e) => {
       e.path = path ? [...path] : [];
-      e.goal = path ? goal : null;
+      // 规划失败时保留 goal：下一帧重试同一目标，而非放弃
+      // （目标若已不可达，看门狗会清掉它）
+      e.goal = path ? goal : e.goal;
       e.followTime = 0;
     });
   };
@@ -187,9 +222,10 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
       // 到达：弹出首点，计时清零（下一点重新计）
       e.path = e.path.slice(1);
       e.followTime = 0;
-      // 最后一个点走完：重置停留计时，让 NPC 在目的地歇一会
+      // 最后一个点走完：重置停留计时。
+      // 恐慌者不歇息——逃到一处后立刻奔向下一处，否则会站着等死。
       if (e.path.length === 0) {
-        e.idleLeft = IDLE_MIN + random() * (IDLE_MAX - IDLE_MIN);
+        e.idleLeft = e.mood === "panic" ? 0 : IDLE_MIN + random() * (IDLE_MAX - IDLE_MIN);
       }
     });
   };

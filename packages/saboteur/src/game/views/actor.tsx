@@ -11,6 +11,7 @@ import { Show, type Context } from "kiaao";
 import { StyleMemo } from "../../engine/directives";
 import { TILE } from "../../world";
 import {
+  alarm,
   behaviour,
   entityCount,
   interaction,
@@ -53,6 +54,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     locomotion.enter(speedProps(col, row, role, facing)),
     perception.enter(),
     interaction.enter(),
+    alarm.enter({ role }),
   ];
 
   const enters = role === "guest" ? [...common, navigation.enter(), behaviour.enter()] : common;
@@ -96,6 +98,9 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 玩家需要预判或跟随。没有这个标记，等待期就是无反馈的黑箱。
   const poisoned = useContext(entity, () => entity().poisonLeft !== null);
 
+  // 恐慌标记：让「传播链在跑」可见。没有它，玩家只能看到 NPC 突然乱跑。
+  const panicking = useContext(entity, () => entity().witnessed);
+
   return (
     <StyleMemo
       value={{
@@ -111,6 +116,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     >
       <div class={bodyClass} />
       <Show value={poisoned}>{() => <span class={style.poisonMark} />}</Show>
+      <Show value={panicking}>{() => <span class={style.panicMark} />}</Show>
     </StyleMemo>
   );
 }
