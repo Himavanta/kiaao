@@ -1,31 +1,19 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// App 壳层样式（CSS Modules：布局静态，与逻辑无关）
-// 运行时逐帧变化的值一律走 StyleMemo，不写在这里
+// 舞台样式：视口裁剪与世界层
+// 相机平移走 StyleMemo（逐帧变化），此处只写静态布局
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-.shell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
 
 .viewport {
   position: relative;
   width: var(--view-w);
   height: var(--view-h);
   overflow: hidden;
-  background: var(--c-surface);
+  background: var(--c-floor);
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 55%);
 }
 
-.title {
+.world {
   position: absolute;
-  top: 12px;
-  left: 16px;
-  color: var(--c-muted);
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  inset: 0;
 }

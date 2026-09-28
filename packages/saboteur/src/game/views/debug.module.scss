@@ -1,0 +1,36 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 调试面板样式
+// 帧率与实体计数每帧变化，但数字宽度固定才不抖动——
+// 用等宽字体与固定最小宽度
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+.panel {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 6px 12px;
+  background: rgb(0 0 0 / 55%);
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.metric {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.label {
+  color: var(--c-muted);
+  letter-spacing: 0.08em;
+}
+
+.value {
+  min-width: 3ch;
+  color: var(--c-accent);
+  text-align: right;
+}

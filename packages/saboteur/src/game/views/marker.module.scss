@@ -1,11 +1,8 @@
-import { createApp } from "kiaao";
-
-import App from "./app";
-
-import "./styles/global.scss";
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// saboteur 入口
+// 【M0 脚手架】标记样式
+// 位置由 StyleMemo 逐帧写入，此处只留静态部分
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-createApp(App).mount("#app");
+.marker {
+  box-shadow: 0 2px 8px rgb(0 0 0 / 45%);
+}

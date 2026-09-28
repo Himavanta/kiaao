@@ -1,11 +1,7 @@
-import { createApp } from "kiaao";
-
-import App from "./app";
-
-import "./styles/global.scss";
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// saboteur 入口
+// 引擎入口：帧循环、实体池、实体注册、渲染指令
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-createApp(App).mount("#app");
+export { createGame } from "./game";
+export { StyleMemo } from "./directives";
+export type { EntityId, EntitySignal, FrameManager, Update } from "./types";

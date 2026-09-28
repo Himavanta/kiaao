@@ -1,0 +1,21 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 根组件样式：外层居中壳与状态提示
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+.shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  color: var(--c-muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  transform: translateX(-50%);
+}

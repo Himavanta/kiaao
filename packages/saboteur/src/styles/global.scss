@@ -1,19 +1,28 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 全局样式（非 CSS Modules：全局选择器、CSS 变量、reset）
-// 布局变量以 CSS 变量暴露，供组件样式与 StyleMemo 共享
+// 全局样式（非 CSS Modules：reset、CSS 变量、字体）
+//
+// 尺寸真值集中在此，JS 侧镜像见 game/config.ts——
+// 两处必须保持一致，改动时同步。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 :root {
-  // 场景尺寸（游戏世界的逻辑像素，与关卡网格解耦）
+  // 视口尺寸
   --view-w: 960px;
   --view-h: 640px;
 
-  // 调色板
-  --c-bg: #111318;
-  --c-surface: #1b1e26;
+  // 世界瓦片
+  --tile: 32px;
+
+  // 场景调色（夜宴氛围：暗背景 + 暖色光源）
+  --c-bg: #0b0d12;
+  --c-floor: #2a2622;
+  --c-wall: #4a4038;
+  --c-furniture-low: #6b5a48;
+  --c-furniture-high: #53463a;
+  --c-accent: #e0a34a;
   --c-text: #e6e8ee;
   --c-muted: #8b91a3;
-  --c-accent: #e0a34a;
+  --c-danger: #d9534f;
 }
 
 * {
@@ -25,6 +34,7 @@ body {
   background: var(--c-bg);
   color: var(--c-text);
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
 }
 
 #app {
