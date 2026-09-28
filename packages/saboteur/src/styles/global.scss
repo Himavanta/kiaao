@@ -1,0 +1,32 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 全局样式（非 CSS Modules：全局选择器、CSS 变量、reset）
+// 布局变量以 CSS 变量暴露，供组件样式与 StyleMemo 共享
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+:root {
+  // 场景尺寸（游戏世界的逻辑像素，与关卡网格解耦）
+  --view-w: 960px;
+  --view-h: 640px;
+
+  // 调色板
+  --c-bg: #111318;
+  --c-surface: #1b1e26;
+  --c-text: #e6e8ee;
+  --c-muted: #8b91a3;
+  --c-accent: #e0a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+#app {
+  height: 100vh;
+}
