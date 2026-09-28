@@ -14,7 +14,7 @@ import type { Context } from "kiaao";
 
 import type { EntityId, FrameManager } from "../../engine/types";
 import { moveRect, type Grid } from "../../world";
-import { facingFromVector, type ActorEntity, type Facing } from "../types";
+import { facingFromVector, type ActorEntity, type Facing, type Role } from "../types";
 
 /** 实体外观尺寸（正方形，略小于瓦片以留出视觉间隙） */
 export const ACTOR_SIZE = 20;
@@ -42,16 +42,26 @@ export type LocomotionSystem = {
   }) => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
   /** 帧逻辑：把移动池内实体按意图推进 */
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
-  /** 注入意图来源（组装层调用：玩家读输入、NPC 读路径） */
-  setIntent: (source: IntentSource) => void;
+  /**
+   * 按角色注入意图来源：玩家读输入、NPC 读路径。
+   *
+   * 按 `role` 分派而非全局唯一来源——两类角色的意图来源本质不同，
+   * 用单一来源再在内部 if 分支会让组装层多一层间接。
+   */
+  setIntent: (role: Role, source: IntentSource) => void;
 };
+
+/** 默认意图：未注册来源的角色原地不动 */
+const NO_INTENT: IntentSource = () => IDLE;
 
 export function createLocomotionSystem(grid: Grid): LocomotionSystem {
   // 移动池：每帧按意图推进；静止实体不入池，零帧写入
   const pool = new Set<EntityId>();
 
-  // 意图来源由组装层注入；默认静止，保证系统可独立使用与测试
-  let readIntent: IntentSource = () => IDLE;
+  // 意图来源按角色分派；未注册的角色的默认静止，保证系统可独立测试
+  const sources = new Map<Role, IntentSource>();
+  const readIntent = (entity: Readonly<ActorEntity>): Intent =>
+    (sources.get(entity.role) ?? NO_INTENT)(entity);
 
   const enter =
     (props: { x: number; y: number; speed: number; facing: Facing }) =>
@@ -117,8 +127,8 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
   return {
     enter,
     update,
-    setIntent: (source: IntentSource) => {
-      readIntent = source;
+    setIntent: (role: Role, source: IntentSource) => {
+      sources.set(role, source);
     },
   };
 }

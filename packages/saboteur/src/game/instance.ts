@@ -10,10 +10,12 @@
 import { use } from "kiaao";
 
 import { createGame } from "../engine";
-import { manor, parseLevel } from "../world";
+import { createRandom, manor, parseLevel } from "../world";
+import { createBehaviourSystem } from "./systems/behaviour";
 import { createFrameSystem } from "./systems/frame";
 import { createInputSystem, readDirection } from "./systems/input";
 import { createLocomotionSystem } from "./systems/locomotion";
+import { createNavigationSystem, pathIntent } from "./systems/navigation";
 import type { ActorEntity } from "./types";
 
 // ── 关卡（模块级单例：地图静态，解析一次）────────────────
@@ -21,6 +23,10 @@ import type { ActorEntity } from "./types";
 // 解析结果作为模块常量——地图在关卡生命周期内不变，
 // 重置新一局时只替换实体目录，网格无需重建（规划文档 4.6）
 export const level = parseLevel(manor);
+
+// 固定种子：NPC 的目的地序列在每次运行时一致，便于对照与调试。
+// 换种子时改这一处。
+export const random = createRandom(20260928);
 
 // ── 输入（源系统：无 update，事件到即写信号）──────────────
 
@@ -37,21 +43,26 @@ export const entityCount = use(0);
 // ── 系统实例（按依赖顺序创建）──────────────────────────
 
 export const locomotion = createLocomotionSystem(level.grid);
+export const navigation = createNavigationSystem({ grid: level.grid, random });
+export const behaviour = createBehaviourSystem({ random });
 
-// 玩家意图：读输入信号。潜行标记随意图一并交给 locomotion 写入实体，
-// 保持「每个字段只有一个写者」的纪律。
-locomotion.setIntent(() => {
+// 意图来源按角色分派（组装层路由，不做 if 分支）：
+// - 玩家：读输入信号
+// - 客人：沿 navigation 给出的路径行走
+locomotion.setIntent("player", () => {
   const { dx, dy } = readDirection(input.pressed());
   return { dx, dy, sneaking: input.sneaking() };
 });
+locomotion.setIntent("guest", (entity) => pathIntent(entity));
 
 // ── 游戏实例（模块级，autostart: false——运行窗口由组件控制）──
 
 // createGame 的参数顺序即帧执行顺序：
-// 输入是源系统（无 update），locomotion 消费意图推进位置，
-// frame 统计放最后（它只计数，无数据依赖）
-export const game = createGame<ActorEntity>([locomotion.update, frameSystem.update], {
-  autostart: false,
-});
+// behaviour 决定状态 → navigation 规划路径 → locomotion 消费意图推进位置
+// → frame 统计放最后（它只计数，无数据依赖）
+export const game = createGame<ActorEntity>(
+  [behaviour.update, navigation.update, locomotion.update, frameSystem.update],
+  { autostart: false },
+);
 
 export const { useEntity, start, stop } = game;

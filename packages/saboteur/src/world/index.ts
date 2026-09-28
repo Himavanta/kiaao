@@ -8,6 +8,16 @@
 export { moveRect, rectBlocked } from "./collision";
 export { rectCenter, TILE, type Rect } from "./geometry";
 export { createGrid, inBounds, isBlocked, isOpaque, setTile, tileAt, type Grid } from "./grid";
+export {
+  cellAt,
+  cellCenter,
+  collectWalkable,
+  findPath,
+  toWaypoints,
+  type Cell,
+  type Vec2,
+} from "./path";
+export { createRandom, type Random } from "./random";
 export { parseLevel, validateLevel, type ParsedLevel } from "./levels/parse";
 export { Tile, type LevelDef, type SpawnFacing, type SpawnPoint } from "./levels/types";
 export { manor } from "./levels/manor";

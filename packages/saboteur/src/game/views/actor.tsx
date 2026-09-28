@@ -2,14 +2,15 @@
 // 角色视图：注册实体 + 逐属性渲染
 //
 // 只注册与渲染，不含游戏逻辑（与 example 的 Ball 同形态）。
-// 位置 / 朝向 / 潜行态都经派生信号产出，值不变时 memo 生效、不写 DOM。
+// 位置 / 朝向 / 潜行态 / 层级都经派生信号产出，值不变时 memo 生效、
+// 不写 DOM。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { type Context } from "kiaao";
 
 import { StyleMemo } from "../../engine/directives";
 import { TILE } from "../../world";
-import { entityCount, locomotion, useEntity } from "../instance";
+import { behaviour, entityCount, locomotion, navigation, useEntity } from "../instance";
 import { playerEntity } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { Facing, Role } from "../types";
@@ -25,7 +26,7 @@ type ActorProps = {
   role: Role;
 };
 
-/** 朝向 → 翻转：图集只画朝右，其余方向靠水平翻转 */
+/** 朝向 → 是否水平镜像（图集只画朝右，其余靠翻转） */
 function isFlipped(facing: Facing): boolean {
   return facing === "west";
 }
@@ -36,16 +37,17 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   onMount(() => entityCount(entityCount() + 1));
   onUnmount(() => entityCount(entityCount() - 1));
 
-  const entity = useEntity(
-    ctx,
-    locomotion.enter({
-      x: col * TILE + (TILE - ACTOR_SIZE) / 2,
-      y: row * TILE + (TILE - ACTOR_SIZE) / 2,
-      speed: role === "player" ? 190 : 120,
-      facing,
-    }),
-    () => ({ role }),
-  );
+  // 客人注册导航与行为系统（玩家不入池——它的意图来自输入）
+  const enters =
+    role === "guest"
+      ? [
+          locomotion.enter(speedProps(col, row, role, facing)),
+          navigation.enter(),
+          behaviour.enter(),
+        ]
+      : [locomotion.enter(speedProps(col, row, role, facing))];
+
+  const entity = useEntity(ctx, ...enters, () => ({ role }));
 
   // 玩家注册到全局表：相机据此跟随（组件树无法向上传出实体信号，
   // 框架没有 ref API）。卸载时清空，避免相机指向已销毁的信号。
@@ -59,10 +61,14 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     return `${x}px ${y}px`;
   });
 
-  // 朝向与潜行态：各自派生，互不影响
-  // 镜像用 `scale`（真实 CSS 属性）而非自造的 `flip`——后者会被浏览器丢弃
+  // 朝向与潜行态：各自派生，互不影响。
+  // 镜像用 `scale`（真实 CSS 属性）而非自造的 `flip`——后者会被浏览器丢弃。
   const scale = useContext(entity, () => (isFlipped(entity().facing) ? "-1 1" : "1 1"));
   const opacity = useContext(entity, () => (entity().sneaking ? "0.55" : "1"));
+
+  // 深度排序：按 y 量化到格子精度。量化后相邻帧多数取值相同，
+  // memo 生效，写入频率远低于每帧。
+  const zIndex = useContext(entity, () => `${Math.round(entity().y / TILE)}`);
 
   return (
     <StyleMemo
@@ -70,6 +76,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
         position: "absolute",
         width: `${ACTOR_SIZE}px`,
         height: `${ACTOR_SIZE}px`,
+        zIndex,
         translate,
         scale,
         opacity,
@@ -78,4 +85,14 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
       <div class={role === "player" ? style.player : style.guest} />
     </StyleMemo>
   );
+}
+
+/** 出生位置与速度：玩家略快于客人 */
+function speedProps(col: number, row: number, role: Role, facing: Facing) {
+  return {
+    x: col * TILE + (TILE - ACTOR_SIZE) / 2,
+    y: row * TILE + (TILE - ACTOR_SIZE) / 2,
+    speed: role === "player" ? 190 : 78,
+    facing,
+  };
 }

@@ -67,7 +67,8 @@ function mountActor(
     owner: {},
   } as any;
 
-  const entity = game.useEntity(ctx, ...(enters as any));
+  // 注册 role 切片：intent 按 role 分派，缺了它来源匹配不上
+  const entity = game.useEntity(ctx, ...(enters as any), () => ({ role: "player" as const }));
   return { entity, mounts, unmounts };
 }
 
@@ -130,7 +131,7 @@ describe("locomotion / 位移", () => {
 
   test("按意图方向移动，距离 = 速度 × 时间", () => {
     const { locomotion, game } = setup();
-    locomotion.setIntent(() => ({ dx: 1, dy: 0, sneaking: false }));
+    locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: false }));
 
     const { entity, mounts } = mountActor(game, [
       locomotion.enter({ x: 100, y: 100, speed: 200, facing: "south" }),
@@ -148,7 +149,7 @@ describe("locomotion / 位移", () => {
 
   test("无意图时位置不变，且不产生帧写入", () => {
     const { locomotion, game } = setup();
-    locomotion.setIntent(() => IDLE);
+    locomotion.setIntent("player", () => IDLE);
 
     const { entity, mounts } = mountActor(game, [
       locomotion.enter({ x: 100, y: 100, speed: 200, facing: "south" }),
@@ -170,7 +171,7 @@ describe("locomotion / 位移", () => {
 
   test("潜行降低速度", () => {
     const { locomotion, game } = setup();
-    locomotion.setIntent(() => ({ dx: 1, dy: 0, sneaking: true }));
+    locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: true }));
 
     const { entity, mounts } = mountActor(game, [
       locomotion.enter({ x: 0, y: 0, speed: 200, facing: "south" }),
@@ -194,7 +195,7 @@ describe("locomotion / 朝向", () => {
     const game = createGame<ActorEntity>([locomotion.update], { autostart: false });
 
     let intent = { dx: 1, dy: 0, sneaking: false };
-    locomotion.setIntent(() => intent);
+    locomotion.setIntent("player", () => intent);
 
     const { entity, mounts } = mountActor(game, [
       locomotion.enter({ x: 100, y: 100, speed: 100, facing: "north" }),
@@ -239,7 +240,7 @@ describe("locomotion / 朝向", () => {
 
     const locomotion = createLocomotionSystem(grid);
     const game = createGame<ActorEntity>([locomotion.update], { autostart: false });
-    locomotion.setIntent(() => ({ dx: 1, dy: 0, sneaking: false }));
+    locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: false }));
 
     const { entity, mounts } = mountActor(game, [
       locomotion.enter({ x: startX, y: 3 * TILE + offset, speed: 100, facing: "north" }),
