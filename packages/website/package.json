@@ -10,11 +10,11 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/node": "^11.0.2",
-    "astro": "7.1.3",
-    "hono": "^4.12.31",
+    "@astrojs/node": "^11.1.6",
+    "astro": "7.3.5",
+    "hono": "^4.13.9",
     "kiaao": "workspace:^",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   },
   "engines": {
     "node": ">=22.12.0"

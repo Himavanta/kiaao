@@ -56,14 +56,14 @@
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.1.7",
-    "@types/node": "^26.1.1",
-    "bumpp": "^12.0.0",
-    "happy-dom": "^20.11.1",
-    "motion": "^12.42.2",
-    "typescript": "^7.0.2",
+    "@rsbuild/core": "^2.2.10",
+    "@types/node": "^26.6.3",
+    "bumpp": "^12.3.0",
+    "happy-dom": "^20.14.5",
+    "motion": "^13.4.4",
+    "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   },
-  "packageManager": "pnpm@12.5.1"
+  "packageManager": "pnpm@12.6.0"
 }
