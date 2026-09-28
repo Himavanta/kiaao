@@ -3,13 +3,16 @@
 //
 // 世界坐标静止，相机只更新一层容器的 translate——相机移动时
 // 每帧 1 次 DOM 写入，而不是每个实体各算一次（规划文档 4.4）。
+//
+// 视口尺寸由关卡推导（`computeViewport`）。地图不超过上限时视口等于
+// 地图，相机可移动范围为 0，整张地图（含四周边界墙）一屏可见。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { type Context, type Signal } from "kiaao";
 
 import { StyleMemo } from "../../engine/directives";
 import { type Grid } from "../../world";
-import { TILE, VIEW_H, VIEW_W } from "../config";
+import { computeViewport, TILE, type Viewport } from "../config";
 
 import style from "./stage.module.scss";
 
@@ -30,12 +33,15 @@ const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min)
 /**
  * 相机跟随：把关注点置于视口中心，并夹在世界边界内。
  *
- * 关注点不变时 memo 生效，不写 DOM；接近世界边缘时相机停住，画面不再跟着走。
- * 派生绑定到 `ctx`，随组件卸载自动清理。
+ * 视口不小于世界时夹取范围为零，相机恒在原点——等价于「无相机」，
+ * 但表达式不变，地图放大后自动转为卷轴而无需改代码。
+ *
+ * 关注点不变时 memo 生效，不写 DOM；派生绑定到 `ctx`，随组件卸载自动清理。
  */
 export function followCamera(
   ctx: Context,
   target: Signal<CameraTarget>,
+  viewport: Viewport,
   grid: Grid,
 ): Signal<Camera> {
   const worldW = grid.cols * TILE;
@@ -44,8 +50,8 @@ export function followCamera(
   return ctx.use(target, () => {
     const { x, y } = target();
     return {
-      x: clamp(x - VIEW_W / 2, 0, Math.max(0, worldW - VIEW_W)),
-      y: clamp(y - VIEW_H / 2, 0, Math.max(0, worldH - VIEW_H)),
+      x: clamp(x - viewport.width / 2, 0, Math.max(0, worldW - viewport.width)),
+      y: clamp(y - viewport.height / 2, 0, Math.max(0, worldH - viewport.height)),
     };
   });
 }
@@ -66,13 +72,18 @@ type StageProps = {
 export function Stage({ camera, grid, children }: StageProps, ctx: Context) {
   const { use } = ctx;
 
+  const viewport = computeViewport(grid.cols, grid.rows);
+
   const translate = use(camera, () => {
     const { x, y } = camera();
     return `${-x}px ${-y}px`;
   });
 
   return (
-    <div class={style.viewport}>
+    <div
+      class={style.viewport}
+      style={{ width: `${viewport.width}px`, height: `${viewport.height}px` }}
+    >
       <StyleMemo
         value={{
           position: "absolute",

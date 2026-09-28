@@ -7,7 +7,7 @@
 
 import { use, type Context } from "kiaao";
 
-import { TILE } from "./game/config";
+import { computeViewport, TILE } from "./game/config";
 import { entityCount, frameSystem, level, start, stop } from "./game/instance";
 import { DebugPanel } from "./game/views/debug";
 import { followCamera, Stage } from "./game/views/stage";
@@ -21,8 +21,14 @@ import style from "./app.module.scss";
  */
 function useCamera(ctx: Context) {
   const { col, row } = level.playerSpawn ?? { col: 0, row: 0 };
+  const { grid } = level;
   const focus = use({ x: col * TILE, y: row * TILE });
-  return followCamera(ctx, focus, level.grid);
+  return followCamera(ctx, focus, computeViewport(grid.cols, grid.rows), grid);
+}
+
+/** 视口尺寸的格数表示（HUD 展示用） */
+function toTileCount(width: number, height: number): string {
+  return `${Math.round(width / TILE)}×${Math.round(height / TILE)}`;
 }
 
 export default function App(_: Record<string, never>, ctx: Context) {
@@ -32,19 +38,21 @@ export default function App(_: Record<string, never>, ctx: Context) {
   onMount(start);
   onUnmount(stop);
 
+  const { grid, name } = level;
   const camera = useCamera(ctx);
+  const viewport = computeViewport(grid.cols, grid.rows);
 
   return (
     <div class={style.shell}>
-      <Stage camera={camera} grid={level.grid}>
+      <Stage camera={camera} grid={grid}>
         {/* 指令作用于子元素——必须包裹真实 <canvas>，不能自闭合 */}
-        <Tilemap grid={level.grid}>
+        <Tilemap grid={grid}>
           <canvas class={style.tilemap} />
         </Tilemap>
       </Stage>
       <DebugPanel fps={frameSystem.fps} entities={entityCount} />
       <span class={style.hint}>
-        {level.name} · {level.grid.cols}×{level.grid.rows}
+        {name} · 地图 {grid.cols}×{grid.rows} · 视口 {toTileCount(viewport.width, viewport.height)}
       </span>
     </div>
   );

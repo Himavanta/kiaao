@@ -135,6 +135,24 @@ describe("端到端 / 关卡渲染", () => {
     app.unmount();
   });
 
+  test("视口容纳整张地图：四周边界墙都在取景范围内", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    // 视口曾硬编码为 960×640 而地图是 1024×768，导致右墙与下墙落在视口外，
+    // 画面看起来像「地图没画完」。此处锁定：视口不小于地图。
+    const viewportEl = document.querySelector("#app > div > div") as HTMLElement;
+    const styleText = viewportEl?.getAttribute("style") ?? "";
+
+    const width = Number(/width:\s*(\d+)px/.exec(styleText)?.[1]);
+    const height = Number(/height:\s*(\d+)px/.exec(styleText)?.[1]);
+
+    expect(width).toBeGreaterThanOrEqual(level.grid.cols * 32);
+    expect(height).toBeGreaterThanOrEqual(level.grid.rows * 32);
+
+    app.unmount();
+  });
+
   test("相机夹在世界边界内：初始位置为 0 起始（出生点靠左上时）", () => {
     const app = createApp(App);
     app.mount("#app");

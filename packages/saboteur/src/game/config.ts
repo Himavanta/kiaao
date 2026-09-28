@@ -1,18 +1,43 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 游戏配置：渲染尺寸、采样间隔
+// 游戏配置：瓦片尺寸、视口规则、采样间隔
 //
 // 世界尺寸不在此声明——它由关卡数据决定（`grid.cols * TILE`），
-// 硬编码会导致地图与配置不一致。此处只放与关卡无关的渲染常量。
-//
-// 尺寸真值以 CSS 变量暴露（global.scss），VIEW_W / VIEW_H 为 JS 侧镜像。
+// 硬编码会导致地图与配置不一致。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 瓦片边长（px）——与 global.scss 的 --tile 保持一致 */
+/** 瓦片边长（px） */
 export const TILE = 32;
 
-/** 视口尺寸（px）——与 global.scss 的 --view-w / --view-h 保持一致 */
-export const VIEW_W = 960;
-export const VIEW_H = 640;
+/**
+ * 视口上限（px）。
+ *
+ * 地图不超过上限时，视口取地图尺寸——整张地图一屏看全，相机静止。
+ * 超过上限时视口封顶，相机转为跟随卷轴。
+ *
+ * 上限存在的意义：地图放大后若仍一屏看全，实体在屏幕上会小到不可辨；
+ * 封顶保证了角色的可读尺寸，代价是需要相机跟随。
+ */
+export const MAX_VIEW_W = 1280;
+export const MAX_VIEW_H = 800;
+
+/** 视口尺寸：容纳整张地图，但不超过上限 */
+export type Viewport = {
+  width: number;
+  height: number;
+};
+
+/**
+ * 由网格尺寸推导视口尺寸。
+ *
+ * 不要硬编码视口尺寸——视口与地图不匹配时，边界墙会落在视口之外，
+ * 画面看起来像「地图没画完」，而实际只是取景范围不对。
+ */
+export function computeViewport(cols: number, rows: number): Viewport {
+  return {
+    width: Math.min(cols * TILE, MAX_VIEW_W),
+    height: Math.min(rows * TILE, MAX_VIEW_H),
+  };
+}
 
 /** 帧率采样的时间窗口（ms）——约 4Hz 足够人眼读数 */
 export const FPS_SAMPLE_MS = 250;
