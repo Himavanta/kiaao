@@ -6,15 +6,30 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createGrid, setTile, type Grid } from "../grid";
-import { spawnForSymbol, tileForSymbol, type LevelDef, type SpawnPoint } from "./types";
+import {
+  propForSymbol,
+  spawnForSymbol,
+  tileForSymbol,
+  type LevelDef,
+  type PropKind,
+  type SpawnPoint,
+} from "./types";
 
-/** 解析结果：网格 + 出生点 + 解析期问题 */
+/** 关卡中的可交互物（实体，非瓦片；其所在格为地板） */
+export type PropSpawn = {
+  kind: PropKind;
+  col: number;
+  row: number;
+};
+
+/** 解析结果：网格 + 出生点 + 可交互物 + 解析期问题 */
 export type ParsedLevel = {
   /** 关卡名（从 `LevelDef` 带入，供 HUD 等展示） */
   name: string;
   grid: Grid;
   playerSpawn: SpawnPoint | undefined;
   npcSpawns: SpawnPoint[];
+  propSpawns: PropSpawn[];
   /** 解析中遇到的未知符号（去重），供开发期报错 */
   unknownSymbols: string[];
 };
@@ -31,6 +46,7 @@ export function parseLevel(level: LevelDef): ParsedLevel {
   const grid = createGrid(cols, rows.length);
 
   const npcSpawns: SpawnPoint[] = [];
+  const propSpawns: PropSpawn[] = [];
   const unknownSymbols = new Set<string>();
   let playerSpawn: SpawnPoint | undefined;
 
@@ -51,11 +67,17 @@ export function parseLevel(level: LevelDef): ParsedLevel {
         continue;
       }
 
+      const prop = propForSymbol(char);
+      if (prop) {
+        propSpawns.push({ kind: prop, col, row });
+        continue;
+      }
+
       unknownSymbols.add(char);
     }
   }
 
-  return { name, grid, playerSpawn, npcSpawns, unknownSymbols: [...unknownSymbols] };
+  return { name, grid, playerSpawn, npcSpawns, propSpawns, unknownSymbols: [...unknownSymbols] };
 }
 
 /** 校验关卡定义，返回问题清单（空数组表示合法） */

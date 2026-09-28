@@ -15,6 +15,8 @@ import { entityCount, frameSystem, input, level, showVision, start, stop } from 
 import { Actor } from "./game/views/actor";
 import { usePlayerCamera } from "./game/views/camera";
 import { DebugPanel } from "./game/views/debug";
+import { Hud } from "./game/views/hud";
+import { Prop } from "./game/views/prop";
 import { Stage } from "./game/views/stage";
 import { Tilemap } from "./game/views/tilemap";
 import { VisionLayer } from "./game/views/vision-layer";
@@ -40,7 +42,7 @@ export default function App(_: Record<string, never>, ctx: Context) {
   // Tab 切换视野提示；输入系统不关心「视野提示」是什么，由组装层接线
   input.onToggleVision(() => showVision(!showVision()));
 
-  const { grid, name, playerSpawn, npcSpawns } = level;
+  const { grid, name, playerSpawn, npcSpawns, propSpawns } = level;
   const viewport = computeViewport(grid.cols, grid.rows);
 
   const player = playerSpawn ?? { col: 1, row: 1 };
@@ -56,16 +58,21 @@ export default function App(_: Record<string, never>, ctx: Context) {
         {/* 视锥图层压在实体之下（zIndex 由 DOM 顺序决定） */}
         <Show value={showVision}>{() => <VisionLayer frames={frameSystem.frames} />}</Show>
 
+        {propSpawns.map((prop) => (
+          <Prop kind={prop.kind} col={prop.col} row={prop.row} />
+        ))}
+
         <Actor col={player.col} row={player.row} facing={player.facing ?? "south"} role="player" />
 
         {npcSpawns.map((spawn) => (
           <Actor col={spawn.col} row={spawn.row} facing={spawn.facing ?? "south"} role="guest" />
         ))}
       </Stage>
+      <Hud />
       <DebugPanel fps={frameSystem.fps} entities={entityCount} />
       <span class={style.hint}>
         {name} · 地图 {grid.cols}×{grid.rows} · 视口 {toTileCount(viewport.width, viewport.height)}{" "}
-        · Tab 显示视野
+        · Space 交互 · Tab 显示视野
       </span>
     </div>
   );

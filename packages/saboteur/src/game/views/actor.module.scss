@@ -23,3 +23,26 @@
 
   background: linear-gradient(180deg, #8fa5c4, #5f7a9c);
 }
+
+// 尸体：压暗 + 偏冷色，与活人一眼可辨（M6 的目击判读依赖这个区分）。
+// 旋转由 StyleMemo 写（`rotate`），此处只管配色。
+.corpse {
+  @extend %actor;
+
+  background: linear-gradient(180deg, #5a5f6e, #3a3d47);
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+// 中毒标记：头顶的小圆点。
+.poisonMark {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: #7ddc8a;
+  border-radius: 50%;
+  box-shadow: 0 0 4px #7ddc8a;
+  transform: translateX(-50%);
+}

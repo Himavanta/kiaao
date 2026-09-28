@@ -6,11 +6,19 @@
 // 不写 DOM。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { type Context } from "kiaao";
+import { Show, type Context } from "kiaao";
 
 import { StyleMemo } from "../../engine/directives";
 import { TILE } from "../../world";
-import { behaviour, entityCount, locomotion, navigation, perception, useEntity } from "../instance";
+import {
+  behaviour,
+  entityCount,
+  interaction,
+  locomotion,
+  navigation,
+  perception,
+  useEntity,
+} from "../instance";
 import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { Facing, Role } from "../types";
@@ -38,15 +46,16 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   onUnmount(() => entityCount(entityCount() - 1));
 
   // 客人注册导航与行为系统（玩家不入池——它的意图来自输入）
-  const enters =
-    role === "guest"
-      ? [
-          locomotion.enter(speedProps(col, row, role, facing)),
-          navigation.enter(),
-          behaviour.enter(),
-          perception.enter(),
-        ]
-      : [locomotion.enter(speedProps(col, row, role, facing)), perception.enter()];
+  // 两类角色都注册 locomotion / perception / interaction：
+  // 交互切片承载 held / dead / poisonLeft——玩家需要（持有与下药），
+  // 客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
+  const common = [
+    locomotion.enter(speedProps(col, row, role, facing)),
+    perception.enter(),
+    interaction.enter(),
+  ];
+
+  const enters = role === "guest" ? [...common, navigation.enter(), behaviour.enter()] : common;
 
   const entity = useEntity(ctx, ...enters, () => ({ role }));
 
@@ -75,6 +84,18 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // memo 生效，写入频率远低于每帧。
   const zIndex = useContext(entity, () => `${Math.round(entity().y / TILE)}`);
 
+  // 尸体：躺倒（旋转）且压暗，与活人一眼可辨——M6 的目击判读依赖这个区分
+  const rotate = useContext(entity, () => (entity().dead ? "90deg" : "0deg"));
+  const bodyClass = useContext(entity, () => {
+    if (entity().dead) return style.corpse;
+    return role === "player" ? style.player : style.guest;
+  });
+
+  // 中毒标记：让玩家看到药效正在起作用。
+  // 中毒者**继续游荡直到毒发**（有意设计）——尸体位置因此不等于下药位置，
+  // 玩家需要预判或跟随。没有这个标记，等待期就是无反馈的黑箱。
+  const poisoned = useContext(entity, () => entity().poisonLeft !== null);
+
   return (
     <StyleMemo
       value={{
@@ -84,10 +105,12 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
         zIndex,
         translate,
         scale,
+        rotate,
         opacity,
       }}
     >
-      <div class={role === "player" ? style.player : style.guest} />
+      <div class={bodyClass} />
+      <Show value={poisoned}>{() => <span class={style.poisonMark} />}</Show>
     </StyleMemo>
   );
 }

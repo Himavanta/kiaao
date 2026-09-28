@@ -18,7 +18,7 @@ type FrameBuffer<T extends Record<string, any>> = {
 };
 
 function createFrameBuffer<T extends Record<string, any>>(
-  gamePool: Map<EntityId, Signal<T>>,
+  gamePool: Map<EntityId, Signal<any>>,
 ): FrameBuffer<T> {
   const cache = new Map<EntityId, T>();
 
@@ -30,7 +30,7 @@ function createFrameBuffer<T extends Record<string, any>>(
       // 写：首次写时拷贝底值入缓存，同帧复用同一可变副本
       let base = cache.get(id);
       if (!base) {
-        base = { ...signal() };
+        base = { ...(signal() as T) };
         cache.set(id, base);
       }
       mutate(base);
@@ -38,7 +38,7 @@ function createFrameBuffer<T extends Record<string, any>>(
     }
 
     // 读：缓存优先，无缓存取信号当前值，不拷贝
-    return cache.get(id) ?? signal();
+    return cache.get(id) ?? (signal() as T);
   }
 
   function flush() {
@@ -61,7 +61,7 @@ type Ticker = {
 
 function createTicker<T extends Record<string, any>>(options: {
   updates: Array<Update<T>>;
-  gamePool: Map<EntityId, Signal<T>>;
+  gamePool: Map<EntityId, Signal<any>>;
 }): Ticker {
   const { updates, gamePool } = options;
 
@@ -74,7 +74,7 @@ function createTicker<T extends Record<string, any>>(options: {
     const delta = Math.min((now - prevTime) / 1000, MAX_DELTA);
     prevTime = now;
 
-    const { frame, flush } = createFrameBuffer(gamePool);
+    const { frame, flush } = createFrameBuffer<T>(gamePool);
 
     for (const update of updates) {
       update(frame, delta);
@@ -104,26 +104,38 @@ function createTicker<T extends Record<string, any>>(options: {
 
 // ── 实体注册（useEntity）──────────────────────────────
 
-function createEntityRegistrar<T extends Record<string, any>>(gamePool: Map<EntityId, Signal<T>>) {
-  return (
+/**
+ * 实体注册器。
+ *
+ * 泛型 `E` 默认取游戏的实体类型，但允许调用点显式指定——同一池里可以
+ * 存在形态不同的实体（如角色与不动道具）。系统的池各自持有 id，
+ * 帧读写只会触及自己注册的实体，因此类型在调用点收敛即可。
+ */
+function createEntityRegistrar<T extends Record<string, any>>(
+  gamePool: Map<EntityId, Signal<any>>,
+) {
+  return <E extends Record<string, any> = T>(
     ctx: Context,
-    ...enters: Array<(id: EntityId, ctx: Context) => Partial<T>>
-  ): EntitySignal<T> => {
+    // `NoInfer` 阻止从参数推断 E：否则 `useEntity(ctx, () => ({ role }))`
+    // 会把 E 推断成 `{ role }` 而丢掉默认的实体类型。
+    // 需要异形实体（如不动道具）时由调用点显式指定 `useEntity<PropEntity>(...)`。
+    ...enters: Array<(id: EntityId, ctx: Context) => Partial<NoInfer<E>>>
+  ): EntitySignal<E> => {
     const { use, onMount, onUnmount } = ctx;
     const id = Symbol();
 
     // 合并各系统数据切片：后注册的系统覆盖同名字段
-    const merged = {} as T;
+    const merged = {} as E;
     for (const enter of enters) {
       Object.assign(merged, enter(id, ctx));
     }
 
-    const signal = use<T>(merged) as EntitySignal<T>;
+    const signal = use<E>(merged) as EntitySignal<E>;
     signal.id = id;
 
     // 挂载窗口 = 实体存活窗口：帧循环只读写池内实体
     onMount(() => {
-      gamePool.set(id, signal);
+      gamePool.set(id, signal as Signal<any>);
     });
     onUnmount(() => {
       gamePool.delete(id);
@@ -145,11 +157,12 @@ export function createGame<T extends Record<string, any>>(
   updates: Array<Update<T>>,
   options?: { autostart?: boolean },
 ) {
-  // 主数据池：id → 实体信号
-  const gamePool = new Map<EntityId, Signal<T>>();
+  // 主数据池：id → 实体信号（形态由注册方决定，泛型在调用点收敛）
+  const gamePool = new Map<EntityId, Signal<any>>();
 
   const ticker = createTicker({ updates, gamePool });
-  const useEntity = createEntityRegistrar(gamePool);
+  // 显式传入 T：createEntityRegistrar 的 T 只出现在返回类型上，无法推断
+  const useEntity = createEntityRegistrar<T>(gamePool);
 
   if (options?.autostart !== false) ticker.start();
 

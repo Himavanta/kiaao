@@ -9,6 +9,14 @@ export { moveRect, rectBlocked } from "./collision";
 export { distance, normalizeAngle, rectCenter, TILE, type Rect, type Vec2 } from "./geometry";
 export { createGrid, inBounds, isBlocked, isOpaque, setTile, tileAt, type Grid } from "./grid";
 export { cellAt, cellCenter, collectWalkable, findPath, toWaypoints, type Cell } from "./path";
+export {
+  cellInFront,
+  facingVector,
+  isBehind,
+  isInFront,
+  normalize,
+  withinReach,
+} from "./interaction";
 export { createRandom, type Random } from "./random";
 export {
   canSee,

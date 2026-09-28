@@ -94,7 +94,7 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
   /** 为单个实体规划路径；不可达时清空路径，留待下次重试 */
   const plan = (frame: FrameManager<ActorEntity>, id: EntityId) => {
     const entity = frame(id);
-    if (!entity) return;
+    if (!entity || entity.dead) return;
 
     const from = cellAt(entity.x + ACTOR_SIZE / 2, entity.y + ACTOR_SIZE / 2);
     // 无有效位置（如尚未写出 x/y）时不规划，下一帧再试
@@ -119,6 +119,9 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
 
     // 无有效位置时不推进（x/y 未写出的瞬间）
     if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+
+    // 死者不导航：尸体留在原地（清空路径由 interaction 在死亡时完成）
+    if (entity.dead) return;
 
     // 驻足状态：不规划新目标，原地等待行为系统切换
     if (entity.mood === "linger" && entity.path.length === 0) return;

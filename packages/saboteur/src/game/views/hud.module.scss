@@ -1,0 +1,38 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HUD 样式：持有道具与交互提示
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+.hud {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 6px 12px;
+  background: rgb(0 0 0 / 55%);
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.label {
+  color: var(--c-muted);
+  letter-spacing: 0.08em;
+}
+
+.value {
+  min-width: 4ch;
+  color: var(--c-accent);
+}
+
+.hint {
+  color: var(--c-text);
+  opacity: 0.85;
+}

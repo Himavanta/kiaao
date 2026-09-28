@@ -83,6 +83,18 @@ export type ActorEntity = {
    */
   facing: Facing;
 
+  // ── interaction 切片 ──
+  /** 【interaction 写】持有的道具；null 表示空手 */
+  held: ItemKind | null;
+  /**
+   * 【interaction 写】是否已死（尸体）。
+   * 死者不再参与导航 / 行为 / 感知（其池在 `onMount` 时按 role 判定），
+   * 但保留实体以便「被发现」与渲染。
+   */
+  dead: boolean;
+  /** 【interaction 写】中毒后的剩余存活时间（秒）；null 表示未中毒 */
+  poisonLeft: number | null;
+
   // ── 身份切片 ──
   /** 【身份，注册时定】角色类型，渲染与规则按此分支 */
   role: Role;
@@ -90,6 +102,12 @@ export type ActorEntity = {
 
 /** 角色类型：玩家 / 客人（NPC）/ 后续的目标人物与警察 */
 export type Role = "player" | "guest";
+
+/** 可携带 / 可拾取的道具类型 */
+export type ItemKind = "booze";
+
+/** 可交互物类型（与 `world/levels/types.ts` 的 `PropKind` 对应） */
+export type PropEntityKind = "booze";
 
 /**
  * NPC 行为。M3 只有闲游与驻足；M5/M6 会加入饮酒、目击、恐慌、逃离。

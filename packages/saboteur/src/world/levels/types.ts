@@ -32,6 +32,16 @@ const TILE_SYMBOLS = new Map<string, Tile>([
   ["T", Tile.HighFurniture],
 ]);
 
+/**
+ * 可交互物符号 → 类型。
+ *
+ * 这些**不落地为瓦片**——它们是实体（有状态：还在不在），参与帧循环；
+ * 其所在格为地板，可通行。
+ */
+const PROP_SYMBOLS = new Map<string, PropKind>([["o", "booze"]]);
+
+export type PropKind = "booze";
+
 /** 出生点符号 → 朝向；`P` / `N` 无朝向，箭头表示初始朝向 */
 const SPAWN_SYMBOLS = new Map<string, SpawnFacing | undefined>([
   ["P", undefined],
@@ -45,6 +55,11 @@ const SPAWN_SYMBOLS = new Map<string, SpawnFacing | undefined>([
 /** 查静态几何符号；非瓦片符号返回 undefined */
 export function tileForSymbol(char: string): Tile | undefined {
   return TILE_SYMBOLS.get(char);
+}
+
+/** 查可交互物符号；非道具符号返回 undefined */
+export function propForSymbol(char: string): PropKind | undefined {
+  return PROP_SYMBOLS.get(char);
 }
 
 /** 查出生点符号；非出生点符号返回 null（区分「无朝向的出生点」与「不是出生点」） */

@@ -11,9 +11,11 @@ import { use } from "kiaao";
 
 import { createGame } from "../engine";
 import { createRandom, manor, parseLevel } from "../world";
+import { playerEntity } from "./state";
 import { createBehaviourSystem } from "./systems/behaviour";
 import { createFrameSystem } from "./systems/frame";
 import { createInputSystem, readDirection } from "./systems/input";
+import { createInteractionSystem } from "./systems/interaction";
 import { createLocomotionSystem } from "./systems/locomotion";
 import { createNavigationSystem, pathIntent } from "./systems/navigation";
 import { createPerceptionSystem } from "./systems/perception";
@@ -51,6 +53,12 @@ export const navigation = createNavigationSystem({ grid: level.grid, random });
 export const behaviour = createBehaviourSystem({ random });
 export const perception = createPerceptionSystem({ grid: level.grid });
 
+// 交互：读玩家实体信号（同时需要位置 / 朝向与 id）
+export const interaction = createInteractionSystem({
+  interactTicks: input.interactTicks,
+  player: () => playerEntity(),
+});
+
 // 意图来源按角色分派（组装层路由，不做 if 分支）：
 // - 玩家：读输入信号
 // - 客人：沿 navigation 给出的路径行走
@@ -66,8 +74,20 @@ locomotion.setIntent("guest", (entity) => pathIntent(entity));
 // behaviour 决定状态 → navigation 规划路径 → locomotion 推进位置
 // → perception 判定谁看见了谁（放在移动之后，保证判定的是本帧位置）
 // → frame 统计放最后（它只计数，无数据依赖）
+// createGame 的参数顺序即帧执行顺序（规划文档 5.1）：
+// interaction 先处理玩家意图（拾取 / 下药，含中毒倒计时）
+// → behaviour 决定状态 → navigation 规划路径 → locomotion 推进位置
+// → perception 判定谁看见了谁（放在移动之后，保证判定的是本帧位置）
+// → frame 统计放最后（它只计数，无数据依赖）
 export const game = createGame<ActorEntity>(
-  [behaviour.update, navigation.update, locomotion.update, perception.update, frameSystem.update],
+  [
+    interaction.update,
+    behaviour.update,
+    navigation.update,
+    locomotion.update,
+    perception.update,
+    frameSystem.update,
+  ],
   { autostart: false },
 );
 

@@ -1,0 +1,12 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 可交互物样式：程序化占位的酒瓶
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+.booze {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #6fae76 0%, #3f7a4a 55%, #2d5a36 100%);
+  border: 1px solid rgb(220 255 220 / 45%);
+  border-radius: 2px 2px 3px 3px;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 45%);
+}

@@ -85,6 +85,8 @@ export function createPerceptionSystem(options: { grid: Grid }): PerceptionSyste
     for (const observerId of ids) {
       const observer = frame(observerId);
       if (!observer) continue;
+      // 死者不观察（但仍可作为被观察的对象——尸体正是目击链的输入）
+      if (observer.dead) continue;
 
       const from = actorCenter(observer);
       const angle = sightAngle(observer);

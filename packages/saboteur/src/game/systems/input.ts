@@ -40,6 +40,14 @@ export type InputSystem = {
   /** 潜行中（Shift 按住） */
   sneaking: Signal<boolean>;
   /**
+   * 交互键的按下计数（每次 keydown 自增）。
+   *
+   * 用计数器而非布尔标志：布尔标志需要「消费后清零」的双边协议，
+   * 而计数器只需消费方记住上次看到的值即可判定边沿（`新值 > 旧值`），
+   * 即使一帧内按下多次也不会漏掉。
+   */
+  interactTicks: Signal<number>;
+  /**
    * 挂载键盘监听。
    *
    * 输入是全局源系统，不属于任何实体——故只借用一个生命周期上下文
@@ -71,6 +79,7 @@ export function readDirection(pressed: ReadonlySet<string>): Direction {
 export function createInputSystem(): InputSystem {
   const pressed = use<ReadonlySet<string>>(new Set<string>());
   const sneaking = use(false);
+  const interactTicks = use(0);
 
   // Tab 回调由组装层注入（输入系统不关心「视野提示」是什么）
   let onToggleVision: (() => void) | undefined;
@@ -86,6 +95,10 @@ export function createInputSystem(): InputSystem {
     }
     if (e.code === "Tab") {
       onToggleVision?.();
+      return;
+    }
+    if (e.code === "Space") {
+      interactTicks(interactTicks() + 1);
       return;
     }
     if (DIRECTION_KEYS[e.code]) {
@@ -127,6 +140,7 @@ export function createInputSystem(): InputSystem {
   return {
     pressed,
     sneaking,
+    interactTicks,
     attach,
     onToggleVision: (fn) => {
       onToggleVision = fn;

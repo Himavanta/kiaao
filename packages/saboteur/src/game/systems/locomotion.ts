@@ -89,6 +89,9 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
     const entity = frame(id);
     if (!entity) return;
 
+    // 死者不动：尸体留在原地
+    if (entity.dead) return;
+
     const intent = readIntent(entity);
     const moving = intent.dx !== 0 || intent.dy !== 0;
 

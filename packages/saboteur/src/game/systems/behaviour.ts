@@ -61,6 +61,9 @@ export function createBehaviourSystem(options: { random: Random }): BehaviourSys
     const entity = frame(id);
     if (!entity) return;
 
+    // 死者不再有行为：尸体不入状态机
+    if (entity.dead) return;
+
     const moodLeft = entity.moodLeft - delta;
     if (moodLeft > 0) {
       frame(id, (e) => {
