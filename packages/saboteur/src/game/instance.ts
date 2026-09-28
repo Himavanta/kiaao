@@ -16,6 +16,7 @@ import { createFrameSystem } from "./systems/frame";
 import { createInputSystem, readDirection } from "./systems/input";
 import { createLocomotionSystem } from "./systems/locomotion";
 import { createNavigationSystem, pathIntent } from "./systems/navigation";
+import { createPerceptionSystem } from "./systems/perception";
 import type { ActorEntity } from "./types";
 
 // ── 关卡（模块级单例：地图静态，解析一次）────────────────
@@ -40,11 +41,15 @@ export const frameSystem = createFrameSystem();
 // 它是全局状态而非实体数据——没有位置，不参与帧循环。
 export const entityCount = use(0);
 
+// 视野提示开关：Tab 切换（规划文档 4.7）
+export { showVision } from "./state";
+
 // ── 系统实例（按依赖顺序创建）──────────────────────────
 
 export const locomotion = createLocomotionSystem(level.grid);
 export const navigation = createNavigationSystem({ grid: level.grid, random });
 export const behaviour = createBehaviourSystem({ random });
+export const perception = createPerceptionSystem({ grid: level.grid });
 
 // 意图来源按角色分派（组装层路由，不做 if 分支）：
 // - 玩家：读输入信号
@@ -57,11 +62,12 @@ locomotion.setIntent("guest", (entity) => pathIntent(entity));
 
 // ── 游戏实例（模块级，autostart: false——运行窗口由组件控制）──
 
-// createGame 的参数顺序即帧执行顺序：
-// behaviour 决定状态 → navigation 规划路径 → locomotion 消费意图推进位置
+// createGame 的参数顺序即帧执行顺序（规划文档 5.1）：
+// behaviour 决定状态 → navigation 规划路径 → locomotion 推进位置
+// → perception 判定谁看见了谁（放在移动之后，保证判定的是本帧位置）
 // → frame 统计放最后（它只计数，无数据依赖）
 export const game = createGame<ActorEntity>(
-  [behaviour.update, navigation.update, locomotion.update, frameSystem.update],
+  [behaviour.update, navigation.update, locomotion.update, perception.update, frameSystem.update],
   { autostart: false },
 );
 

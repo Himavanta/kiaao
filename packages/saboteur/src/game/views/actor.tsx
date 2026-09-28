@@ -10,8 +10,8 @@ import { type Context } from "kiaao";
 
 import { StyleMemo } from "../../engine/directives";
 import { TILE } from "../../world";
-import { behaviour, entityCount, locomotion, navigation, useEntity } from "../instance";
-import { playerEntity } from "../state";
+import { behaviour, entityCount, locomotion, navigation, perception, useEntity } from "../instance";
+import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { Facing, Role } from "../types";
 
@@ -44,17 +44,22 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
           locomotion.enter(speedProps(col, row, role, facing)),
           navigation.enter(),
           behaviour.enter(),
+          perception.enter(),
         ]
-      : [locomotion.enter(speedProps(col, row, role, facing))];
+      : [locomotion.enter(speedProps(col, row, role, facing)), perception.enter()];
 
   const entity = useEntity(ctx, ...enters, () => ({ role }));
 
-  // 玩家注册到全局表：相机据此跟随（组件树无法向上传出实体信号，
-  // 框架没有 ref API）。卸载时清空，避免相机指向已销毁的信号。
+  // 全局注册表：玩家供相机跟随，全部角色供视锥调试层遍历。
+  // 卸载时反注册，避免调试层指向已销毁的信号。
   if (role === "player") {
     onMount(() => playerEntity(entity));
     onUnmount(() => playerEntity(undefined));
   }
+  onMount(() => {
+    const unregister = registerActor(entity);
+    onUnmount(unregister);
+  });
 
   const translate = useContext(entity, () => {
     const { x, y } = entity();

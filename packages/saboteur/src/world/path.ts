@@ -7,14 +7,11 @@
 // 启发式在 4 向移动下是可采纳的（永不高估），故 A* 找到的是最优解。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { TILE } from "./geometry";
+import { TILE, type Vec2 } from "./geometry";
 import { isBlocked, type Grid } from "./grid";
 
 /** 格子坐标 */
 export type Cell = { col: number; row: number };
-
-/** 像素坐标（世界坐标） */
-export type Vec2 = { x: number; y: number };
 
 /** 4 邻域偏移 */
 const NEIGHBORS: ReadonlyArray<readonly [number, number]> = [

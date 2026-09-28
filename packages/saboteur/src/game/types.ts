@@ -5,6 +5,7 @@
 // 其余系统只读。写入冲突是 ECS 最常见的数据竞争来源。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import type { EntityId } from "../engine";
 import type { Cell } from "../world";
 
 /** 朝向：4 向，等于最后一次移动方向 */
@@ -16,6 +17,19 @@ export const FACING_VECTORS: Record<Facing, { dx: number; dy: number }> = {
   east: { dx: 1, dy: 0 },
   south: { dx: 0, dy: 1 },
   west: { dx: -1, dy: 0 },
+};
+
+/**
+ * 朝向 → 视线角度（弧度）。
+ *
+ * 屏幕坐标系（y 轴向下）：0 为正东，顺时针为正。`Math.atan2(dy, dx)`
+ * 的约定与此一致，因此视锥判定可以直接相减比较。
+ */
+export const FACING_ANGLES: Record<Facing, number> = {
+  north: -Math.PI / 2,
+  east: 0,
+  south: Math.PI / 2,
+  west: Math.PI,
 };
 
 /** 方向向量 → 朝向；零向量时返回 undefined（无位移不改变朝向） */
@@ -47,6 +61,14 @@ export type ActorEntity = {
   idleLeft: number;
   /** 【navigation 写】距上次路径推进的时长（秒）；超时即放弃，防卡死 */
   followTime: number;
+
+  // ── perception 切片 ──
+  /** 【perception 写】视距（px） */
+  sightRange: number;
+  /** 【perception 写】视锥半角（弧度） */
+  sightArc: number;
+  /** 【perception 写】当前能看见的实体 id 列表（每轮扫描后更新） */
+  visibleIds: EntityId[];
 
   // ── behaviour 切片 ──
   /** 【behaviour 写】当前行为与计时。M6 将扩展为恐慌 / 逃离 */

@@ -19,8 +19,30 @@ import type { ActorEntity } from "./types";
  *
  * 初始为 undefined：相机此时退到出生点回退值。玩家注册后触发重算，
  * 但因两者坐标相同（都来自出生点），值不变故不产生 DOM 写入。
- *
- * 注意：玩家若被卸载（如切关卡），此处会留下已销毁的信号。
- * M7 重开流程需要显式清空，届时补上。
  */
 export const playerEntity = use<EntitySignal<ActorEntity> | undefined>(undefined);
+
+/**
+ * 全部角色实体注册表（视锥可视化等调试层需要遍历）。
+ *
+ * 用普通数组而非信号：调试层本就每帧重绘（位置在变），订阅帧计数
+ * 即可，集合变化不需要单独驱动。若将来有别的消费者需要响应式地
+ * 感知「角色增减」，再把它改成信号。
+ */
+const actors: EntitySignal<ActorEntity>[] = [];
+
+export function registerActor(entity: EntitySignal<ActorEntity>): () => void {
+  actors.push(entity);
+  return () => {
+    const i = actors.indexOf(entity);
+    if (i !== -1) actors.splice(i, 1);
+  };
+}
+
+/** 当前全部角色实体（只读快照，勿修改） */
+export function listActors(): readonly EntitySignal<ActorEntity>[] {
+  return actors;
+}
+
+/** 视锥显示开关（Tab 切换，规划文档 4.7） */
+export const showVision = use(false);

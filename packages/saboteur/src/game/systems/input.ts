@@ -46,6 +46,8 @@ export type InputSystem = {
    * （组件的 `ctx` 即可），不采用 `enter(id, ctx)` 的实体注册形态。
    */
   attach: (ctx: LifecycleContext) => void;
+  /** 注册 Tab 切换回调（视野提示的开关，由组装层接线） */
+  onToggleVision: (fn: () => void) => void;
 };
 
 /** 只要求生命周期钩子的最简上下文 */
@@ -70,6 +72,9 @@ export function createInputSystem(): InputSystem {
   const pressed = use<ReadonlySet<string>>(new Set<string>());
   const sneaking = use(false);
 
+  // Tab 回调由组装层注入（输入系统不关心「视野提示」是什么）
+  let onToggleVision: (() => void) | undefined;
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (PREVENT_DEFAULT.has(e.code)) e.preventDefault();
     // 忽略长按重复：目标状态已由首次按下建立
@@ -77,6 +82,10 @@ export function createInputSystem(): InputSystem {
 
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
       sneaking(true);
+      return;
+    }
+    if (e.code === "Tab") {
+      onToggleVision?.();
       return;
     }
     if (DIRECTION_KEYS[e.code]) {
@@ -115,5 +124,12 @@ export function createInputSystem(): InputSystem {
     });
   };
 
-  return { pressed, sneaking, attach };
+  return {
+    pressed,
+    sneaking,
+    attach,
+    onToggleVision: (fn) => {
+      onToggleVision = fn;
+    },
+  };
 }

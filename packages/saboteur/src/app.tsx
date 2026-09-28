@@ -4,19 +4,20 @@
 // 组件负责运行窗口（挂载 start、卸载 stop），世界状态与系统实例
 // 全部在模块级（game/instance.ts）——组件不持有游戏数据。
 //
-// 输入监听的挂载借用玩家实体的 ctx 钩子（`input.enter()`）：
-// 监听随游戏运行窗口存在，不留到组件树之外。
+// 输入监听的挂载借用组件的生命周期：监听随游戏运行窗口存在，
+// 不留到组件树之外。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { type Context } from "kiaao";
+import { Show, type Context } from "kiaao";
 
 import { computeViewport } from "./game/config";
-import { entityCount, frameSystem, input, level, start, stop } from "./game/instance";
+import { entityCount, frameSystem, input, level, showVision, start, stop } from "./game/instance";
 import { Actor } from "./game/views/actor";
 import { usePlayerCamera } from "./game/views/camera";
 import { DebugPanel } from "./game/views/debug";
 import { Stage } from "./game/views/stage";
 import { Tilemap } from "./game/views/tilemap";
+import { VisionLayer } from "./game/views/vision-layer";
 import { TILE } from "./world";
 
 import style from "./app.module.scss";
@@ -33,9 +34,11 @@ export default function App(_: Record<string, never>, ctx: Context) {
   onMount(start);
   onUnmount(stop);
 
-  // 键盘监听借用组件的生命周期（与游戏运行窗口一致）；
-  // 输入是全局源系统，不属于任何实体，故不采用实体注册形态
+  // 键盘监听随组件生命周期挂载/移除（输入是全局源系统，不属于实体）
   input.attach(ctx);
+
+  // Tab 切换视野提示；输入系统不关心「视野提示」是什么，由组装层接线
+  input.onToggleVision(() => showVision(!showVision()));
 
   const { grid, name, playerSpawn, npcSpawns } = level;
   const viewport = computeViewport(grid.cols, grid.rows);
@@ -50,6 +53,9 @@ export default function App(_: Record<string, never>, ctx: Context) {
           <canvas class={style.tilemap} />
         </Tilemap>
 
+        {/* 视锥图层压在实体之下（zIndex 由 DOM 顺序决定） */}
+        <Show value={showVision}>{() => <VisionLayer frames={frameSystem.frames} />}</Show>
+
         <Actor col={player.col} row={player.row} facing={player.facing ?? "south"} role="player" />
 
         {npcSpawns.map((spawn) => (
@@ -58,7 +64,8 @@ export default function App(_: Record<string, never>, ctx: Context) {
       </Stage>
       <DebugPanel fps={frameSystem.fps} entities={entityCount} />
       <span class={style.hint}>
-        {name} · 地图 {grid.cols}×{grid.rows} · 视口 {toTileCount(viewport.width, viewport.height)}
+        {name} · 地图 {grid.cols}×{grid.rows} · 视口 {toTileCount(viewport.width, viewport.height)}{" "}
+        · Tab 显示视野
       </span>
     </div>
   );
