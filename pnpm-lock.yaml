@@ -164,6 +164,9 @@ settings:
 
 catalogs:
   default:
+    sass-embedded:
+      specifier: ^1.105.0
+      version: 1.105.0
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -219,7 +222,7 @@ importers:
         specifier: workspace:^
         version: link:../..
       sass-embedded:
-        specifier: ^1.105.0
+        specifier: 'catalog:'
         version: 1.105.0
       typescript:
         specifier: 'catalog:'
@@ -261,6 +264,9 @@ importers:
       kiaao:
         specifier: workspace:^
         version: link:../..
+      sass-embedded:
+        specifier: 'catalog:'
+        version: 1.105.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

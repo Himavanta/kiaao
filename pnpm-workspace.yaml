@@ -3,6 +3,7 @@ catalog:
   vitest: 5.0.2
   vite-plus: ^1.0.0
   typescript: ^7.0.2
+  sass-embedded: ^1.105.0
 overrides:
   vite: "catalog:"
 peerDependencyRules:
