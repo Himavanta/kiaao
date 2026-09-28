@@ -8,7 +8,8 @@
 
 import { describe, expect, test } from "vite-plus/test";
 
-import { computeViewport, MAX_VIEW_H, MAX_VIEW_W, TILE } from "../config";
+import { TILE } from "../../world";
+import { computeViewport, MAX_VIEW_H, MAX_VIEW_W } from "../config";
 
 describe("computeViewport / 地图不超过上限", () => {
   test("视口等于地图尺寸：整张地图一屏可见（含四周边界墙）", () => {

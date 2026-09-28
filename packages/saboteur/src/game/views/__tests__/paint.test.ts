@@ -10,8 +10,8 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import { createGrid, setTile } from "../../../world";
+import { TILE } from "../../../world/geometry";
 import { Tile } from "../../../world/levels/types";
-import { TILE } from "../../config";
 import { paintGrid, planTiles, TILE_COLORS, type PaintContext, type PaintTarget } from "../paint";
 
 describe("planTiles / 绘制清单", () => {

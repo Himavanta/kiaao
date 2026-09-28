@@ -11,8 +11,8 @@
 import { type Context, type Signal } from "kiaao";
 
 import { StyleMemo } from "../../engine/directives";
-import { type Grid } from "../../world";
-import { computeViewport, TILE, type Viewport } from "../config";
+import { TILE, type Grid } from "../../world";
+import { computeViewport } from "../config";
 
 import style from "./stage.module.scss";
 
@@ -27,34 +27,6 @@ export type CameraTarget = {
   x: number;
   y: number;
 };
-
-const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-
-/**
- * 相机跟随：把关注点置于视口中心，并夹在世界边界内。
- *
- * 视口不小于世界时夹取范围为零，相机恒在原点——等价于「无相机」，
- * 但表达式不变，地图放大后自动转为卷轴而无需改代码。
- *
- * 关注点不变时 memo 生效，不写 DOM；派生绑定到 `ctx`，随组件卸载自动清理。
- */
-export function followCamera(
-  ctx: Context,
-  target: Signal<CameraTarget>,
-  viewport: Viewport,
-  grid: Grid,
-): Signal<Camera> {
-  const worldW = grid.cols * TILE;
-  const worldH = grid.rows * TILE;
-
-  return ctx.use(target, () => {
-    const { x, y } = target();
-    return {
-      x: clamp(x - viewport.width / 2, 0, Math.max(0, worldW - viewport.width)),
-      y: clamp(y - viewport.height / 2, 0, Math.max(0, worldH - viewport.height)),
-    };
-  });
-}
 
 type StageProps = {
   /** 相机位置信号（世界坐标） */

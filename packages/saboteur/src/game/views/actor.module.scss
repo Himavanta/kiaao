@@ -1,0 +1,25 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 角色样式：程序化占位（规划文档 6.5）
+// 位置 / 朝向 / 潜行态由 StyleMemo 写，此处只画形状
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+%actor {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px 4px 2px 2px;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 45%);
+}
+
+.player {
+  @extend %actor;
+
+  background: linear-gradient(180deg, #f0c674, #c9932f);
+  // 亮色描边让玩家在任何地面色上都可辨
+  outline: 1px solid rgb(255 235 190 / 70%);
+}
+
+.guest {
+  @extend %actor;
+
+  background: linear-gradient(180deg, #8fa5c4, #5f7a9c);
+}

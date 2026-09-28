@@ -14,7 +14,7 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import App from "../../app";
-import { level, frameSystem, stop } from "../instance";
+import { entityCount, level, frameSystem, stop } from "../instance";
 
 /**
  * 手动驱动的 raf：逐帧推进且不递归。
@@ -153,24 +153,36 @@ describe("端到端 / 关卡渲染", () => {
     app.unmount();
   });
 
-  test("相机夹在世界边界内：初始位置为 0 起始（出生点靠左上时）", () => {
+  test("相机夹在世界边界内：世界层 translate 为负值或 0", () => {
     const app = createApp(App);
     app.mount("#app");
 
-    // 世界层 translate 应被夹在 <= 0 的范围内（相机坐标非负）
-    const styles = [...document.querySelectorAll("#app div[style]")].map(
-      (el) => el.getAttribute("style") ?? "",
-    );
-    const translated = styles.filter((s) => s.includes("translate"));
+    // 相机坐标非负 → 世界层 translate 必 ≤ 0。
+    // 只取世界层（宽度含地图全宽），不能泛指所有带 translate 的元素——
+    // 角色也有 translate，且它们是世界坐标（正值）。
+    const mapW = level.grid.cols * 32;
+    const worldLayer = [...document.querySelectorAll("#app div[style]")].find((el) => {
+      const s = el.getAttribute("style") ?? "";
+      return s.includes(`width: ${mapW}px`) && s.includes("translate");
+    });
+    expect(worldLayer).toBeDefined();
 
-    expect(translated.length).toBeGreaterThan(0);
-    for (const s of translated) {
-      const match = /translate:\s*(-?[\d.]+)px\s+(-?[\d.]+)px/.exec(s);
-      if (!match) continue;
-      // 相机 x/y >= 0 → translate 为负值或 0
-      expect(Number(match[1])).toBeLessThanOrEqual(0);
-      expect(Number(match[2])).toBeLessThanOrEqual(0);
-    }
+    const match = /translate:\s*(-?[\d.]+)px\s+(-?[\d.]+)px/.exec(
+      worldLayer!.getAttribute("style") ?? "",
+    );
+    expect(match).not.toBeNull();
+    expect(Number(match![1])).toBeLessThanOrEqual(0);
+    expect(Number(match![2])).toBeLessThanOrEqual(0);
+
+    app.unmount();
+  });
+
+  test("玩家与 NPC 实体都被渲染", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    // 玩家 + 关卡中配置的 NPC 全部注册
+    expect(entityCount()).toBe(1 + level.npcSpawns.length);
 
     app.unmount();
   });

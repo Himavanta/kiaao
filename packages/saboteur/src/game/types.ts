@@ -5,15 +5,48 @@
 // 其余系统只读。写入冲突是 ECS 最常见的数据竞争来源。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 朝向：4 向（等于最后一次移动方向） */
+/** 朝向：4 向，等于最后一次移动方向 */
 export type Facing = "north" | "east" | "south" | "west";
 
+/** 朝向 → 单位向量（感知与交互读面朝格时使用） */
+export const FACING_VECTORS: Record<Facing, { dx: number; dy: number }> = {
+  north: { dx: 0, dy: -1 },
+  east: { dx: 1, dy: 0 },
+  south: { dx: 0, dy: 1 },
+  west: { dx: -1, dy: 0 },
+};
+
+/** 方向向量 → 朝向；零向量时返回 undefined（无位移不改变朝向） */
+export function facingFromVector(dx: number, dy: number): Facing | undefined {
+  if (dx === 0 && dy === 0) return undefined;
+  if (dx > 0) return "east";
+  if (dx < 0) return "west";
+  return dy > 0 ? "south" : "north";
+}
+
 export type ActorEntity = {
-  /** 【scaffold 写】世界坐标位置（px，左上角原点） */
+  // ── locomotion 切片 ──
+  /** 【locomotion 写】世界坐标位置（px，角色左上角） */
   x: number;
   y: number;
-  /** 【scaffold 写】移动速度（px/s），0 表示静止 */
+  /** 【locomotion 写】基础移动速度（px/s） */
   speed: number;
-  /** 【scaffold 写】朝向 */
+  /** 【locomotion 写】潜行时的速度系数（0~1） */
+  sneakFactor: number;
+  /** 【locomotion 写】当前是否潜行中 */
+  sneaking: boolean;
+
+  // ── 跨系统共享字段 ──
+  /**
+   * 【locomotion 写，其余系统只读】最后移动方向。
+   * 刻意不归入任何系统切片——交互与感知都读它（规划文档 5.2）。
+   */
   facing: Facing;
+
+  // ── 身份切片 ──
+  /** 【身份，注册时定】角色类型，渲染与规则按此分支 */
+  role: Role;
 };
+
+/** 角色类型：玩家 / 客人（NPC）/ 后续的目标人物与警察 */
+export type Role = "player" | "guest";

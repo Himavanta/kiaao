@@ -9,7 +9,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { Tile, type Grid } from "../../world";
-import { TILE } from "../config";
+import { TILE } from "../../world";
 
 /**
  * 绘制目标：只声明我们实际使用的 canvas 成员。

@@ -1,30 +1,25 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 根组件：舞台 + 关卡层 + HUD 组装
+// 根组件：舞台 + 关卡层 + 角色 + HUD 组装
 //
 // 组件负责运行窗口（挂载 start、卸载 stop），世界状态与系统实例
 // 全部在模块级（game/instance.ts）——组件不持有游戏数据。
+//
+// 输入监听的挂载借用玩家实体的 ctx 钩子（`input.enter()`）：
+// 监听随游戏运行窗口存在，不留到组件树之外。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { use, type Context } from "kiaao";
+import { type Context } from "kiaao";
 
-import { computeViewport, TILE } from "./game/config";
-import { entityCount, frameSystem, level, start, stop } from "./game/instance";
+import { computeViewport } from "./game/config";
+import { entityCount, frameSystem, input, level, start, stop } from "./game/instance";
+import { Actor } from "./game/views/actor";
+import { usePlayerCamera } from "./game/views/camera";
 import { DebugPanel } from "./game/views/debug";
-import { followCamera, Stage } from "./game/views/stage";
+import { Stage } from "./game/views/stage";
 import { Tilemap } from "./game/views/tilemap";
+import { TILE } from "./world";
 
 import style from "./app.module.scss";
-
-/**
- * M1：相机初始对准玩家出生点（无跟随目标，静止）。
- * M2 接入玩家实体后，这里改为订阅玩家位置的派生信号。
- */
-function useCamera(ctx: Context) {
-  const { col, row } = level.playerSpawn ?? { col: 0, row: 0 };
-  const { grid } = level;
-  const focus = use({ x: col * TILE, y: row * TILE });
-  return followCamera(ctx, focus, computeViewport(grid.cols, grid.rows), grid);
-}
 
 /** 视口尺寸的格数表示（HUD 展示用） */
 function toTileCount(width: number, height: number): string {
@@ -38,17 +33,28 @@ export default function App(_: Record<string, never>, ctx: Context) {
   onMount(start);
   onUnmount(stop);
 
-  const { grid, name } = level;
-  const camera = useCamera(ctx);
+  // 键盘监听借用组件的生命周期（与游戏运行窗口一致）；
+  // 输入是全局源系统，不属于任何实体，故不采用实体注册形态
+  input.attach(ctx);
+
+  const { grid, name, playerSpawn, npcSpawns } = level;
   const viewport = computeViewport(grid.cols, grid.rows);
+
+  const player = playerSpawn ?? { col: 1, row: 1 };
+  const camera = usePlayerCamera(ctx, viewport, grid);
 
   return (
     <div class={style.shell}>
       <Stage camera={camera} grid={grid}>
-        {/* 指令作用于子元素——必须包裹真实 <canvas>，不能自闭合 */}
         <Tilemap grid={grid}>
           <canvas class={style.tilemap} />
         </Tilemap>
+
+        <Actor col={player.col} row={player.row} facing={player.facing ?? "south"} role="player" />
+
+        {npcSpawns.map((spawn) => (
+          <Actor col={spawn.col} row={spawn.row} facing={spawn.facing ?? "south"} role="guest" />
+        ))}
       </Stage>
       <DebugPanel fps={frameSystem.fps} entities={entityCount} />
       <span class={style.hint}>
