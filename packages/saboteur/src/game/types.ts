@@ -11,14 +11,6 @@ import type { Cell } from "../world";
 /** 朝向：4 向，等于最后一次移动方向 */
 export type Facing = "north" | "east" | "south" | "west";
 
-/** 朝向 → 单位向量（感知与交互读面朝格时使用） */
-export const FACING_VECTORS: Record<Facing, { dx: number; dy: number }> = {
-  north: { dx: 0, dy: -1 },
-  east: { dx: 1, dy: 0 },
-  south: { dx: 0, dy: 1 },
-  west: { dx: -1, dy: 0 },
-};
-
 /**
  * 朝向 → 视线角度（弧度）。
  *
@@ -109,11 +101,13 @@ export type ActorEntity = {
 /** 角色类型：玩家 / 客人（NPC）/ 后续的目标人物与警察 */
 export type Role = "player" | "guest";
 
-/** 可携带 / 可拾取的道具类型 */
+/**
+ * 可携带 / 可拾取的道具类型。
+ *
+ * 与 `world/levels/types.ts` 的 `PropKind` 取值一致，但**不是同一个类型**：
+ * `world/` 不依赖 `game/`（分层单向），两边各自声明，由组装层保证对应。
+ */
 export type ItemKind = "booze";
-
-/** 可交互物类型（与 `world/levels/types.ts` 的 `PropKind` 对应） */
-export type PropEntityKind = "booze";
 
 /**
  * NPC 行为。mood 决定 navigation 的目标选择策略：
