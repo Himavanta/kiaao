@@ -23,9 +23,6 @@ import { ACTOR_SIZE } from "./locomotion";
 /** 每发现一个异常，警报值的增量 */
 export const ALARM_PER_WITNESS = 12;
 
-/** 恐慌持续时长（秒）。到期后仍会重新规划目的地，但不会恢复「不知情」 */
-const PANIC_DURATION = 30;
-
 export type AlarmSystem = {
   /**
    * 注册角色。
@@ -44,7 +41,17 @@ export type AlarmSystem = {
   reset: () => void;
 };
 
-export function createAlarmSystem(): AlarmSystem {
+export function createAlarmSystem(options: {
+  /**
+   * 请求让某实体进入恐慌态。
+   *
+   * 注入而非直接 import behaviour：alarm 只负责「谁看见了什么」，
+   * 至于「看见之后行为怎么变」是行为系统的事。这样两个系统之间
+   * 没有编译期依赖，也符合「恐慌由目击触发」这一个事实的归属。
+   */
+  onPanic: (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => void;
+}): AlarmSystem {
+  const { onPanic } = options;
   const pool = new Set<EntityId>();
   const alarm = use(0);
   const witnessCount = use(0);
@@ -101,23 +108,19 @@ export function createAlarmSystem(): AlarmSystem {
   };
 
   /**
-   * 目击者陷入恐慌。
+   * 报告一次目击。
    *
-   * 只置状态（mood / fleeFrom / witnessed），不挑逃离点也不写路径——
-   * 「去哪」由 navigation 按 mood 决定。清空既有路径是必要的：否则会先
-   * 走完旧路再去新目标，看起来像「没反应」。
+   * **本系统不写行为字段**——它只报告「谁被谁吓到了」这一事实，
+   * 由 `behaviour.panic()` 执行状态切换（含清路径、掷定时长）。
+   * 这样 `mood` / `path` / `goal` / `idleLeft` / `followTime` 的
+   * 写入者始终只有状态机一处。
    */
-  const panic = (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => {
+  const report = (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => {
     frame(id, (e) => {
+      // witnessed 是记忆，永久保留——它属于本系统的语义
       e.witnessed = true;
-      e.mood = "panic";
-      e.moodLeft = PANIC_DURATION;
-      e.fleeFrom = threat;
-      e.goal = null;
-      e.path = [];
-      e.idleLeft = 0;
-      e.followTime = 0;
     });
+    onPanic(frame, id, threat);
   };
 
   const update = (frame: FrameManager<ActorEntity>) => {
@@ -140,7 +143,7 @@ export function createAlarmSystem(): AlarmSystem {
       const threatCell = cellAt(threat.x + ACTOR_SIZE / 2, threat.y + ACTOR_SIZE / 2);
       if (!threatCell) continue;
 
-      panic(frame, id, threatCell);
+      report(frame, id, threatCell);
       freshTotal += fresh.length;
       witnesses += 1;
     }

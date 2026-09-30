@@ -19,7 +19,7 @@ import { createFrameSystem } from "./systems/frame";
 import { createInputSystem, readDirection } from "./systems/input";
 import { createInteractionSystem } from "./systems/interaction";
 import { createLocomotionSystem } from "./systems/locomotion";
-import { createNavigationSystem, pathIntent } from "./systems/navigation";
+import { createNavigationService, pathIntent } from "./systems/navigation";
 import { createPerceptionSystem } from "./systems/perception";
 import { createRulesSystem } from "./systems/rules";
 import type { ActorEntity } from "./types";
@@ -55,10 +55,13 @@ export { resetGameState, showVision } from "./state";
 // ── 系统实例（按依赖顺序创建）──────────────────────────
 
 export const locomotion = createLocomotionSystem(level.grid);
-export const navigation = createNavigationSystem({ grid: level.grid, random });
-export const behaviour = createBehaviourSystem({ random });
+// navigation 是**服务**（不读 mood、不知道自己被谁调用）
+export const navigation = createNavigationService({ grid: level.grid, random });
+// behaviour 是**状态机驱动**：具体行为在 states.ts 的状态对象里
+export const behaviour = createBehaviourSystem({ random, navigation });
 export const perception = createPerceptionSystem({ grid: level.grid });
-export const alarm = createAlarmSystem();
+// alarm 只报告事实，恐慌切换由 behaviour 执行（注入回调，避免循环依赖）
+export const alarm = createAlarmSystem({ onPanic: behaviour.panic });
 
 // 交互：读玩家实体信号（同时需要位置 / 朝向与 id）
 export const interaction = createInteractionSystem({
@@ -90,8 +93,9 @@ locomotion.setIntent("guest", (entity) => pathIntent(entity));
 export const game = createGame<ActorEntity>(
   [
     interaction.update,
+    // behaviour 内含「决策 + 规划 + 移动推进」：它驱动状态对象，
+    // 状态通过 navigation 服务算路径。因此 navigation 不在帧流水线里。
     behaviour.update,
-    navigation.update,
     locomotion.update,
     perception.update,
     alarm.update,

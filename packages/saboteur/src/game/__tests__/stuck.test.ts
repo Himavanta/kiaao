@@ -137,28 +137,49 @@ describe("僵死回归 / 长期运行", () => {
     app.unmount();
   });
 
-  test("恐慌会到期结束：panic 人数最终归零", () => {
+  test("恐慌会到期：单人目击、无人传播时确实结束", () => {
     const app = createApp(App);
     app.mount("#app");
 
-    const victim = guestsOf()[0];
-    (victim as any)({ ...victim(), x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
+    // **隔离**：只让一个客人目击，其余全部钉到远处死角且背对。
+    // 不隔离的话，恐慌会在 NPC 之间反复传播——那是正确行为，
+    // 但会掩盖本用例真正要验证的东西：「计时到期后 panic 会不会结束」。
+    const witness = guestsOf()[0];
+    const corpse = guestsOf()[1];
+    const keep = [witness, corpse];
 
-    // 全程每帧把警报压回 0：本用例要验证「恐慌会到期」，而警报一旦
-    // 满值游戏立即结束、帧循环停止，就再也观察不到到期。压警报是隔离
-    // 手段，不影响 panic 计时本身。同时每帧钉住尸体位置（否则会被搬走）。
-    for (let i = 0; i < runFrames; i += 1) {
-      alarm.alarm(0);
-      (victim as any)({ ...victim(), x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
+    // 先放好尸体（它是目击的对象），再让 witness 正对它
+    (corpse as any)({ ...corpse(), x: 7 * 32, y: 10 * 32, dead: true, path: [], goal: null });
+
+    for (let i = 0; i < 40 && !witness().witnessed; i += 1) {
+      for (const g of guestsOf()) {
+        if (keep.includes(g)) continue;
+        (g as any)({ ...g(), x: 38, y: 38, facing: "north", path: [], goal: null, idleLeft: 1e6 });
+      }
+      (witness as any)({
+        ...witness(),
+        x: 5 * 32,
+        y: 10 * 32,
+        facing: "east",
+        path: [],
+        goal: null,
+        idleLeft: 1e6,
+      });
       driver.tick();
     }
 
-    const panicking = guestsOf().filter((e) => e().mood === "panic").length;
-    const witnessed = guestsOf().filter((e) => e().witnessed).length;
+    expect(witness().witnessed).toBe(true);
+    expect(witness().mood).toBe("panic");
+
+    // 松开手，跑满剩余时间（把警报压住以免游戏提前结束）
+    for (let i = 0; i < runFrames; i += 1) {
+      alarm.alarm(0);
+      driver.tick();
+    }
 
     // 情绪结束，但记忆保留——这是两者的关键区别
-    expect(panicking).toBe(0);
-    expect(witnessed).toBeGreaterThan(0);
+    expect(witness().mood).not.toBe("panic");
+    expect(witness().witnessed).toBe(true);
 
     app.unmount();
   });

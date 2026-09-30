@@ -1,17 +1,17 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 导航系统：目标选择 + A* 重算 + 路径推进
+// 导航服务：把「去某处」这件事做出来
 //
-// 寻路是这一步最贵的运算，而 NPC 的目的地变化很慢（到达后才换）。
-// 因此按实体节流：只有「需要新路径」的实体才跑 A*，其余帧零开销。
+// 这个模块**不知道状态机存在**——它只提供两个动作：给一个目标格，
+// 它算出路径；给一条路径，它推进一帧。谁在什么时候调用它，由状态
+// （`states.ts`）决定。
 //
-// 路径的推进（走到点就弹出）也在本系统——`path` 的写者只有 navigation。
-// locomotion 的意图来源只读 `path[0]` 求方向，不修改它。
+// 上一版这里读 `entity.mood` 来决定「挑随机目标还是逃跑目标」——
+// 那是把状态的决策混进了服务里。现在分派只发生在一处（状态对象内），
+// 服务保持无策略。
 //
 // **看门狗**：被墙挡住或挤在角落时，NPC 可能永远走不到下一个路径点，
-// 于是路径永不弹出、NPC 卡死。跟随时长超过阈值即放弃当前路径并重规划。
+// 于是路径永不弹出、NPC 卡死。超过阈值无推进即放弃当前路径。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-import type { Context } from "kiaao";
 
 import type { EntityId, FrameManager } from "../../engine/types";
 import {
@@ -31,67 +31,39 @@ import { ACTOR_SIZE } from "./locomotion";
 const ARRIVE_RADIUS = 4;
 
 /**
- * 单点跟随的上限（秒）：超时即放弃当前路径重规划，防卡死。
+ * 单点跟随的上限（秒）：超时即放弃当前路径，防卡死。
  *
  * 这是**距上次推进**的时长，而非整条路径的时长——一条 30 格的路径
  * 以 78px/s 走完需要十几秒，按整条计时会把正常路径误杀。
  */
 const STUCK_TIMEOUT = 4;
 
-/** 停留时长范围（秒）：到达后歇一会，避免 NPC 像弹球一样永动 */
-const IDLE_MIN = 0.8;
-const IDLE_MAX = 3.5;
-
 /** 逃跑候选点数：取最远的前 N 个再随机选一，避免所有目击者挤向同一角落 */
 const FLEE_CANDIDATES = 12;
 
-export type NavigationSystem = {
-  enter: (props?: {
-    idleMin?: number;
-    idleMax?: number;
-  }) => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
-  update: (frame: FrameManager<ActorEntity>, delta: number) => void;
-  /** 让所有池内实体重新规划（关卡切换或目标失效时调用） */
-  replanAll: () => void;
+export type NavigationService = {
+  /** 随机挑一个可通行格作为目的地（避开当前格） */
+  pickRandomGoal: (from: Cell) => Cell | undefined;
+  /** 挑一个远离威胁的目的地（排除当前格，否则会「规划到自身」而空转） */
+  pickFleeGoal: (from: Cell, threat: Cell) => Cell | undefined;
+  /**
+   * 朝当前 `goal` 走一帧：无路径则先规划，有路径则推进一帧。
+   *
+   * 到达时清掉 `goal` 并置零 `followTime`——状态通过观察
+   * `!path.length && !goal` 得知「到了」。
+   */
+  moveTowardGoal: (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => void;
 };
 
-export function createNavigationSystem(options: { grid: Grid; random: Random }): NavigationSystem {
+export function createNavigationService(options: {
+  grid: Grid;
+  random: Random;
+}): NavigationService {
   const { grid, random } = options;
-
-  // 池：需要导航的实体（NPC）。玩家不入池——它的意图来自输入
-  const pool = new Set<EntityId>();
 
   // 随机目的地候选集：地图静态，收集一次即可
   const walkable = collectWalkable(grid);
 
-  // 待重规划：enter 与 replanAll 只置位，实际规划在 update 中做
-  const needsPlan = new Set<EntityId>();
-  let replanAllPending = false;
-
-  const enter =
-    (props?: { idleMin?: number; idleMax?: number }) =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      ctx.onMount(() => {
-        pool.add(id);
-        needsPlan.add(id);
-      });
-      ctx.onUnmount(() => {
-        pool.delete(id);
-        needsPlan.delete(id);
-      });
-
-      const idleMin = props?.idleMin ?? IDLE_MIN;
-      const idleMax = props?.idleMax ?? IDLE_MAX;
-
-      return {
-        path: [],
-        goal: null,
-        idleLeft: idleMin + random() * (idleMax - idleMin),
-        followTime: 0,
-      } as Partial<ActorEntity>;
-    };
-
-  /** 随机挑一个可通行格作为目的地（避开当前格） */
   const pickRandomGoal = (from: Cell): Cell | undefined => {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const candidate = random.pick(walkable);
@@ -102,101 +74,46 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
     return undefined;
   };
 
-  /**
-   * 挑目的地：**按 mood 分派策略**。
-   *
-   * 恐慌者反向逃跑——朝远离威胁处跑；其余人随机游荡。这样「去哪」的
-   * 决策全在本系统内，alarm 只需置状态（mood / fleeFrom），不必碰路径与移动。
-   * 与 locomotion 按 role 分派意图来源是同一形态。
-   */
-  const pickGoal = (from: Cell, entity: Readonly<ActorEntity>): Cell | undefined => {
-    if (entity.mood === "panic" && entity.fleeFrom) {
-      // 排除自身所在格：否则 findPath 返回空路径（起终点重合），
-      // 表现为「有目标却站着不动」
-      return random.pick(furthestCells(walkable, entity.fleeFrom, FLEE_CANDIDATES, from));
-    }
-    return pickRandomGoal(from);
-  };
+  const pickFleeGoal = (from: Cell, threat: Cell): Cell | undefined =>
+    random.pick(furthestCells(walkable, threat, FLEE_CANDIDATES, from));
 
-  /**
-   * 为单个实体规划路径。
-   *
-   * **目的地来源有两处**：`goal` 已有值时用它（alarm 在恐慌时写入），
-   * 否则随机挑一个。这样 panic 只需给出「去哪」，不必碰路径与移动；
-   * 而 wander 的随机目的地仍由本系统决定。
-   */
-  const plan = (frame: FrameManager<ActorEntity>, id: EntityId) => {
-    const entity = frame(id);
-    if (!entity || entity.dead) return;
-
-    const from = cellAt(entity.x + ACTOR_SIZE / 2, entity.y + ACTOR_SIZE / 2);
-    // 无有效位置（如尚未写出 x/y）时不规划，下一帧再试
-    if (!from) return;
-
-    // 恐慌时忽略既有 goal：威胁点可能已变，每次重规划都用最新的 fleeFrom
-    const goal =
-      entity.mood === "panic" ? pickGoal(from, entity) : (entity.goal ?? pickGoal(from, entity));
+  /** 为当前 `goal` 规划路径；不可达时清空目标，留待下帧重挑 */
+  const plan = (
+    frame: FrameManager<ActorEntity>,
+    id: EntityId,
+    entity: Readonly<ActorEntity>,
+  ): void => {
+    const goal = entity.goal;
     if (!goal) return;
 
+    const from = cellAt(entity.x + ACTOR_SIZE / 2, entity.y + ACTOR_SIZE / 2);
+    if (!from) return;
+
     const path = findPath(grid, from, goal);
+    // 空路径有两种来源：已在目标格（起终点重合）或目标不可达。
+    // 两者都不该保留 goal——否则下一帧会「重新规划到当前格」得到空路径、
+    // 再保留同一个 goal，**无限空转**（表现为站着不动）。
+    // 注意不能写 `path ? ...`：空数组是 truthy，会把这种情况当成成功。
+    const usable = path !== null && path.length > 0;
 
     frame(id, (e) => {
-      e.path = path ? [...path] : [];
-      // 规划失败时保留 goal：下一帧重试同一目标，而非放弃
-      // （目标若已不可达，看门狗会清掉它）
-      e.goal = path ? goal : e.goal;
+      e.path = usable ? [...path] : [];
+      e.goal = usable ? goal : null;
       e.followTime = 0;
     });
   };
 
-  /** 推进单个实体：待规划 → 跟随 → 到达后停留 → 再规划 */
-  const step = (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => {
-    const entity = frame(id);
-    if (!entity) return;
-
-    // 无有效位置时不推进（x/y 未写出的瞬间）
-    if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
-
-    // 死者不导航：尸体留在原地（清空路径由 interaction 在死亡时完成）
-    if (entity.dead) return;
-
-    // 驻足状态：不规划新目标，原地等待行为系统切换
-    if (entity.mood === "linger" && entity.path.length === 0) return;
-
-    if (needsPlan.delete(id)) {
-      plan(frame, id);
-      return;
-    }
-
-    if (entity.path.length > 0) {
-      advance(frame, id, entity, delta);
-      return;
-    }
-
-    // 路径走完：停留计时，到点后规划下一段
-    const idleLeft = entity.idleLeft - delta;
-    if (idleLeft > 0) {
-      frame(id, (e) => {
-        e.idleLeft = idleLeft;
-      });
-      return;
-    }
-
-    plan(frame, id);
-  };
-
   /**
-   * 路径推进：到达首点则弹出并在推进时清零计时；长时间无推进则放弃。
+   * 路径推进：到达首点则弹出并清零计时；长时间无推进则放弃整条路径。
    *
-   * 计时语义是「距上次推进」而非「整条路径已走多久」：被墙挡住或
-   * 被挤住时无进展，累计到阈值即放弃重规划。
+   * 计时语义是「距上次推进」：被挡住或挤住时无进展，累计到阈值即放弃。
    */
   const advance = (
     frame: FrameManager<ActorEntity>,
     id: EntityId,
     entity: Readonly<ActorEntity>,
     delta: number,
-  ) => {
+  ): void => {
     const [next] = entity.path;
     if (!next) return;
 
@@ -205,7 +122,6 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
     const cy = entity.y + ACTOR_SIZE / 2;
     const arrived = Math.abs(tx - cx) < ARRIVE_RADIUS && Math.abs(ty - cy) < ARRIVE_RADIUS;
 
-    // 看门狗：长时间无推进即放弃，避免永久卡在这一段
     const stuckTime = entity.followTime + delta;
     if (!arrived && stuckTime > STUCK_TIMEOUT) {
       frame(id, (e) => {
@@ -221,42 +137,36 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
         e.followTime = stuckTime;
         return;
       }
-      // 到达：弹出首点，计时清零（下一点重新计）
+      // 到达：弹出首点。走完最后一点时清掉目标——状态据此得知「到了」
       e.path = e.path.slice(1);
       e.followTime = 0;
-      // 最后一个点走完：清掉目标并重置停留计时。
-      // 清 goal 是必须的——否则下一轮会「规划到当前格」，得到空路径后空转。
-      // 恐慌者不歇息：逃到一处后立刻奔向下一处，否则会站着等死。
-      if (e.path.length === 0) {
-        e.goal = null;
-        e.idleLeft = e.mood === "panic" ? 0 : IDLE_MIN + random() * (IDLE_MAX - IDLE_MIN);
-      }
+      if (e.path.length === 0) e.goal = null;
     });
   };
 
-  const update = (frame: FrameManager<ActorEntity>, delta: number) => {
-    if (replanAllPending) {
-      replanAllPending = false;
-      for (const id of pool) needsPlan.add(id);
+  const moveTowardGoal = (frame: FrameManager<ActorEntity>, id: EntityId, delta: number): void => {
+    const entity = frame(id);
+    if (!entity) return;
+
+    // 无有效位置时不推进（x/y 未写出的瞬间）
+    if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
+
+    if (entity.path.length === 0) {
+      plan(frame, id, entity);
+      return;
     }
 
-    for (const id of pool) step(frame, id, delta);
+    advance(frame, id, entity, delta);
   };
 
-  return {
-    enter,
-    update,
-    replanAll: () => {
-      replanAllPending = true;
-    },
-  };
+  return { pickRandomGoal, pickFleeGoal, moveTowardGoal };
 }
 
 /**
  * 路径跟随意图：朝当前路径点的格中心移动。
  *
  * 供 locomotion 的 `setIntent` 使用——只读 `path[0]`，不修改路径
- * （推进由 navigation 负责，保持单写者）。
+ * （推进由 navigation 服务负责，保持单写者）。
  *
  * 4 向而非斜向：与寻路的 4 邻域一致。斜向意图会让实体蹭着墙角走，
  * 而寻路给出的路径本身就是 4 向的，走斜线反而会撞墙。

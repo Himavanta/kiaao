@@ -16,7 +16,6 @@ import {
   entityCount,
   interaction,
   locomotion,
-  navigation,
   perception,
   useEntity,
 } from "../instance";
@@ -57,7 +56,8 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     alarm.enter({ role }),
   ];
 
-  const enters = role === "guest" ? [...common, navigation.enter(), behaviour.enter()] : common;
+  // 客人多一个行为状态机（玩家由输入驱动，不跑状态机）
+  const enters = role === "guest" ? [...common, behaviour.enter()] : common;
 
   const entity = useEntity(ctx, ...enters, () => ({ role }));
 
