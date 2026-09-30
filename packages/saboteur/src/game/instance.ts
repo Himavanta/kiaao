@@ -11,6 +11,7 @@ import { use } from "kiaao";
 
 import { createGame } from "../engine";
 import { createRandom, manor, parseLevel } from "../world";
+import { resetGameState } from "./state";
 import { playerEntity } from "./state";
 import { createAlarmSystem } from "./systems/alarm";
 import { createBehaviourSystem } from "./systems/behaviour";
@@ -20,6 +21,7 @@ import { createInteractionSystem } from "./systems/interaction";
 import { createLocomotionSystem } from "./systems/locomotion";
 import { createNavigationSystem, pathIntent } from "./systems/navigation";
 import { createPerceptionSystem } from "./systems/perception";
+import { createRulesSystem } from "./systems/rules";
 import type { ActorEntity } from "./types";
 
 // ── 关卡（模块级单例：地图静态，解析一次）────────────────
@@ -31,6 +33,9 @@ export const level = parseLevel(manor);
 // 固定种子：NPC 的目的地序列在每次运行时一致，便于对照与调试。
 // 换种子时改这一处。
 export const random = createRandom(20260928);
+
+// 时限初值：必须在这里写入，否则规则系统会在第一帧就判 timeout
+resetGameState(level.objective.timeLimit);
 
 // ── 输入（源系统：无 update，事件到即写信号）──────────────
 
@@ -45,7 +50,7 @@ export const frameSystem = createFrameSystem();
 export const entityCount = use(0);
 
 // 视野提示开关：Tab 切换（规划文档 4.7）
-export { showVision } from "./state";
+export { resetGameState, showVision } from "./state";
 
 // ── 系统实例（按依赖顺序创建）──────────────────────────
 
@@ -90,9 +95,41 @@ export const game = createGame<ActorEntity>(
     locomotion.update,
     perception.update,
     alarm.update,
+    // rules 放最后：它读本轮结束时的击杀数与警报值判终局，
+    // 放在前面会用上一帧的数据
+    (_frame, delta) => rules.update(delta),
     frameSystem.update,
   ],
   { autostart: false },
 );
 
 export const { useEntity, start, stop } = game;
+
+// ── 规则与重开 ─────────────────────────────────────────
+
+/**
+ * 一局的身份。递增即表示「新的一局」——视图层把它并入 `Each` 的 key，
+ * 于是所有角色被卸载重建，实体池随 `onUnmount` 自然清空。
+ *
+ * 这是声明式重置（规划文档 4.6）：不调用 `dispose`（它清空池后没有恢复
+ * 入口），而是让声明式生灭机制完成重建。
+ */
+export const runId = use(0);
+
+/** 玩家是否已注册（重开时用来等视图层重建完成） */
+function restartRun(): void {
+  // 先停帧循环：重建期间不该跑帧（否则会读到半旧的实体状态）
+  stop();
+  // 警报与全局状态归零
+  alarm.reset();
+  resetGameState(level.objective.timeLimit);
+  // 递增局号：视图层的 Each 会重建全部角色与道具
+  runId(runId() + 1);
+}
+
+export const rules = createRulesSystem({
+  objective: level.objective,
+  stop,
+  alarm: () => alarm.alarm(),
+  onRestart: restartRun,
+});

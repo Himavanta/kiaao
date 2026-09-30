@@ -12,6 +12,12 @@ import { createGrid, inBounds, isBlocked, isOpaque, setTile, tileAt } from "../g
 import { parseLevel, validateLevel } from "../levels/parse";
 import { Tile, type LevelDef } from "../levels/types";
 
+/** 测试用关卡：补上 objective（大多数用例不关心它） */
+const lv = (def: Omit<LevelDef, "objective">): LevelDef => ({
+  ...def,
+  objective: { killGoal: 1, timeLimit: 60 },
+});
+
 describe("网格 / 越界安全", () => {
   test("越界读取视为墙：不可通行且阻挡视线", () => {
     const grid = createGrid(4, 3);
@@ -70,16 +76,13 @@ describe("网格 / 通行性与视线分离", () => {
 });
 
 describe("关卡解析", () => {
-  const simple: LevelDef = {
+  const simple = lv({
     name: "测试关卡",
     rows: ["#####", "#.P.#", "#...#", "#####"],
-  };
+  });
 
   test("静态符号解析为对应瓦片", () => {
-    const { grid } = parseLevel({
-      name: "t",
-      rows: ["#tT.", "#..."],
-    });
+    const { grid } = parseLevel(lv({ name: "t", rows: ["#tT.", "#..."] }));
 
     expect(tileAt(grid, 0, 0)).toBe(Tile.Wall);
     expect(tileAt(grid, 1, 0)).toBe(Tile.LowFurniture);
@@ -96,10 +99,9 @@ describe("关卡解析", () => {
   });
 
   test("提取 NPC 出生点与朝向", () => {
-    const { npcSpawns } = parseLevel({
-      name: "t",
-      rows: ["#####", "#^v<>#", "#....#", "#####"],
-    });
+    const { npcSpawns } = parseLevel(
+      lv({ name: "t", rows: ["#####", "#^v<>#", "#....#", "#####"] }),
+    );
 
     expect(npcSpawns).toEqual([
       { col: 1, row: 1, facing: "north" },
@@ -110,13 +112,13 @@ describe("关卡解析", () => {
   });
 
   test("行长度不一致时按最长行补地板，不抛错", () => {
-    const { grid } = parseLevel({ name: "t", rows: ["####", "#.", "####"] });
+    const { grid } = parseLevel(lv({ name: "t", rows: ["####", "#.", "####"] }));
     expect(grid.cols).toBe(4);
     expect(tileAt(grid, 3, 1)).toBe(Tile.Floor);
   });
 
   test("未知符号被报告，且不落地为墙", () => {
-    const { grid, unknownSymbols } = parseLevel({ name: "t", rows: ["#?."] });
+    const { grid, unknownSymbols } = parseLevel(lv({ name: "t", rows: ["#?."] }));
 
     expect(unknownSymbols).toEqual(["?"]);
     expect(isBlocked(grid, 1, 0)).toBe(false);
@@ -125,16 +127,16 @@ describe("关卡解析", () => {
 
 describe("关卡校验", () => {
   test("合法关卡无问题", () => {
-    expect(validateLevel({ name: "t", rows: ["###", "#P#", "###"] })).toEqual([]);
+    expect(validateLevel(lv({ name: "t", rows: ["###", "#P#", "###"] }))).toEqual([]);
   });
 
   test("缺少玩家出生点被报告", () => {
-    const errors = validateLevel({ name: "t", rows: ["###", "#.#", "###"] });
+    const errors = validateLevel(lv({ name: "t", rows: ["###", "#.#", "###"] }));
     expect(errors.some((e) => e.includes("P"))).toBe(true);
   });
 
   test("行长度不一致被报告", () => {
-    const errors = validateLevel({ name: "t", rows: ["####", "#P#"] });
+    const errors = validateLevel(lv({ name: "t", rows: ["####", "#P#"] }));
     expect(errors.some((e) => e.includes("长度"))).toBe(true);
   });
 });

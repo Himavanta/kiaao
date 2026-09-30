@@ -88,6 +88,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
 
   // 尸体：躺倒（旋转）且压暗，与活人一眼可辨——M6 的目击判读依赖这个区分
   const rotate = useContext(entity, () => (entity().dead ? "90deg" : "0deg"));
+  // `class` 传信号才响应：死亡切换尸体样式依赖这一点
   const bodyClass = useContext(entity, () => {
     if (entity().dead) return style.corpse;
     return role === "player" ? style.player : style.guest;
@@ -114,9 +115,16 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
         opacity,
       }}
     >
-      <div class={bodyClass} />
-      <Show value={poisoned}>{() => <span class={style.poisonMark} />}</Show>
-      <Show value={panicking}>{() => <span class={style.panicMark} />}</Show>
+      {/*
+        标记放进被样式化的元素内部，而不是与它并列。
+        `Show` 隐藏时会产出注释锚点；若锚点成为指令的直接子节点，框架会
+        记一条「directive skipped non-Element child」警告（7 个角色 × 2 个
+        标记 = 每帧刷屏）。
+      */}
+      <div class={bodyClass}>
+        <Show value={poisoned}>{() => <span class={style.poisonMark} />}</Show>
+        <Show value={panicking}>{() => <span class={style.panicMark} />}</Show>
+      </div>
     </StyleMemo>
   );
 }

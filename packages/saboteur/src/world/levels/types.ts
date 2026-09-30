@@ -93,4 +93,14 @@ export type LevelDef = {
   name: string;
   /** ASCII 地图行（每行长度应相同，由 `validateLevel` 检查） */
   rows: string[];
+  /** 通关目标 */
+  objective: Objective;
+};
+
+/** 通关目标：需达成的击杀数与时限 */
+export type Objective = {
+  /** 需要达成的击杀数 */
+  killGoal: number;
+  /** 时限（秒） */
+  timeLimit: number;
 };

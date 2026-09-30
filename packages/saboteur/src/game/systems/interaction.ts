@@ -17,6 +17,7 @@ import { use, type Context, type Signal } from "kiaao";
 
 import type { EntityId, EntitySignal, FrameManager } from "../../engine/types";
 import { cellAt, cellInFront, TILE, type Vec2 } from "../../world";
+import { gameState } from "../state";
 import type { ActorEntity, ItemKind } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 
@@ -242,6 +243,10 @@ export function createInteractionSystem(options: {
         e.path = [];
         e.goal = null;
       });
+
+      // 击杀计数在此累加而非由规则系统轮询：死亡是本系统判定的事实，
+      // 「谁死了」的真相源只有一处。规则系统只读计数、决定何时终局。
+      gameState.kills(gameState.kills() + 1);
     }
   };
 

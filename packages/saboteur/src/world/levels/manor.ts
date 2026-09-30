@@ -14,6 +14,9 @@ import type { LevelDef } from "./types";
 
 export const manor: LevelDef = {
   name: "宅邸宴会厅",
+  // 切片关卡：6 名客人，需解决 2 人。目标数低于总数是有意的——
+  // 「杀光」在 6 人规模下没有玩法空间，也没有取舍余地
+  objective: { killGoal: 2, timeLimit: 150 },
   rows: [
     "################################",
     "#..............................#",

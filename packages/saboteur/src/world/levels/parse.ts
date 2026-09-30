@@ -11,6 +11,7 @@ import {
   spawnForSymbol,
   tileForSymbol,
   type LevelDef,
+  type Objective,
   type PropKind,
   type SpawnPoint,
 } from "./types";
@@ -26,6 +27,8 @@ export type PropSpawn = {
 export type ParsedLevel = {
   /** 关卡名（从 `LevelDef` 带入，供 HUD 等展示） */
   name: string;
+  /** 通关目标（从 `LevelDef` 带入） */
+  objective: Objective;
   grid: Grid;
   playerSpawn: SpawnPoint | undefined;
   npcSpawns: SpawnPoint[];
@@ -41,7 +44,7 @@ export type ParsedLevel = {
  * 补位比直接抛错更实用（且是显式、可预期的行为，由 `validateLevel` 报告）。
  */
 export function parseLevel(level: LevelDef): ParsedLevel {
-  const { name, rows } = level;
+  const { name, rows, objective } = level;
   const cols = rows.reduce((max, r) => Math.max(max, r.length), 0);
   const grid = createGrid(cols, rows.length);
 
@@ -77,7 +80,15 @@ export function parseLevel(level: LevelDef): ParsedLevel {
     }
   }
 
-  return { name, grid, playerSpawn, npcSpawns, propSpawns, unknownSymbols: [...unknownSymbols] };
+  return {
+    name,
+    objective,
+    grid,
+    playerSpawn,
+    npcSpawns,
+    propSpawns,
+    unknownSymbols: [...unknownSymbols],
+  };
 }
 
 /** 校验关卡定义，返回问题清单（空数组表示合法） */

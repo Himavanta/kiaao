@@ -36,5 +36,11 @@ export {
   type SightOptions,
 } from "./vision";
 export { parseLevel, validateLevel, type ParsedLevel } from "./levels/parse";
-export { Tile, type LevelDef, type SpawnFacing, type SpawnPoint } from "./levels/types";
+export {
+  Tile,
+  type LevelDef,
+  type Objective,
+  type SpawnFacing,
+  type SpawnPoint,
+} from "./levels/types";
 export { manor } from "./levels/manor";

@@ -11,9 +11,21 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import App from "../../app";
-import { level, stop } from "../instance";
-import { listActors } from "../state";
+import { alarm, level, resetGameState, stop } from "../instance";
+import { gameState, listActors } from "../state";
 import { POISON_DELAY } from "../systems/interaction";
+
+/**
+ * 每例前复位全局状态。
+ *
+ * `gameState` 是模块级单例，同文件内跨用例共享——上一例的 `held` /
+ * `kills` / `timeLeft` 会带到下一例。实体随组件卸载而清理，但信号不会。
+ */
+function resetAll() {
+  alarm.reset();
+  resetGameState(level.objective.timeLimit);
+  gameState.kills(0);
+}
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -57,6 +69,7 @@ function release(code: string) {
 
 /** 玩家与某角色的位置 */
 const playerOf = () => listActors().find((e) => e().role === "player")!;
+const guestsOf = () => listActors().filter((e) => e().role === "guest");
 
 describe("M5 / 关卡数据", () => {
   test("关卡中解析出酒瓶道具", () => {
@@ -78,6 +91,7 @@ describe("M5 / 端到端击杀链", () => {
   beforeEach(() => {
     driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
+    resetAll();
   });
 
   afterEach(() => {
@@ -257,6 +271,32 @@ describe("M5 / 端到端击杀链", () => {
 
     app.unmount();
   });
+
+  test("尸体换用不同的 class（class 传信号才响应）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guest = guestsOf()[0];
+    // 角色元素自身同时带 translate 与 class（StyleMemo 的包裹元素即角色本体）
+    const classOf = () =>
+      [...document.querySelectorAll("#app div[style]")].find((n) =>
+        (n.getAttribute("style") ?? "").includes(`translate: ${guest().x}px ${guest().y}px`),
+      )?.className ?? "";
+
+    const aliveClass = classOf();
+    expect(aliveClass).not.toBe("");
+
+    (guest as any)({ ...guest(), dead: true });
+    driver.tick();
+
+    // class 绑定若写成 `class={cond ? a : b}` 的普通三元（非信号），
+    // 首次渲染求值后就不再更新——尸体仍是活人配色。
+    const deadClass = classOf();
+    expect(deadClass).not.toBe("");
+    expect(deadClass).not.toBe(aliveClass);
+
+    app.unmount();
+  });
 });
 
 describe("M5 / 交互键的边沿语义", () => {
@@ -265,6 +305,7 @@ describe("M5 / 交互键的边沿语义", () => {
   beforeEach(() => {
     driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
+    resetAll();
   });
 
   afterEach(() => {

@@ -68,8 +68,15 @@ function createTicker<T extends Record<string, any>>(options: {
   let prevTime = performance.now();
   let rafId = 0;
   let running = false;
+  // 是否正在执行帧回调。用于处理「帧内 stop 再 start」：
+  // 此时 start 不该自己排队（loop 尾部会排），否则同一帧排出两个回调，
+  // 帧率翻倍。
+  let inFrame = false;
 
   function loop() {
+    inFrame = true;
+    rafId = 0; // 本帧的回调已被消费
+
     const now = performance.now();
     const delta = Math.min((now - prevTime) / 1000, MAX_DELTA);
     prevTime = now;
@@ -82,7 +89,10 @@ function createTicker<T extends Record<string, any>>(options: {
 
     flush();
 
-    rafId = requestAnimationFrame(loop);
+    inFrame = false;
+    // 帧内可能已调用 stop（如胜负判定后停止游戏）。
+    // 无条件重新排队会让停止失效——游戏结束后仍在后台空转。
+    if (running) rafId = requestAnimationFrame(loop);
   }
 
   const start = () => {
@@ -90,13 +100,15 @@ function createTicker<T extends Record<string, any>>(options: {
     running = true;
     // 重置时间基准：恢复时不把暂停时长计入 delta
     prevTime = performance.now();
-    rafId = requestAnimationFrame(loop);
+    // 帧内启动由 loop 尾部接管，避免重复排队
+    if (!inFrame) rafId = requestAnimationFrame(loop);
   };
 
   const stop = () => {
     if (!running) return;
     running = false;
     cancelAnimationFrame(rafId);
+    rafId = 0;
   };
 
   return { start, stop };
