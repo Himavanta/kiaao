@@ -23,8 +23,8 @@ export type BehaviourSystem = {
 /**
  * 各行为的持续时长范围（秒）。
  *
- * `panic` 的时长由 alarm 设定（`PANIC_DURATION`），此处的值只是类型完整性
- * 所需——行为系统在 `witnessed` 为真时直接早退，不会用到它。
+ * `panic` 的时长由 alarm 初次设定（`PANIC_DURATION`），随后由本系统递减；
+ * 此处的值只在「恐慌结束后重新掷定」时不会用到，保留是为了类型完整。
  */
 const DURATION: Record<Mood, { min: number; max: number }> = {
   wander: { min: 6, max: 18 },
@@ -70,11 +70,30 @@ export function createBehaviourSystem(options: { random: Random }): BehaviourSys
     // 死者不再有行为：尸体不入状态机
     if (entity.dead) return;
 
-    // 恐慌者的 mood 归 alarm 管：状态机不再切换它，否则逃到一半
-    // 会被切回 wander 而停下
-    if (entity.witnessed) return;
-
     const moodLeft = entity.moodLeft - delta;
+
+    // 恐慌：计时同样要递减，到期后恢复游荡。
+    // 恐慌期间不因「路径未走完」而推迟——逃跑本就该连贯进行。
+    if (entity.mood === "panic") {
+      if (moodLeft > 0) {
+        frame(id, (e) => {
+          e.moodLeft = moodLeft;
+        });
+        return;
+      }
+
+      frame(id, (e) => {
+        e.mood = "wander";
+        e.moodLeft = rollDuration("wander");
+        e.fleeFrom = null;
+        // 清空旧目标：否则 navigation 会继续朝逃跑点走
+        e.path = [];
+        e.goal = null;
+        e.idleLeft = 0;
+      });
+      return;
+    }
+
     if (moodLeft > 0) {
       frame(id, (e) => {
         e.moodLeft = moodLeft;

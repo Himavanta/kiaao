@@ -160,13 +160,24 @@ export function toWaypoints(path: Cell[]): Vec2[] {
  *
  * 用于恐慌逃离：逃离点选「离威胁最远的地方」。返回不超过 `count` 个
  * 候选，调用方再从中随机取一——纯取最远点会让所有目击者挤向同一角落。
+ *
+ * `exclude` 用于排除「调用方已站立」的格：把自身格当目标会让
+ * `findPath` 返回空路径（起终点重合），调用方陷入「有目标但无路径」
+ * 的空转。这类约束由调用方提供（它才知道当前格），而不是在此猜测。
  */
-export function furthestCells(candidates: readonly Cell[], away: Cell, count: number): Cell[] {
-  const scored = candidates.map((cell) => ({
-    cell,
-    // 曼哈顿距离足够：与寻路的 4 邻域同尺度，避免开方
-    d: Math.abs(cell.col - away.col) + Math.abs(cell.row - away.row),
-  }));
+export function furthestCells(
+  candidates: readonly Cell[],
+  away: Cell,
+  count: number,
+  exclude?: Cell,
+): Cell[] {
+  const scored = candidates
+    .filter((cell) => !(exclude && cell.col === exclude.col && cell.row === exclude.row))
+    .map((cell) => ({
+      cell,
+      // 曼哈顿距离足够：与寻路的 4 邻域同尺度，避免开方
+      d: Math.abs(cell.col - away.col) + Math.abs(cell.row - away.row),
+    }));
 
   scored.sort((a, b) => b.d - a.d);
   return scored.slice(0, Math.max(0, count)).map((s) => s.cell);

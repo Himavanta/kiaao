@@ -111,7 +111,9 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
    */
   const pickGoal = (from: Cell, entity: Readonly<ActorEntity>): Cell | undefined => {
     if (entity.mood === "panic" && entity.fleeFrom) {
-      return random.pick(furthestCells(walkable, entity.fleeFrom, FLEE_CANDIDATES));
+      // 排除自身所在格：否则 findPath 返回空路径（起终点重合），
+      // 表现为「有目标却站着不动」
+      return random.pick(furthestCells(walkable, entity.fleeFrom, FLEE_CANDIDATES, from));
     }
     return pickRandomGoal(from);
   };
@@ -222,9 +224,11 @@ export function createNavigationSystem(options: { grid: Grid; random: Random }):
       // 到达：弹出首点，计时清零（下一点重新计）
       e.path = e.path.slice(1);
       e.followTime = 0;
-      // 最后一个点走完：重置停留计时。
-      // 恐慌者不歇息——逃到一处后立刻奔向下一处，否则会站着等死。
+      // 最后一个点走完：清掉目标并重置停留计时。
+      // 清 goal 是必须的——否则下一轮会「规划到当前格」，得到空路径后空转。
+      // 恐慌者不歇息：逃到一处后立刻奔向下一处，否则会站着等死。
       if (e.path.length === 0) {
+        e.goal = null;
         e.idleLeft = e.mood === "panic" ? 0 : IDLE_MIN + random() * (IDLE_MAX - IDLE_MIN);
       }
     });
