@@ -1,6 +1,7 @@
-import { type Context, type Signal } from "kiaao";
+import { type Signal } from "kiaao";
 
-import type { EntityId, Enter, FrameManager } from "../engine";
+import type { EntityId, FrameManager } from "../engine";
+import { createPool } from "../engine/pool";
 import type { SoundName } from "./assets";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -97,62 +98,161 @@ export type RuleDeps = {
 };
 
 /**
+ * 事件单元：把「队列 + 发射口 + 处理函数」封在一个定义点。
+ *
+ * 以前一个事件被切在五处：类型 / `const xxxQueue = []` / `emit.xxx` /
+ * `update` 里的 `onXxx(...)` 派发 / 90 行之外的 `function onXxx`。
+ * 现在是这个形状：
+ *
+ * ```ts
+ * const breaking = createEvent<BreakPayload>((p, frame) => {
+ *   // 处理逻辑就在这里，`frame` 与 `deps` 都可见
+ * });
+ * breaking.emit(...)   // 发射
+ * breaking.drain(frame) // 帧循环里消费
+ * ```
+ *
+ * `drain` 用 `splice(0)` 取快照——**处理中新压入的事件留到下一帧**，
+ * 与改造前的语义一致（避免链式事件在帧内无限展开）。
+ */
+function createEvent<P>(handle: (payload: P, frame: FrameManager<RuleEntity>) => void) {
+  const queue: P[] = [];
+  return {
+    emit: (payload: P) => {
+      queue.push(payload);
+    },
+    /** 消费本帧全部事件（splice 取快照：处理中新压入的留到下一帧） */
+    drain: (frame: FrameManager<any>) => {
+      for (const payload of queue.splice(0)) {
+        handle(payload, frame);
+      }
+    },
+  };
+}
+
+/**
  * 规则系统：内部维护多个闭包事件队列（每事件类型一个），
  * emit 方法绑定各队列（类型由签名锁定），update 在帧循环中处理队列。
  * 挡板/砖块实体注册进本系统的池（像普通系统的 pool 一样持有实体）；
  * 全局状态（分数/生命/状态机/球目录）不在实体中——是事件处理的产物，由 deps 注入的信号承载。
  */
 export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
-  // 闭包事件队列（每类型一个）
-  const breakQueue: BreakPayload[] = [];
-  const outQueue: OutPayload[] = [];
-  const launchQueue: LaunchPayload[] = [];
-  const clickQueue: ClickPayload[] = [];
-  const restartQueue: RestartPayload[] = [];
+  // 实体池（登记即持有 id）
+  const paddlePool = createPool<RuleEntity>();
+  const brickPool = createPool<RuleEntity>();
 
-  // 实体池（注册即持有 id）
-  const paddlePool = new Set<EntityId>();
-  const brickPool = new Set<EntityId>();
+  // ── 击碎：禁用砖 + 球加速 + 加分；分数满则胜 ──────────────
+  const breaking = createEvent<BreakPayload>((p, frame) => {
+    const b = frame(p.id);
+    if (!b || !b.enabled) return; // 幂等：已被击碎（同帧多球撞击）
+
+    b.enabled = false;
+
+    // 撞击者：仅当仍在池中时才加速。事件 payload 里的 id 可能已被销毁
+    // （出界销毁发生在 outing），因此这里必须显式判空。
+    const ball = frame(p.by);
+    if (ball) {
+      ball.vx *= 1.02;
+      ball.vy *= 1.02;
+    }
+
+    // 全局状态（信号）：分数是事件处理的产物，不在实体中
+    deps.score(deps.score() + p.points);
+    if (deps.score() >= MAX_SCORE && deps.state() !== "win") {
+      deps.state("win");
+      deps.win({});
+    }
+  });
+
+  // ── 出界：按 dataId 声明式销毁该球；球全没则减命，生命耗尽则败 ──
+  const outing = createEvent<OutPayload>((p, frame) => {
+    if (deps.state() !== "running") return; // 非运行状态不处理出界
+
+    const b = frame(p.id);
+    if (!b) return;
+
+    // 数组整体替换（浅拷贝：原地修改不产生新引用，信号不传播）
+    const next = deps.balls().filter((item) => item.id !== b.dataId);
+    deps.balls(next);
+    if (next.length > 0) return;
+
+    deps.lives(deps.lives() - 1);
+    if (deps.lives() <= 0) {
+      deps.state("lose");
+      deps.lose({});
+    } else {
+      deps.state("ready");
+    }
+  });
+
+  // ── 发球：ready 且无球时，从挡板上方生成第一个球 ──────────
+  const launching = createEvent<LaunchPayload>((_p, frame) => {
+    const [paddleId] = paddlePool.ids;
+    if (!paddleId) return;
+    if (deps.state() !== "ready" || deps.balls().length > 0) return;
+
+    const p = frame(paddleId);
+    if (!p) return;
+    const angle = (Math.random() - 0.5) * (Math.PI / 3);
+
+    deps.balls([
+      ...deps.balls(),
+      createBall(
+        p.x + (p.w - BALL_SIZE) / 2,
+        p.y - BALL_SIZE - 2,
+        Math.sin(angle) * BALL_SPEED,
+        -Math.cos(angle) * BALL_SPEED,
+      ),
+    ]);
+    deps.state("running");
+  });
+
+  // ── 点击：运行中生成一个奖励球（多球玩法，演示声明式实体创建） ──
+  const clicking = createEvent<ClickPayload>((p) => {
+    if (deps.state() !== "running") return;
+
+    const angle = Math.random() * Math.PI * 2;
+    deps.balls([
+      ...deps.balls(),
+      createBall(p.x, p.y, Math.cos(angle) * BALL_SPEED, Math.sin(angle) * BALL_SPEED),
+    ]);
+  });
+
+  // ── 重开：重置全局状态 + 遍历砖块池恢复 enabled ──────────
+  const restarting = createEvent<RestartPayload>((_p, frame) => {
+    deps.balls([]);
+    deps.score(0);
+    deps.lives(LIVES);
+    deps.state("ready");
+    for (const id of brickPool.ids) {
+      // brickPool 与数据池同步（结构保证）；砖块从不销毁
+      frame(id)!.enabled = true;
+    }
+  });
 
   // emit：每个事件类型一个方法，绑定对应队列
   const emit = {
-    break: (p: BreakPayload) => breakQueue.push(p),
-    out: (p: OutPayload) => outQueue.push(p),
-    launch: (p: LaunchPayload) => launchQueue.push(p),
-    click: (p: ClickPayload) => clickQueue.push(p),
-    restart: (p: RestartPayload) => restartQueue.push(p),
+    break: breaking.emit,
+    out: outing.emit,
+    launch: launching.emit,
+    click: clicking.emit,
+    restart: restarting.emit,
   };
 
   // enter：实体进入接口——只进池，不提供数据（与 emit 对称）
   const enter = {
     // 挡板（供发球时读取位置）
-    paddle: ((id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      onMount(() => {
-        paddlePool.add(id);
-      });
-      onUnmount(() => {
-        paddlePool.delete(id);
-      });
-    }) as Enter<RuleEntity>,
+    paddle: paddlePool.enter,
     // 砖块（供重开时统一恢复 enabled）
-    brick: ((id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      onMount(() => {
-        brickPool.add(id);
-      });
-      onUnmount(() => {
-        brickPool.delete(id);
-      });
-    }) as Enter<RuleEntity>,
+    brick: brickPool.enter,
   };
 
   // 挡板跟随优化：方向不变时零写入（避免无谓信号传播）
   let lastDir = 0;
 
-  // update：挡板跟随（方向信号 → 挡板速度）+ 处理各队列（链式事件：处理中向 deps 发射）
+  // update：挡板跟随 + 按序消费各事件队列（顺序即原来的队列处理顺序）
   const update = (frame: FrameManager<T>) => {
-    const [paddleId] = paddlePool;
+    const [paddleId] = paddlePool.ids;
 
     // 挡板跟随：持续输入状态 → 实体数据（仅在变化时写入）
     const d = deps.dir();
@@ -162,103 +262,15 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
       lastDir = d;
     }
 
-    for (const e of breakQueue.splice(0)) onBreak(frame, e, deps);
-    for (const e of outQueue.splice(0)) onOut(frame, e, deps);
-    for (const _e of launchQueue.splice(0)) onLaunch(frame, paddleId, deps);
-    for (const e of clickQueue.splice(0)) onClick(e, deps);
-    for (const _e of restartQueue.splice(0)) onRestart(frame, brickPool, deps);
+    breaking.drain(frame);
+    outing.drain(frame);
+    launching.drain(frame);
+    clicking.drain(frame);
+    restarting.drain(frame);
   };
 
   return { enter, emit, update };
 }
-
-/** 击碎：禁用砖块 + 球加速 + 加分；分数满则胜利（链式发射 win） */
-function onBreak(frame: FrameManager<RuleEntity>, payload: BreakPayload, deps: RuleDeps) {
-  const b = frame(payload.id);
-  if (!b || !b.enabled) return; // 幂等：已被击碎（同帧多球撞击）
-
-  b.enabled = false;
-
-  // 撞击者：仅当仍在池中时才加速。事件 payload 里的 id 可能已被销毁
-  // （出界销毁发生在 onOut），因此这里必须显式判空。
-  const ball = frame(payload.by);
-  if (ball) {
-    ball.vx *= 1.02;
-    ball.vy *= 1.02;
-  }
-
-  // 全局状态（信号）：分数是事件处理的产物，不在实体中
-  deps.score(deps.score() + payload.points);
-  if (deps.score() >= MAX_SCORE && deps.state() !== "win") {
-    deps.state("win");
-    deps.win({});
-  }
-}
-
-/** 出界：按 dataId 声明式销毁该球；球全没则减命，生命耗尽失败（链式发射 lose） */
-function onOut(frame: FrameManager<RuleEntity>, payload: OutPayload, deps: RuleDeps) {
-  if (deps.state() !== "running") return; // 非运行状态不处理出界
-
-  const b = frame(payload.id);
-  if (!b) return;
-
-  // 数组整体替换（写时拷贝是浅拷贝：原地修改不产生新引用，信号不传播）
-  deps.balls(deps.balls().filter((item) => item.id !== b.dataId));
-  if (deps.balls().length === 0) {
-    deps.lives(deps.lives() - 1);
-    if (deps.lives() <= 0) {
-      deps.state("lose");
-      deps.lose({});
-    } else {
-      deps.state("ready");
-    }
-  }
-}
-
-/** 发球：ready 且无球时，从挡板上方生成第一个球 */
-function onLaunch(frame: FrameManager<RuleEntity>, paddleId: EntityId | undefined, deps: RuleDeps) {
-  if (!paddleId) return;
-  if (deps.state() !== "ready" || deps.balls().length > 0) return;
-
-  const p = frame(paddleId);
-  if (!p) return;
-  const angle = (Math.random() - 0.5) * (Math.PI / 3);
-
-  deps.balls([
-    ...deps.balls(),
-    createBall(
-      p.x + (p.w - BALL_SIZE) / 2,
-      p.y - BALL_SIZE - 2,
-      Math.sin(angle) * BALL_SPEED,
-      -Math.cos(angle) * BALL_SPEED,
-    ),
-  ]);
-  deps.state("running");
-}
-
-/** 点击：运行中生成一个奖励球（多球玩法，演示声明式实体创建） */
-function onClick(payload: ClickPayload, deps: RuleDeps) {
-  if (deps.state() !== "running") return;
-
-  const angle = Math.random() * Math.PI * 2;
-  deps.balls([
-    ...deps.balls(),
-    createBall(payload.x, payload.y, Math.cos(angle) * BALL_SPEED, Math.sin(angle) * BALL_SPEED),
-  ]);
-}
-
-/** 重开：重置全局状态 + 遍历砖块池恢复 enabled */
-function onRestart(frame: FrameManager<RuleEntity>, brickPool: Set<EntityId>, deps: RuleDeps) {
-  deps.balls([]);
-  deps.score(0);
-  deps.lives(LIVES);
-  deps.state("ready");
-  for (const id of brickPool) {
-    // brickPool 与数据池同步（结构保证）；砖块从不销毁
-    frame(id)!.enabled = true;
-  }
-}
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 音效系统（表现系统：事件驱动的副作用）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

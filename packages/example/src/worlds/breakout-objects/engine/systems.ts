@@ -1,6 +1,7 @@
 import { use, type Signal } from "kiaao";
 
 import type { EntityId, Enter, FrameManager } from "./index";
+import { createPool } from "./pool";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 系统字段需求
@@ -16,24 +17,14 @@ export type Bounded = Movable & { w: number; h: number };
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function createMovementSystem<T extends Movable = Movable>() {
-  // 移动池：每帧更新位置；静止池：保持不动，零帧写入开销
-  const movePool = new Set<EntityId>();
-  const staticPool = new Set<EntityId>();
+  // 只收移动实体：静止实体不入池，帧循环里根本不出现（零开销）
+  const pool = createPool<T>((s) => s.moving);
 
-  const enter: Enter<T> = (id, ctx, state) => {
-    const { onMount, onUnmount } = ctx;
-    onMount(() => {
-      (state.moving ? movePool : staticPool).add(id);
-    });
-    onUnmount(() => {
-      movePool.delete(id);
-      staticPool.delete(id);
-    });
-  };
+  const enter = pool.enter;
 
-  // update: 帧逻辑，只遍历移动池（静止池实体不参与帧写入）
+  // update: 帧逻辑，只遍历移动池
   const update = (frame: FrameManager<T>, delta: number) => {
-    for (const id of movePool) {
+    for (const id of pool.ids) {
       // 池与数据池由同一套 onMount/onUnmount 维护，同步是结构保证的
       const e = frame(id)!;
       e.x += e.vx * delta;
@@ -78,17 +69,8 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
   },
   routes?: BoundaryRoutes,
 ) {
-  const pool = new Set<EntityId>();
-
-  const enter: Enter<T> = (id, ctx) => {
-    const { onMount, onUnmount } = ctx;
-    onMount(() => {
-      pool.add(id);
-    });
-    onUnmount(() => {
-      pool.delete(id);
-    });
-  };
+  const pool = createPool<T>();
+  const enter = pool.enter;
 
   // 水平边处理：left / right（die 边由 update 提前拦截并报告事件）
   const applyHorizontal = (e: T, maxX: number) => {
@@ -160,7 +142,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
     const maxX = config?.width ?? window.innerWidth;
     const maxY = config?.height ?? window.innerHeight;
 
-    for (const id of pool) {
+    for (const id of pool.ids) {
       // 池与数据池同步（结构保证），故用断言；不存在时应当报错而非静默跳过
       const e = frame(id)!;
       if (!isOutOfBounds(e, maxX, maxY)) continue;
@@ -282,20 +264,14 @@ export type CollisionRoutes = {
  * 早期版本从 `e.bounds` 读尺寸，现在改读扁平字段（见 `BoundedEntity`）。
  */
 export function createCollisionSystem<T extends Collidable = Collidable>(routes?: CollisionRoutes) {
-  // 移动池 + 静止池：配对只发生在移动实体侧，静止×静止不检测
-  const movePool = new Set<EntityId>();
-  const staticPool = new Set<EntityId>();
+  // 两个池：只有移动×移动、移动×静止会配对（静止×静止不检测）
+  const movers = createPool<T>((s) => s.moving);
+  const statics = createPool<T>((s) => !s.moving);
 
-  const enter: Enter<T> = (id, ctx, state) => {
-    const { onMount, onUnmount } = ctx;
-    onMount(() => {
-      (state.moving ? movePool : staticPool).add(id);
-    });
-    onUnmount(() => {
-      movePool.delete(id);
-      staticPool.delete(id);
-    });
-  };
+  const enter = ((id, ctx, state) => {
+    movers.enter(id, ctx, state);
+    statics.enter(id, ctx, state);
+  }) as Enter<T>;
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
   const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
@@ -354,17 +330,17 @@ export function createCollisionSystem<T extends Collidable = Collidable>(routes?
 
   // update: 移动×移动去重配对 + 移动×静止全配对
   const update = (frame: FrameManager<T>) => {
-    const moves = Array.from(movePool);
-    const statics = Array.from(staticPool);
+    const moveIds = Array.from(movers.ids);
+    const staticIds = Array.from(statics.ids);
 
-    for (const [i, idA] of moves.entries()) {
-      for (const idB of moves.slice(i + 1)) {
+    for (const [i, idA] of moveIds.entries()) {
+      for (const idB of moveIds.slice(i + 1)) {
         resolve(frame, idA, idB, false);
       }
     }
 
-    for (const idA of moves) {
-      for (const idB of statics) {
+    for (const idA of moveIds) {
+      for (const idB of staticIds) {
         resolve(frame, idA, idB, true);
       }
     }
