@@ -43,5 +43,6 @@ export const { Router, Link, push, current, search } = createRouter({
     "bouncing-boxes": lazy(() => import("./worlds/bouncing-boxes/index.tsx")),
     "gravity-balls": lazy(() => import("./worlds/gravity-balls/index.tsx")),
     breakout: lazy(() => import("./worlds/breakout/index.tsx")),
+    "breakout-objects": lazy(() => import("./worlds/breakout-objects/breakout/index.tsx")),
   },
 });

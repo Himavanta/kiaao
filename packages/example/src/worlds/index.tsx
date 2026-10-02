@@ -29,6 +29,12 @@ const demos = [
     desc: "对照组实验：状态存在组件闭包、池里放带方法的对象。点击方块制造尸体，视野内的 NPC 会恐慌逃跑并传染给更远的人。与 ECS 版实现同一类玩法，用于比较两种模型的心智负担。",
     tags: ["actor 模型", "闭包状态", "恐慌传播", "实验"],
   },
+  {
+    path: "/breakout-objects",
+    title: "打砖块（对象池改写）",
+    desc: "breakout 的副本，改用「状态对象 + 池 + 帧末统一 flush」的写法：状态是可变的普通对象，方法直接 mutate，帧末浅拷贝进信号更新视图。与 ECS 版对照。",
+    tags: ["对象池", "帧末 flush", "对照实验"],
+  },
 ];
 
 export default function Worlds() {
