@@ -1,7 +1,7 @@
 import { type Context } from "kiaao";
 
 import { StyleMemo } from "../engine/directives";
-import { boundary, collision, define, movement, rules } from "./game-instance";
+import { boundary, collision, define, rules } from "./game-instance";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 砖块布局
@@ -70,11 +70,11 @@ type BrickProps = {
 function Brick({ data }: BrickProps, ctx: Context) {
   const { use } = ctx;
 
+  // 不注册 movement：砖块 x/y 恒定，注册进去只会进一个从不被读的池
   const entity = define(
     ctx,
-    movement.enter,
     boundary.enter,
-    collision.enter,
+    collision.enterStatic,
     rules.enter.brick,
   )({
     // 物理
@@ -82,7 +82,6 @@ function Brick({ data }: BrickProps, ctx: Context) {
     y: data.y,
     vx: 0,
     vy: 0,
-    moving: false,
     w: BRICK_W,
     h: BRICK_H,
     // 边界：全 pass（砖块不参与边界处理）

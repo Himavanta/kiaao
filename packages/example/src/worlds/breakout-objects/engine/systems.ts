@@ -7,8 +7,16 @@ import { createPool } from "./pool";
 // 系统字段需求
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 移动系统字段需求：位置、速度、池路由（moving 决定进哪个池） */
-export type Movable = { x: number; y: number; vx: number; vy: number; moving: boolean };
+/**
+ * 移动系统字段需求：位置与速度。
+ *
+ * 「谁被推进」不由字段决定——**注册了 `movement.enter` 的实体就会每帧被推进**。
+ *
+ * 早期这里有个 `driven` / `moving` 字段用于分池，但它把两件正交的事
+ * （「每帧推进位置」与「碰撞里是否为动体」）混成一个，导致挡板无法移动。
+ * 现在改由 `define(...)` 里列了哪个 enter 表达，字段取消。
+ */
+export type Movable = { x: number; y: number; vx: number; vy: number };
 /** 边界/碰撞系统字段需求：实体具备尺寸 */
 export type Bounded = Movable & { w: number; h: number };
 
@@ -17,12 +25,12 @@ export type Bounded = Movable & { w: number; h: number };
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function createMovementSystem<T extends Movable = Movable>() {
-  // 只收移动实体：静止实体不入池，帧循环里根本不出现（零开销）
-  const [movers, enter] = createPool<T>((s) => s.moving);
+  // 注册进本系统的实体每帧被推进（不注册的实体比如砖块，帧循环里根本不出现）
+  const [pool, enter] = createPool<T>();
 
-  // update: 帧逻辑，只遍历移动池
+  // update: 帧逻辑，遍历本池
   const update = (frame: FrameManager<T>, delta: number) => {
-    for (const id of movers) {
+    for (const id of pool) {
       // 池与数据池由同一套 onMount/onUnmount 维护，同步是结构保证的
       const e = frame(id)!;
       e.x += e.vx * delta;
@@ -262,13 +270,10 @@ export type CollisionRoutes = {
  */
 export function createCollisionSystem<T extends Collidable = Collidable>(routes?: CollisionRoutes) {
   // 两个池：只有移动×移动、移动×静止会配对（静止×静止不检测）
-  const [movers, enterMovers] = createPool<T>((s) => s.moving);
-  const [statics, enterStatics] = createPool<T>((s) => !s.moving);
-
-  const enter = ((id, ctx, state) => {
-    enterMovers(id, ctx, state);
-    enterStatics(id, ctx, state);
-  }) as Enter<T>;
+  // 「谁是动体」由调用处选了哪个 enter 决定——挡板用 static（它是被撞的障碍），
+  // 球用 mover。两者都注册 movement 推进位置，那是另一回事。
+  const [movers, enterMover] = createPool<T>();
+  const [statics, enterStatic] = createPool<T>();
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
   const resolve = (frame: FrameManager<T>, idA: EntityId, idB: EntityId, bStatic: boolean) => {
@@ -343,7 +348,7 @@ export function createCollisionSystem<T extends Collidable = Collidable>(routes?
     }
   };
 
-  return { enter, update };
+  return { enterMover, enterStatic, update };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

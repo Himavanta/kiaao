@@ -29,13 +29,12 @@ function Ball({ data }: BallProps, ctx: Context) {
     ctx,
     movement.enter,
     boundary.enter,
-    collision.enter,
+    collision.enterMover,
   )({
     x: data.x,
     y: data.y,
     vx: data.vx,
     vy: data.vy,
-    moving: true,
     w: BALL_SIZE,
     h: BALL_SIZE,
     // 四边：三边反弹、底边出界
@@ -84,13 +83,12 @@ function PaddleView(_: Record<string, never>, ctx: Context) {
     input.enter,
     movement.enter,
     boundary.enter,
-    collision.enter,
+    collision.enterStatic,
   )({
     x: (ARENA_W - PADDLE_W) / 2,
     y: ARENA_H - 48,
     vx: 0,
     vy: 0,
-    moving: false,
     w: PADDLE_W,
     h: PADDLE_H,
     // 四边：左右夹住、上下不参与

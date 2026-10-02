@@ -15,30 +15,25 @@
 import type { EntityId, Enter } from "./index";
 
 /**
- * 创建实体池。
+ * 创建实体池：收下所有登记到它的实体。
  *
  * ```ts
- * // 全部实体
  * const [pool, enter] = createPool<BoundedEntity>();
- *
- * // 只收移动的（`accept` 在**登记时**筛选，不入池的实体在帧循环里根本不出现）
- * const [movers, enterMovers] = createPool<Movable>((s) => s.moving);
- * const [statics, enterStatics] = createPool<Movable>((s) => !s.moving);
  *
  * // update 内：for (const id of pool) …
  * ```
  *
- * 返回 `[池, 登记函数]`：池用于遍历，登记函数交给 `define`。
+ * **没有筛选参数**。「哪个实体属于哪个池」由 `define(...)` 里列了哪个
+ * `enter` 决定——那是显式可见的；靠字段谓词筛选则是隐藏的（且只在登记时
+ * 求值一次，看起来像响应式其实不是）。
+ *
+ * 若同一类实体需要分成两组（如碰撞的动体 / 静止障碍），**建两个池、
+ * 导出两个 enter**，由调用处各取所需。
  */
-export function createPool<N = Record<string, unknown>>(
-  accept?: (state: N) => boolean,
-): [pool: Set<EntityId>, enter: Enter<N>] {
+export function createPool<N = Record<string, unknown>>(): [pool: Set<EntityId>, enter: Enter<N>] {
   const ids = new Set<EntityId>();
 
-  const enter: Enter<N> = (id, ctx, state) => {
-    // 不接受的实体根本不登记——既不进池，也不挂生命周期钩子
-    if (accept && !accept(state)) return;
-
+  const enter: Enter<N> = (id, ctx) => {
     ctx.onMount(() => {
       ids.add(id);
     });
