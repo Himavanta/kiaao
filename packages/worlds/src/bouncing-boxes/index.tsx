@@ -1,40 +1,19 @@
+import { createGame, StyleMemo } from "engine";
+import type { Enter } from "engine";
+import { createBoundarySystem, createCollisionSystem, createMovementSystem } from "engine/systems";
 import type { Context } from "kiaao";
-
-import { createGame } from "../engine";
-import { StyleMemo } from "../engine/directives";
-import {
-  createBoundarySystem,
-  createCollisionSystem,
-  createMovementSystem,
-  type Bounds,
-  type Shape,
-} from "../engine/systems";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1. 创建游戏实例
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 示例实体：结构由使用者自定义，取决于注册了哪些系统 */
-type BoxEntity = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  w: number;
-  h: number;
-  bounds: Bounds;
-  shape: Shape;
-  enabled: boolean;
-  breakable: boolean;
-  drive: number;
-  points: number;
-};
+const movement = createMovementSystem();
+const boundary = createBoundarySystem();
+const collision = createCollisionSystem();
 
-const movement = createMovementSystem<BoxEntity>();
-const boundary = createBoundarySystem<BoxEntity>();
-const collision = createCollisionSystem<BoxEntity>();
-
-const { useEntity } = createGame<BoxEntity>([movement.update, boundary.update, collision.update]);
+// 帧内执行顺序：移动 → 边界 → 碰撞
+const game = createGame([movement.update, boundary.update, collision.update]);
+const { define } = game;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 2. Box 组件
@@ -46,20 +25,40 @@ type BoxProps = {
   vx?: number;
   vy?: number;
   color: string;
-  /** 是否参与移动：false 时实体注册到静止池，保持不动（仍参与边界/碰撞） */
+  /** 是否参与移动：false 时静止不动（仍参与碰撞，作为静止障碍物） */
   moving?: boolean;
 };
 
 function Box({ x, y, vx, vy, color, moving = true }: BoxProps, ctx: Context) {
   const { use } = ctx;
 
-  // 所有实体统一注册三个系统；moving 参数决定进移动池还是静止池（移动/碰撞同步）
-  const entity = useEntity(
+  // 「谁进哪个池」由这里列了哪个 enter 决定：
+  // 静止盒子不注册 movement（每帧不被推进），但仍注册 boundary / collision
+  const enters: Enter<any>[] = moving
+    ? [movement.enter, boundary.enter, collision.enterMover]
+    : [boundary.enter, collision.enterStatic];
+
+  const entity = define(
     ctx,
-    movement.enter({ x, y, vx, vy, moving }),
-    boundary.enter({ w: 80, h: 80 }),
-    collision.enter({ moving }),
-  );
+    ...enters,
+  )({
+    x,
+    y,
+    vx: vx ?? 0,
+    vy: vy ?? 0,
+    w: 80,
+    h: 80,
+    // 四边反弹（默认行为）
+    left: "bounce",
+    right: "bounce",
+    top: "bounce",
+    bottom: "bounce",
+    shape: "rect",
+    enabled: true,
+    breakable: false,
+    drive: 0,
+    points: 0,
+  });
 
   return (
     <StyleMemo

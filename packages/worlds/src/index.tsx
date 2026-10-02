@@ -1,4 +1,4 @@
-import { Link } from "../router";
+import { Link } from "./router";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // worlds 入口页：demo 跳转卡片

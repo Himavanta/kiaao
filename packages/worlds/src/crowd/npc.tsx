@@ -9,9 +9,9 @@
 // 加一个行为要动 types.ts + system + instance + actor.tsx。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { StyleMemo } from "engine";
 import { type Context, type Signal } from "kiaao";
 
-import { StyleMemo } from "../engine/directives";
 import { advance, createInitialState, NPC_SIZE, type NpcState, type PeerSource } from "./behaviour";
 import { useGame } from "./use-game";
 

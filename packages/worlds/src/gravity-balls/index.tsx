@@ -1,47 +1,22 @@
+import { createGame, createPool, StyleMemo, type FrameManager } from "engine";
+import { createBoundarySystem, createCollisionSystem, createMovementSystem } from "engine/systems";
 import { Each, use, type Context } from "kiaao";
 
-import { createGame, type EntityId, type FrameManager } from "../engine";
-import { StyleMemo } from "../engine/directives";
-import {
-  createBoundarySystem,
-  createCollisionSystem,
-  createMovementSystem,
-  type Bounds,
-  type Movable,
-  type Shape,
-} from "../engine/systems";
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 1. 重力系统（world2 自定义系统示例）
+// 1. 重力系统（自定义系统示例）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /** 重力系统字段需求：实体具备受重力加速度 */
-type Gravitable = Movable & { gravity: number };
+type Gravitable = { vy: number; gravity: number };
 
 function createGravitySystem<T extends Gravitable = Gravitable>() {
-  const pool = new Set<EntityId>();
-
-  const enter = (props: { gravity?: number }) => {
-    return (id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      onMount(() => {
-        pool.add(id);
-      });
-      onUnmount(() => {
-        pool.delete(id);
-      });
-
-      // 返回数据切片
-      return { gravity: props.gravity ?? 500 };
-    };
-  };
+  const [pool, enter] = createPool<T>();
 
   // update: 帧逻辑，重力加速度作用于垂直速度
   const update = (frame: FrameManager<T>, delta: number) => {
     for (const id of pool) {
-      frame(id, (e) => {
-        e.vy += e.gravity * delta;
-      });
+      const e = frame(id)!;
+      e.vy += e.gravity * delta;
     }
   };
 
@@ -52,35 +27,14 @@ function createGravitySystem<T extends Gravitable = Gravitable>() {
 // 2. 创建游戏实例
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 弹球实体：复用基础系统 + 重力字段 */
-type BallEntity = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  w: number;
-  h: number;
-  gravity: number;
-  bounds: Bounds;
-  shape: Shape;
-  enabled: boolean;
-  breakable: boolean;
-  drive: number;
-  points: number;
-};
-
-const movement = createMovementSystem<BallEntity>();
-const boundary = createBoundarySystem<BallEntity>();
-const collision = createCollisionSystem<BallEntity>();
-const gravity = createGravitySystem<BallEntity>();
+const movement = createMovementSystem();
+const boundary = createBoundarySystem();
+const collision = createCollisionSystem();
+const gravity = createGravitySystem();
 
 // 帧内执行顺序：重力 → 移动 → 边界 → 碰撞
-const { useEntity } = createGame<BallEntity>([
-  gravity.update,
-  movement.update,
-  boundary.update,
-  collision.update,
-]);
+const game = createGame([gravity.update, movement.update, boundary.update, collision.update]);
+const { define } = game;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 3. 弹球组件
@@ -100,14 +54,33 @@ type BallProps = {
 function Ball({ x, y, vx, vy, size, color, gravity: accel, onRemove }: BallProps, ctx: Context) {
   const { use } = ctx;
 
-  // 复用基础系统 + 自定义重力系统；注册顺序决定帧内执行顺序（重力→移动→边界→碰撞）
-  const entity = useEntity(
+  // 复用基础系统 + 自定义重力系统
+  const entity = define(
     ctx,
-    movement.enter({ x, y, vx, vy }),
-    boundary.enter({ w: size, h: size }),
-    collision.enter({ moving: true, shape: "circle" }),
-    gravity.enter({ gravity: accel }),
-  );
+    movement.enter,
+    boundary.enter,
+    collision.enterMover,
+    gravity.enter,
+  )({
+    x,
+    y,
+    vx,
+    vy,
+    w: size,
+    h: size,
+    // 自重（自定义字段：基础系统不认识它）
+    gravity: accel ?? 500,
+    // 四边反弹
+    left: "bounce",
+    right: "bounce",
+    top: "bounce",
+    bottom: "bounce",
+    shape: "circle",
+    enabled: true,
+    breakable: false,
+    drive: 0,
+    points: 0,
+  });
 
   return (
     <StyleMemo
@@ -139,13 +112,28 @@ type BlockProps = {
 function Block({ x, y, size, color }: BlockProps, ctx: Context) {
   const { use } = ctx;
 
-  // 静止实体：注册到移动/碰撞的静止池，参与碰撞但不移动
-  const entity = useEntity(
+  // 静止实体：不注册 movement（不被推进），在碰撞里作为静止障碍
+  const entity = define(
     ctx,
-    movement.enter({ x, y, moving: false }),
-    boundary.enter({ w: size, h: size }),
-    collision.enter({ moving: false }),
-  );
+    boundary.enter,
+    collision.enterStatic,
+  )({
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    w: size,
+    h: size,
+    left: "bounce",
+    right: "bounce",
+    top: "bounce",
+    bottom: "bounce",
+    shape: "rect",
+    enabled: true,
+    breakable: false,
+    drive: 0,
+    points: 0,
+  });
 
   return (
     <StyleMemo
@@ -202,7 +190,7 @@ export default function App() {
     randomBall(4),
     randomBall(5),
   ]);
-  let nextId = 4;
+  let nextId = 6;
 
   const addBall = () => {
     balls([...balls(), randomBall(nextId++)]);

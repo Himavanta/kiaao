@@ -17,10 +17,10 @@ export const { Router, Link, push, current } = createRouter({
   },
   routes: {
     "": ({ RouterView }) => RouterView,
-    worlds: lazy(() => import("./worlds/index.tsx")),
-    "bouncing-boxes": lazy(() => import("./worlds/bouncing-boxes/index.tsx")),
-    "gravity-balls": lazy(() => import("./worlds/gravity-balls/index.tsx")),
-    breakout: lazy(() => import("./worlds/breakout/index.tsx")),
-    crowd: lazy(() => import("./worlds/crowd/index.tsx")),
+    worlds: lazy(() => import("./index.tsx")),
+    "bouncing-boxes": lazy(() => import("./bouncing-boxes/index.tsx")),
+    "gravity-balls": lazy(() => import("./gravity-balls/index.tsx")),
+    breakout: lazy(() => import("./breakout/index.tsx")),
+    crowd: lazy(() => import("./crowd/index.tsx")),
   },
 });
