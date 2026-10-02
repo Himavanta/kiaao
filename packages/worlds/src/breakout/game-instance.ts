@@ -21,7 +21,6 @@ import {
   ARENA_H,
   ARENA_W,
   createRuleSystem,
-  createSoundSystem,
   LIVES,
   type BallData,
   type GameState,
@@ -42,14 +41,16 @@ export const gameState = {
 };
 
 // ── 音效播放器：惰性装配（loadAssets 异步完成，首次播放时已就绪）──
-
+//
+// 音效**不是系统**：它不读写实体、不参与帧流水线，只是事件发生的副作用。
+// 直接由触发方调用。
+//
+// 代价：同帧多次触发会叠播（实测：球卡在两砖之间时会同帧击碎两块）。
+// 若爆音明显，可在 play 里按音效名加时间窗去重（常见做法），
+// 比“队列 + 帧末合并”更通用——后者只能合并到帧粒度。
 const play = (name: SoundName) => {
   void loadAssets().then((assets) => assets.play(name));
 };
-
-// ── 系统实例（模块级，按依赖顺序创建：audio → input → rules）──
-
-export const audio = createSoundSystem(play);
 
 // 输入系统（源系统）：键盘路由表 + 持续状态信号（方向键 → input.dir）
 export const input = createInputSystem({
@@ -69,12 +70,13 @@ export const input = createInputSystem({
   },
 });
 
-// 规则系统（事件系统：内部闭包队列，update 中处理）+ 音效系统路由
+// 规则系统（事件系统：内部闭包队列，update 中处理）
+// 终局音效直接播——win / lose 自带幂等守卫（`state !== "win"`），只会发一次
 export const rules = createRuleSystem<RuleEntity>({
   ...gameState, // 全局状态信号注入（事件处理的产物）
   dir: input.dir,
-  win: (p) => audio.emit.win(p),
-  lose: (p) => audio.emit.lose(p),
+  win: () => play("win"),
+  lose: () => play("lose"),
 });
 
 // 各系统自己声明需要的字段（见 engine/systems.ts 的 Movable / BoundedEntity /
@@ -87,15 +89,14 @@ export const boundary = createBoundarySystem(
 export const collision = createCollisionSystem({
   onBreak: (p) => {
     rules.emit.break(p);
-    audio.emit.break(p);
+    play("hit");
   },
-  onBounce: (p) => audio.emit.bounce(p),
+  onBounce: () => play("paddle"),
 });
 
 // ── 游戏实例（模块级，autostart: false——运行窗口由 Game 组件控制）──
 
-export const game = createGame(
-  [movement.update, boundary.update, collision.update, rules.update, audio.update],
-  { autostart: false },
-);
+export const game = createGame([movement.update, boundary.update, collision.update, rules.update], {
+  autostart: false,
+});
 export const { define } = game;

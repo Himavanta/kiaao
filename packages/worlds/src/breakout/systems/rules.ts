@@ -2,8 +2,6 @@ import type { EntityId, FrameManager } from "engine";
 import { createEvent, createPool } from "engine";
 import { type Signal } from "kiaao";
 
-import type { SoundName } from "../assets";
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 打砖块实体字段
 //
@@ -237,43 +235,4 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   };
 
   return { enter, emit, update };
-}
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 音效系统（表现系统：事件驱动的副作用）
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-/** 表现系统：闭包队列 + emit 方法，update 中匹配播放音效（纯副作用，不修改数据） */
-export function createSoundSystem(play: (name: SoundName) => void) {
-  const hitQueue: BreakPayload[] = [];
-  const paddleQueue: BouncePayload[] = [];
-  const winQueue: WinPayload[] = [];
-  const loseQueue: LosePayload[] = [];
-
-  const emit = {
-    break: (p: BreakPayload) => hitQueue.push(p),
-    bounce: (p: BouncePayload) => paddleQueue.push(p),
-    win: (p: WinPayload) => winQueue.push(p),
-    lose: (p: LosePayload) => loseQueue.push(p),
-  };
-
-  const update = () => {
-    if (hitQueue.length > 0) {
-      hitQueue.length = 0;
-      play("hit");
-    }
-    if (paddleQueue.length > 0) {
-      paddleQueue.length = 0;
-      play("paddle");
-    }
-    if (winQueue.length > 0) {
-      winQueue.length = 0;
-      play("win");
-    }
-    if (loseQueue.length > 0) {
-      loseQueue.length = 0;
-      play("lose");
-    }
-  };
-
-  return { emit, update };
 }
