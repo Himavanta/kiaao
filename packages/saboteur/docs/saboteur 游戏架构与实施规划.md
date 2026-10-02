@@ -1,8 +1,8 @@
 # saboteur 游戏架构与实施规划
 
-**状态：** 定稿（决策已全部确认，见第八节）
-**最后更新：** 2026-09-28
-**关联：** `packages/saboteur/`；引擎原型 `packages/example/src/worlds/`
+**状态：** 定稿（决策已全部确认，见第八节）；**引擎已于 2026-10-02 迁至 `packages/engine`**
+**最后更新：** 2026-10-02
+**关联：** `packages/saboteur/`；引擎 `packages/engine/`；迁移记录 `saboteur 引擎迁移：切换到 engine 包.md`
 **读者行为：** 定位查找——本文按条目组织架构决策与里程碑，实施时逐条对照
 
 > **声明**：本文代码块均为示意伪代码，用于说明结构与设计意图，不是可直接运行的实现。具体实现由开发者根据实际需求决定。
@@ -43,13 +43,17 @@
 
 **理由**：「看起来像那个游戏」需要的是关卡设计与数值调参，不是代码量。切片的目的是把系统跑通并可验证，把调参留给后续。范围一旦铺开，会死在内容而非架构上。
 
-### 1.3 与 example 的关系
+### 1.3 与共享引擎包的关系
 
-`example` 中的 `worlds/engine/` 是引擎原型，包含 `createGame` / `useEntity` / `FrameManager` 三个薄抽象（约 170 行）。saboteur **不复用、不抽取共享包**，自行实现一套。
+初版规划的结论是「**不复用、不抽取共享包**」——理由是引擎层与 breakout 共用的只有 `createGame` / `useEntity` / `FrameManager` 三个薄抽象，而系统实现几乎无交集，约 170 行重复可接受，换两套引擎形态互不制约。
 
-判定依据是重叠面：引擎层与 breakout 共用的只有这三个抽象，而同名系统的实现几乎无交集——breakout 是「移动 + 边界 + 形状碰撞」，saboteur 是「网格 + 视线 + 寻路」。共享收益低于耦合成本。
+**该结论已于 2026-10-02 推翻**（见 `saboteur 引擎迁移：切换到 engine 包.md`）。前提变了：
 
-代价是约 170 行重复代码，可接受；换到的是两套引擎形态互不制约，canonical 版本可以各自演进。
+- 引擎被抽成独立包 `packages/engine`，不再内嵌于 breakout demo
+- `define` 改造完成（数据归组件、系统只声明参与），验证了 `Enter<Need>` 幻影类型 + 交集检查
+- `createPool` / `createEvent` 泛化并移入 engine 包
+
+于是重复的 260 行不再换来「两套形态互不制约」，只换来两处要同步维护的 bug——事实上已经发生：为帧内 `stop` 补的 `inFrame` 守卫在新引擎里丢失了。现在 saboteur **直接使用 `packages/engine`**，自带的 `src/engine/` 已删除。
 
 ---
 
@@ -57,12 +61,12 @@
 
 ### 2.1 四层划分
 
-| 层        | 职责                                     | 是否依赖 kiaao |
-| --------- | ---------------------------------------- | -------------- |
-| `engine/` | 帧循环、实体池、`useEntity`、`StyleMemo` | 是             |
-| `world/`  | 网格、视线、寻路、几何、关卡数据         | **否**         |
-| `game/`   | 系统实现、实体结构、全局状态、组装、视图 | 是             |
-| `ui/`     | HUD、覆盖层、菜单                        | 是             |
+| 层                | 职责                                                    | 是否依赖 kiaao |
+| ----------------- | ------------------------------------------------------- | -------------- |
+| `packages/engine` | 帧循环、实体注册（`define`）、实体池、`StyleMemo`       | 是             |
+| `saboteur/world/` | 网格、视线、寻路、几何、关卡数据                        | **否**         |
+| `saboteur/game/`  | 系统实现、实体结构、全局状态、组装、视图                | 是             |
+| `saboteur/ui/`    | HUD、覆盖层、菜单（实际落在 `game/views/`，单列无意义） | 是             |
 
 ### 2.2 边界规则
 
@@ -89,11 +93,7 @@ packages/saboteur/src/
 ├── app.module.scss
 ├── styles/
 │   └── global.scss             # CSS 变量、reset、字体（全局，非 Module）
-├── engine/                     # 游戏引擎（与玩法无关）
-│   ├── index.ts                # 入口再导出
-│   ├── types.ts                # EntityId / EntitySignal / FrameManager / Update
-│   ├── game.ts                 # createGame：帧循环 + 实体池 + useEntity
-│   └── directives.tsx          # StyleMemo
+├── engine/                     # （已删除）引擎已迁至 packages/engine
 ├── world/                      # 纯逻辑：零 kiaao 依赖、零 DOM
 │   ├── index.ts                # 入口再导出
 │   ├── geometry.ts             # TILE 尺度、Rect、Vec2、距离与角度
@@ -109,7 +109,7 @@ packages/saboteur/src/
 │       └── manor.ts            # 关卡数据（含目标与时限）
 ├── game/                       # 玩法层
 │   ├── config.ts               # 视口规则、采样间隔
-│   ├── types.ts                # ActorEntity（各系统切片合并）
+│   ├── types.ts                # ActorEntity（注册注解类型，见 5.2）
 │   ├── state.ts                # 游戏状态与全局注册表（Phase / 计数 / 视图开关）
 │   ├── instance.ts             # 模块级单例：系统 + 实例 + 重开
 │   ├── systems/
@@ -143,27 +143,29 @@ packages/saboteur/src/
 - `game/views/actors.tsx` → `actor.tsx`（单数，一文件一组件）；新增 `camera.ts` / `prop.tsx` / `result.tsx` / `paint.ts` / `vision.ts`。
 - 初版设想的 `ui/hud.tsx` 取消：HUD 也是 `game/views/` 下的一个视图，单列一层没有意义。
 - `game/systems/` 新增 `rules.ts`（胜负与时限）与 `frame.ts`（帧统计），这是流水线两端的必需品。
+- **`engine/` 整层已删除**（2026-10-02）：改用 `packages/engine`。系统的 `enter` 不再提供数据，改为各自声明 `Enter<Need>` 并导出 `spawn()` 纯函数。
+- **`views/__tests__/` 保留**：`paint.test.ts` 测的是纯计算，不受引擎迁移影响。
 
 ---
 
 ## 四、关键设计决策
 
-| 决策点         | 结论                                 | 依据                           |
-| -------------- | ------------------------------------ | ------------------------------ |
-| 静态几何载体   | 网格位图，非实体                     | 避免 O(移动×静止) 配对         |
-| 静态层渲染     | canvas 预绘制                        | 640 个 DOM 节点换 1 个         |
-| 感知系统频率   | 定频 ~10Hz，非每帧                   | 视线判定是最贵的一环           |
-| 相机位置       | 单点更新容器，不进实体派生           | 相机一动不该触发全部重算       |
-| 关卡数据       | ASCII 地图 + 图例                    | 关卡迭代速度是核心             |
-| 实体结构       | 各系统切片合并（`useEntity`）        | 沿用 example 已验证形态        |
-| 系统间连接     | 组装层注入引用（`setIntent` / 回调） | 沿用 v3 路由形态               |
-| 实例形态       | 模块级单例，组件只管运行窗口         | 大代码量下的组织效率           |
-| 重开机制       | 递增局号触发声明式重建               | 池随实体自然重建，不用 dispose |
-| 输入方式       | 全键盘，无鼠标                       | 消掉坐标换算与拾取判定         |
-| 移动方向       | 4 向                                 | 无斜向穿墙问题                 |
-| 朝向           | 等于最后移动方向                     | 交互与感知共用，无额外按键     |
-| 恐慌传播       | 复用感知系统，不建传播表             | 恐慌者被看见即传染             |
-| 「去哪」的决策 | 全部集中在 `navigation`              | 行为切换只改状态，不碰路径     |
+| 决策点         | 结论                                       | 依据                                    |
+| -------------- | ------------------------------------------ | --------------------------------------- |
+| 静态几何载体   | 网格位图，非实体                           | 避免 O(移动×静止) 配对                  |
+| 静态层渲染     | canvas 预绘制                              | 640 个 DOM 节点换 1 个                  |
+| 感知系统频率   | 定频 ~10Hz，非每帧                         | 视线判定是最贵的一环                    |
+| 相机位置       | 单点更新容器，不进实体派生                 | 相机一动不该触发全部重算                |
+| 关卡数据       | ASCII 地图 + 图例                          | 关卡迭代速度是核心                      |
+| 实体结构       | 各系统自声明 `Enter<Need>`，数据由视图写全 | 编译期字段检查，无 `Object.assign` 拼接 |
+| 系统间连接     | 组装层注入引用（`setIntent` / 回调）       | 沿用 v3 路由形态                        |
+| 实例形态       | 模块级单例，组件只管运行窗口               | 大代码量下的组织效率                    |
+| 重开机制       | 递增局号触发声明式重建                     | 池随实体自然重建，不用 dispose          |
+| 输入方式       | 全键盘，无鼠标                             | 消掉坐标换算与拾取判定                  |
+| 移动方向       | 4 向                                       | 无斜向穿墙问题                          |
+| 朝向           | 等于最后移动方向                           | 交互与感知共用，无额外按键              |
+| 恐慌传播       | 复用感知系统，不建传播表                   | 恐慌者被看见即传染                      |
+| 「去哪」的决策 | 全部集中在 `navigation`                    | 行为切换只改状态，不碰路径              |
 
 ### 4.1 静态几何用网格，不用实体
 
@@ -264,16 +266,19 @@ const update = (frame: FrameManager<T>, delta: number) => {
 落地形态是**递增局号**（初版设想的是「替换实体数组信号」）：
 
 ```ts
-// game/instance.ts —— 重置 = 递增局号 + 状态归零
+// game/instance.ts —— 重置 = 递增局号 + 状态归零 + 重启帧循环
 export const runId = use(0);
 
 function restartRun(): void {
-  stop(); // 重建期间不跑帧
+  stop(); // 重建期间不跑帧（否则读到半旧的实体状态）
   alarm.reset();
   resetGameState(level.objective.timeLimit);
-  runId(runId() + 1); // 递增 → 全部实体 key 变化
+  runId(runId() + 1); // 递增 → 全部实体 key 变化（同步完成）
+  start(); // 必须在最后：帧循环不会因组件重建而自动恢复
 }
 ```
+
+**`start()` 不能省**（既有缺陷，2026-10-02 修复）：初版以为「组件重建时会 `start`」，但 `start()` 只在根组件 `onMount` 时执行一次，而递增 `runId` 只重建 `Each` 的子项——画面会冻在终局那一帧。详见迁移文档 §3.2。
 
 角色与道具由 `Each` 渲染，key 里含局号：
 
@@ -282,6 +287,8 @@ function restartRun(): void {
 ```
 
 局号变化 → 全部 key 变化 → 框架卸载旧条目、挂载新条目。实体池随 `onUnmount` 清空、`enter` 重新执行给出全新初始状态。**不需要 `dispose`**——它的语义是「清空池、一去不回」，没有恢复入口。
+
+> **「`enter` 重新执行」的含义在 2026-10-02 迁移后变了**：现在是 `define(ctx, ...enters)(state)` 重新执行——`enter` 只负责把新实体登记进各系统的池，字段初值由视图的 `state` 字面量（各系统的 `spawn()`）给出。
 
 **为什么不用「替换数组信号」**：那要求维护一份出生数据并在重置时重建它，而地图数据已经存在于 `level` 中；递增一个计数器更简单，也不会让两份数据不同步。
 
@@ -327,79 +334,126 @@ function targetAhead(facing: Facing, pos: Vec2): Vec2 {
 
 `createGame` 的参数顺序即执行顺序，按数据依赖排列。以下为**实际落地**的顺序：
 
-| 顺序 | 系统          | 职责                                       | 池              | 频率           |
-| ---- | ------------- | ------------------------------------------ | --------------- | -------------- |
-| —    | `input`       | 键盘事件 → 意图信号（源系统，无 update）   | —               | 事件驱动       |
-| 1    | `interaction` | 拾取 / 下药 / 中毒倒计时 / 死亡 + 击杀计数 | 角色池 / 道具池 | 每帧           |
-| 2    | `behaviour`   | NPC 状态机：闲游 / 驻足 / 恐慌             | 客人池          | 每帧           |
-| 3    | `navigation`  | 目标选择 + A* 重算 + 路径推进 + 看门狗     | 需寻路池        | 每帧（含节流） |
-| 4    | `locomotion`  | 沿路径移动 + 网格碰撞 + 朝向更新           | 移动池          | 每帧           |
-| 5    | `perception`  | 视线判定（定频 ~10Hz）                     | 感知池          | 定频           |
-| 6    | `alarm`       | 目击 → 恐慌 → 传播 → 报警                  | 客人池          | 每帧           |
-| 7    | `rules`       | 胜负判定、时限递减、终局停止               | —               | 每帧           |
-| 8    | `frame`       | 帧计数与帧率（调试）                       | —               | 每帧           |
+| 顺序 | 系统          | 职责                                           | 池              | 频率     |
+| ---- | ------------- | ---------------------------------------------- | --------------- | -------- |
+| —    | `input`       | 键盘事件 → 意图信号（源系统，无 update）       | —               | 事件驱动 |
+| 1    | `interaction` | 拾取 / 下药 / 中毒倒计时 / 死亡 + 击杀计数     | 角色池 / 道具池 | 每帧     |
+| 2    | `behaviour`   | NPC 状态机：闲游 / 驻足 / 恐慌（驱动导航服务） | 客人池          | 每帧     |
+| 3    | `locomotion`  | 沿路径移动 + 网格碰撞 + 朝向更新               | 移动池          | 每帧     |
+| 4    | `perception`  | 视线判定（定频 ~10Hz）                         | 感知池          | 定频     |
+| 5    | `alarm`       | 目击 → 恐慌 → 传播 → 报警                      | 客人池          | 每帧     |
+| 6    | `rules`       | 胜负判定、时限递减、终局停止                   | —               | 每帧     |
+| 7    | `frame`       | 帧计数与帧率（调试）                           | —               | 每帧     |
+
+**`navigation` 不在流水线里**——它是**服务**而非系统（无 `enter`、无池、无 `update`）。`behaviour` 驱动状态对象，状态通过导航服务算路径，因此「决策 + 规划 + 推进」都发生在 `behaviour.update` 内。这是 2026-09-30「恐慌 → 状态对象」重构的结果（`c9b1dfc`）。
 
 **顺序依据**（三个必须的先后关系）：
 
-- **`behaviour` 先于 `navigation`**：后者按 `mood` 分派目标选择策略（恐慌者反向逃跑），必须读到本帧已更新过的状态。反过来会把行为切换晚一帧生效。
 - **`perception` 在 `locomotion` 之后**：保证判定的是本帧的位置；若放在之前，会出现「已经走到眼前但看不见」的时序错觉。
+- **`alarm` 紧跟在 `perception` 之后**：它消费本轮的 `visibleIds` 产生恐慌。
 - **`rules` 在最后**：它读本轮结束时的击杀数与警报值判终局，放前面会用上一帧的数据。
 
-**与初版规划的两处差异**：初版把 `navigation` 排在 `behaviour` 之前（实际是反的，原因见上）；初版的 `audio` 系统未实现（属 M8）。
+**与初版规划的两处差异**：初版把 `navigation` 列为流水线一员（现已退化为服务）；初版的 `audio` 系统未实现（属 M8）。
 
 ### 5.2 实体结构
 
-各系统通过 `enter` 贡献自己的数据切片，`useEntity` 合并为完整实体。以下是**实际落地**的结构（每个字段标注写者——谁写它必须唯一且明确）：
+**实体形态自 2026-10-02 迁移后一直是：各系统各自声明 `Enter<Need>`，数据由视图的 `state` 字面量写全**（旧版的「系统切片 + `useEntity` 合并」已废弃）。
+
+`ActorEntity` 仍保留，但**角色变了**（D1）：它不再作为「注册契约」（那个职责已下发给各系统的 `Enter<Need>`），而是作为
+
+- **注册表与调试层的共享类型**——`playerEntity` / `listActors()` 需要它（`Signal` 在 TS 里不变，没有这个共享类型会很难表达）
+- **字段与写者的文档**——每个字段仍标注【谁写】，保持单一写者纪律
+
+以下是实际落地的字段与写者（每个字段的【写者】必须在帧循环里唯一）：
 
 ```ts
-// game/types.ts
+// game/types.ts — 分组即「谁写」（不是「谁的切片」：数据已不来自系统）
 type ActorEntity = {
-  // locomotion 切片
+  // 【locomotion 写】位置与速度
   x: number;
   y: number; // 世界坐标（左上角）
   speed: number;
   sneakFactor: number; // 速度与潜行倍率
   sneaking: boolean;
 
-  // navigation 切片
+  // 【behaviour 写】行为与路径（navigation 是服务，无 enter，由驱动者负责初值）
   path: Cell[]; // 待走的格序列；空表示已到达或未规划
   goal: Cell | null; // 当前目标格
   idleLeft: number; // 剩余驻足时间
   followTime: number; // 距上次路径推进的时长（看门狗用）
 
-  // perception 切片
+  // 【perception 写】视锥与结果栅
   sightRange: number;
   sightArc: number;
   visibleIds: EntityId[]; // 本轮能看见谁
 
-  // behaviour 切片
+  // 【behaviour 写】行为状态
   mood: Mood; // wander / linger / panic
   moodLeft: number;
 
-  // alarm 切片
+  // 【alarm 写】目击记忆与逃跑参照
   witnessed: boolean; // 是否目击过异常（永久）
   fleeFrom: Cell | null;
 
-  // interaction 切片
+  // 【interaction 写】持有、死亡与中毒
   held: ItemKind | null;
   dead: boolean; // 尸体
   poisonLeft: number | null; // 中毒剩余存活时间
 
-  // 跨系统共享
+  // 【locomotion 写】跨系统共享：交互与感知都读它
   facing: Facing;
 
-  // 身份切片
+  // 【注册时定】身份
   role: Role; // player / guest
 };
 ```
 
-**`facing` 刻意不归入任何切片。** 它由 `locomotion` 写入，被 `interaction` 与 `perception` 读取，还被渲染层用于镜像翻转。放进某个系统的切片会造成所有权错觉——谁写它、谁读它，应当在类型定义上就分开。
+**`facing` 刻意不归入任何系统。** 它由 `locomotion` 写入，被 `interaction` 与 `perception` 读取，还被渲染层用于镜像翻转。归入某个系统的字段需求会造成所有权错觉——谁写它、谁读它，应当在类型定义上就分开。
 
-**`dead` 由多个系统读取，但写者只有 `interaction`**。尸体必须留在场景里被看见（M6 的目击输入），所以不能从池中移除；改由 `navigation` / `behaviour` / `locomotion` / `perception` 各自判 `dead` 早退。这是「一个字段、多个读者」的合理用法。
+**`dead` 由多个系统读取，但写者只有 `interaction`**。尸体必须留在场景里被看见（M6 的目击输入），所以不能从池中移除；改由 `locomotion` / `behaviour` / `perception` / `alarm` 各自判 `dead` 早退。这是「一个字段、多个读者」的合理用法。
 
 **静态池纪律**：不动的实体（待机 NPC、尸体、未使用的道具）绝不写帧数据。理由见第六节——实体信号每次提交都是新对象引用，写入即触发下游派生重算。
 
-**异形实体**：道具（酒瓶）不是角色，有自己的形状（`PropEntity`）。`useEntity` 的泛型可显式指定（`useEntity<PropEntity>(...)`）以容纳。
+**异形实体**：道具（酒瓶）不是角色，有自己的形状（`PropEntity`）。同一个 `define` 可以容纳两种形态（`Prop` 组件传 `interaction.enterProp` 与 `spawnProp`）。
+
+**各系统的字段需求（`Enter<Need>`）**：
+
+| 系统        | 需要字段                                                                  |
+| :---------- | :------------------------------------------------------------------------ |
+| locomotion  | `x y speed sneakFactor sneaking facing role dead`                         |
+| perception  | `x y facing dead visibleIds`                                              |
+| behaviour   | `mood moodLeft path goal idleLeft followTime witnessed fleeFrom dead x y` |
+| alarm       | `dead witnessed fleeFrom visibleIds x y`（注册时读 `role`）               |
+| interaction | `x y facing dead held poisonLeft path goal`                               |
+| frame       | 无（`Record<string, unknown>`）                                           |
+
+`define` 把它们求交集作为 `state` 的必填项——**漏写任一个就在调用处报错**，这是旧 `Object.assign` 拼接没有的编译期保护。
+
+**初值的产出方式**：各系统导出 `spawn()` 纯函数（不接触 `ctx`、不迸池），视图负责组合：
+
+```tsx
+// game/views/actor.tsx
+const state: ActorEntity = {
+  ...locomotion.spawn(speedProps(col, row, role, facing)),
+  ...perception.spawn(),
+  ...interaction.spawn(),
+  ...alarm.spawn(),
+  ...behaviour.spawn(),
+  role,
+};
+const entity = define(ctx, ...enters)(state);
+```
+
+这不是「系统提供数据」的回潮：`enter` 只进池，`spawn` 只算初值，两者职责分明。「初值怎么算」留在最清楚它的系统侧（如 `behaviour.spawn` 需要掷 `moodLeft` 的随机时长），视图只负责组合与渲染。
+
+**行为字段两类角色都给**（实体形态统一）：玩家也写 `mood` / `path`，但因为没有注册 `behaviour.enter`，这些字段永不被读写。谁跑状态机由「注册了哪个 `enter`」决定，而非由字段有无决定。
+
+**信号的两个视图**（迁移时补的）：`define` 返回的 `EntitySignal<T>` 上挂了 `state`，指向系统读写的**同一活对象**。
+
+- `entity()` 读渲染快照（帧末由 `flush` 提交，驱动 DOM）
+- `entity.state` 是活对象，**需要写入实体时必须用它**（写信号会被下一帧 `flush` 覆盖）
+
+帧循环内一律用 `frame(id)` 拿到同一个活对象，改它即改数据。旧的 `frame(id, fn)` 写时拷贝形式已不存在（本项目 11 处调用点已全部清空）。
 
 ### 5.3 全局状态
 
@@ -408,18 +462,21 @@ type ActorEntity = {
 ```ts
 // game/state.ts
 export const gameState = {
-  /** 实体目录（声明式生灭的数据源：Each 订阅，重置时整体替换） */
-  actors: use<ActorSpawn[]>([]),
   phase: use<Phase>("playing"),
-  alarm: use(0),
+  /** 已达成的击杀数 */
   kills: use(0),
-  timeLeft: use(120),
+  /** 剩余时间（秒） */
+  timeLeft: use(0),
+  /** 本局耗时（秒），结算展示用 */
+  elapsed: use(0),
 };
 ```
 
 判定尺子沿用 ECS 文档 5.3：**有位置、参与帧循环的才是实体；其余是信号**。
 
-**`actors` 是 4.6 重置机制的枢轴**：它不是实体本身，而是实体的**出生目录**（同 breakout 的 `balls`）。重置时替换整个数组，`Each` 按 keyed 差异卸载旧实体、挂载新实体，`enter` 重新执行完成系统池重建。
+**出生目录不在 `gameState` 里。** 初版规划把它列入，实际落在 `app.tsx` 的 `useSpawns(ctx, runId)`——因为它的数据源是**关卡**（`level.playerSpawn` / `npcSpawns` / `propSpawns`），而关卡只在 `instance.ts` 解析一次。把它放进 `gameState` 会让「游戏状态」反向依赖关卡数据。
+
+**`runId` 才是重置机制的枢轴**（4.6）：递增它 → `useSpawns` 重算 → 丙出新的 `run` → `Each` 的 key 全部变化 → 卸载旧的、挂载新的 → 实体池随 `onUnmount` / `onMount` 自然重建。
 
 ---
 
@@ -585,13 +642,14 @@ canvas 预绘制。
 
 ## 附：参考
 
-- 引擎原型与已验证形态：`packages/example/src/worlds/`（尤其 `breakout/` 的组装层与 `engine/` 的系统形态）
+- 引擎与已验证形态：`packages/engine/`（机制）+ `packages/worlds/src/breakout/`（系统组装与视图的参考实现）
 - ECS 设计依据：`docs/game/Kiaao ECS 框架设计文档.md`（系统形态、事件机制、实体归属、全局状态判定尺子）
 - 样式方案依据：`docs/game/游戏示例 style 细粒度更新方案探索.md`（方案 D：StyleMemo 指令 + memo 语义）
+- 数据归组件的依据：`packages/worlds/docs/define 改造：数据归组件、系统只声明参与.md`
 
 ---
 
-_本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 全部确认；M0–M7 已实施完毕，实际落地形态以第十一节为准；当前状态与调参参考见第十二节。_
+_本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 全部确认；M0–M7 已实施完毕，实际落地形态以第十一节为准（含 2026-10-02 的引擎迁移）；当前状态与调参参考见第十二节。_
 
 ---
 
@@ -603,15 +661,15 @@ _本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 
 
 **交付**：
 
-| 模块                    | 内容                                                    |
-| ----------------------- | ------------------------------------------------------- |
-| `engine/types.ts`       | `EntityId` / `EntitySignal` / `FrameManager` / `Update` |
-| `engine/game.ts`        | `createGame`（拆为帧缓冲 / 帧循环 / 实体注册三块）      |
-| `engine/directives.tsx` | `StyleMemo`                                             |
-| `game/config.ts`        | 尺寸常量（与 `global.scss` 的 CSS 变量互为镜像）        |
-| `game/instance.ts`      | 模块级单例组装层                                        |
-| `game/views/stage.tsx`  | 相机跟随（夹在世界边界内）+ 世界层平移                  |
-| `game/views/debug.tsx`  | 帧率与实体计数面板                                      |
+| 模块                    | 内容                                                                  |
+| ----------------------- | --------------------------------------------------------------------- |
+| `engine/types.ts`       | `EntityId` / `EntitySignal` / `FrameManager` / `Update`（**已迁出**） |
+| `engine/game.ts`        | `createGame`（拆为帧缓冲 / 帧循环 / 实体注册三块）（**已迁出**）      |
+| `engine/directives.tsx` | `StyleMemo`（**已迁出**）                                             |
+| `game/config.ts`        | 尺寸常量（与 `global.scss` 的 CSS 变量互为镜像）                      |
+| `game/instance.ts`      | 模块级单例组装层                                                      |
+| `game/views/stage.tsx`  | 相机跟随（夹在世界边界内）+ 世界层平移                                |
+| `game/views/debug.tsx`  | 帧率与实体计数面板                                                    |
 
 **脚手架**（M2 落地时删除）：`systems/scaffold.ts`（圆周运动）、`views/marker.tsx`（标记实体）、`systems/frame.ts`（帧统计）。
 
@@ -620,11 +678,13 @@ _本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 
 - **节流必须在信号源头，不能在派生里**。调试面板最初设计为「派生里按时间窗口取值」，那仍是 60Hz 重算。正解是帧统计系统按采样间隔才写 `fps` 信号，下游派生天然获得 memo 收益。这一条对所有高频信号适用。
 - **类名不能写在指令元素上**。`<StyleMemo class="...">` 无效——指令的 props 传给指令函数，不作用于 DOM 元素。类名必须写在子元素上。
 - **`onMount` / `onUnmount` 回调需为块体**。箭头函数简写返回 `Map` / `boolean` 会与 `void | Promise<void>` 签名冲突。
-- **`useEntity` 返回信号**，读值需调用（`entity()`），不是属性访问。
+- **`useEntity` 返回信号**，读值需调用（`entity()`），不是属性访问。（现行：`define` 返回的 `EntitySignal`，同样是读值需调用；另带 `.state` 指向活对象。）
 
 **测试**（18 例，含 `render.test.ts` 的 10 例端到端）：
 
-覆盖两类构建成功无法证明的部分——引擎时序契约（写时拷贝、帧内读缓存、帧末统一提交、池随生命周期增减、`start`/`stop` 幂等、`update` 按参数顺序）与端到端通路（真实挂载后实体注册、帧循环启动、**帧推进后 DOM 的 `translate` 真的变化**、卸载后停止）。
+覆盖两类构建成功无法证明的部分——引擎时序契约（帧末统一提交、池随生命周期增减、`start`/`stop` 幂等、`update` 按参数顺序）与端到端通路（真实挂载后实体注册、帧循环启动、**帧推进后 DOM 的 `translate` 真的变化**、卸载后停止）。
+
+> **2026-10-02 迁移后**：引擎时序契约的测试已移到 `packages/engine/src/__tests__/game.test.ts`（13 例）；saboteur 侧只保留端到端通路。
 
 最后一条是「实体 → DOM」通路的实证，也是后续所有里程碑的回归基线。
 
@@ -811,14 +871,14 @@ _本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 
 
 - **可交互物符号与瓦片符号分开**。道具是实体（有 `taken` 状态、参与帧循环），不是瓦片；其所在格必须是地板，否则玩家够不着。`parseLevel` 产出独立的 `propSpawns`。
 - **交互键用计数器而非布尔标志**。布尔标志需要「消费后清零」的双边协议；计数器只需消费方记住上次看到的值即可判定边沿（`新值 > 旧值`），一帧内按多次也不会漏。
-- **`useEntity` 泛型化以容纳异形实体**。道具不是角色，形状不同。（用 `NoInfer` 阻止从参数推断默认类型，需显式指定时写 `useEntity<PropEntity>(...)`。）
+- **各系统自声明字段需求（`Enter<Need>`）来容纳异形实体**（原为 `useEntity<PropEntity>(...)`）。道具不是角色，形状不同；注册时传入 `interaction.enterProp`，初值由 `spawnProp` 换算。
 - **死者由各系统各自跳过**，而非从池中移除。尸体要留在场景里被看见（M6 的目击输入），所以实体必须存活；`navigation` / `behaviour` / `locomotion` / `perception` 各自判 `dead` 早退。这是「一个字段，多个读者」的合理用法——写入者只有 interaction。
 - **中毒者继续游荡直到毒发**（有意设计）。因此尸体位置不等于下药位置——玩家需要预判或跟随。为免等待期成为无反馈的黑箱，加了头顶的中毒标记（小绿点）。
 - **尸体在渲染上可与活人一眼区分**：旋转 90° + 压暗冷色。M6 的目击判读依赖这个区分。
 
 **实施中发现并修正的几点**：
 
-- **客人未注册交互切片**：首版只在玩家的 `enters` 里加了 `interaction.enter()`，结果客人的 `dead` / `poisonLeft` 全是 `undefined`。交互切片是**两类角色共有**的——玩家需要（持有与下药），客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
+- **客人未注册交互系统**：首版只在玩家的 `enters` 里加了 `interaction.enter`，结果客人的 `dead` / `poisonLeft` 全是 `undefined`。交互字段是**两类角色共有**的——玩家需要（持有与下药），客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
 - **`interaction` 需要实体信号而非裸数据**：判定要同时用位置 / 朝向（读值）与 id（排除自己、写回持有状态），而实体数据本身不含 id。
 
 **测试**（24 例，累计 189）：
@@ -848,7 +908,7 @@ _本文档为 saboteur 包的实施蓝图。第八节的决策已于 2026-09-28 
 - **状态不可逆**：`witnessed` 一旦置位不再清除。若允许冷静，玩家就能靠等待消除暴露，题材的紧迫感会消失。
 - **「去哪」的决策全在 navigation**。alarm 只置状态（`mood` / `fleeFrom` / `witnessed`）并清空旧路径；`pickGoal` 按 mood 分派策略：panic 者朝远离威胁处跑，其余人随机游荡。与 locomotion 按 `role` 分派意图来源是同一形态——每个系统只做自己那一层的决策。
 - **去重是必需的**：按「观察者 → 它已反应过的异常源」记录。缺了这层，站着的目击者会每轮扫描都 +12，警报瞬间爆表。
-- **玩家不入恐慌池**：玩家不会因看见自己的尸体而恐慌，也不该计入目击者。分派在注册侧完成（`enter({ role })`）——入池即代表「此人参与恐慌链」，判据是身份而非每帧数据。
+- **玩家不入恐慌池**：玩家不会因看见自己的尸体而恐慌，也不该计入目击者。分派在注册侧完成（`alarm.enter({ role })`）——入池即代表「此人参与恐慌链」，判据是身份而非每帧数据。字段初值（`witnessed` / `fleeFrom`）两类角色都给，由 `alarm.spawn()` 产出。
 - **恐慌者到达后不歇息**（`idleLeft = 0`）：否则会在逃跑途中停 0.8~3.5 秒，看起来像「吓傻了」。
 - **`behaviour` 在 `witnessed` 为真时早退**：`mood` 归 alarm 管，否则状态机会把 panic 切回 wander，逃到一半就停下。
 
@@ -910,13 +970,13 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 
 **交付**：
 
-| 模块                    | 内容                                                 |
-| ----------------------- | ---------------------------------------------------- |
-| `game/systems/rules.ts` | 胜负判定、时限递减、终局停止                         |
-| `game/state.ts`         | `Phase` 阶段机、`kills` / `timeLeft` / `elapsed`     |
-| `game/views/result.tsx` | 结算覆盖层（胜负文案 + 统计 + 重开）                 |
-| `app.tsx`               | 角色 / 道具改由 `Each` 渲染，key 含局号 → 声明式重开 |
-| `engine/game.ts`        | 修正**帧内 `stop()` 失效**（见下）                   |
+| 模块                    | 内容                                                           |
+| ----------------------- | -------------------------------------------------------------- |
+| `game/systems/rules.ts` | 胜负判定、时限递减、终局停止                                   |
+| `game/state.ts`         | `Phase` 阶段机、`kills` / `timeLeft` / `elapsed`               |
+| `game/views/result.tsx` | 结算覆盖层（胜负文案 + 统计 + 重开）                           |
+| `app.tsx`               | 角色 / 道具改由 `Each` 渲染，key 含局号 → 声明式重开           |
+| `engine/game.ts`        | 修正**帧内 `stop()` 失效**（见下；现已迁至 `packages/engine`） |
 
 **设计要点**：
 
@@ -929,7 +989,8 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 
 **实施中发现并修正的几点**：
 
-- **帧内 `stop()` 完全失效**（引擎缺陷）。`loop()` 末尾无条件 `requestAnimationFrame(loop)`，于是帧内调用 `stop()` 后仍会继续跑——游戏结束后在后台空转。修正为重新排队前检查 `running`；同时引入 `inFrame` 处理「帧内 stop 再 start」，否则会排出两个回调、帧率翻倍。新增 `game/__tests__/engine/lifecycle.test.ts`（2 例）锁定。
+- **帧内 `stop()` 完全失效**（引擎缺陷）。`loop()` 末尾无条件 `requestAnimationFrame(loop)`，于是帧内调用 `stop()` 后仍会继续跑——游戏结束后在后台空转。修正为重新排队前检查 `running`；同时引入 `inFrame` 处理「帧内 stop 再 start」，否则会排出两个回调、帧率翻倍。新增 2 例锁定（后随引擎迁移至 `packages/engine/src/__tests__/game.test.ts`）。
+  > **后续（2026-10-02）**：这个守卫在引擎抽成独立包时又丢了一次（见 `saboteur 引擎迁移：切换到 engine 包.md` §3.1）。这正是「两套引擎同步维护」的代价——已通过迁移消除。
 - **`class` 必须传信号才响应**。首版写 `class={[style.overlay, settled() ? style.visible : ""].join(" ")}`——这是**渲染时求值一次**的普通字符串，结算界面因此永远不显示。同理 `actor.tsx` 的尸体配色也不会切换。全部改为传派生信号。新增用例锁定（`kill.test.ts` 的「尸体换用不同的 class」）。
 - **`gameState` 是模块级单例，同文件内跨用例共享**。上一例压过的时限、击杀数会带到下一例，导致一开局就 `timeout`。测试需在 `beforeEach` 复位全局状态——实体随组件卸载而清理，但信号不会。
 - **`Show` 的注释锚点会污染指令子元素**。中毒 / 恐慌标记与 `StyleMemo` 的 `div` 并列时，隐藏状态下的注释锚点成为指令的直接子节点，框架每帧报 7×2=14 条「directive skipped non-Element child」。把标记移进该 `div` 内部即消除。
@@ -938,7 +999,7 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 **测试**（20 例，累计 225）：
 
 - `game/__tests__/rules.test.ts`（18）——目标配置 / 时限递减 / `timeout` / `caught` / `won` / **达成目标优先于被抓** / 终局后不再判定 / 击杀数由死亡累加 / 重开复位（阶段、计数、时限、警报、实体数不累积、可重复多局）/ R 键重开 / 结算三态文案
-- `game/__tests__/engine/lifecycle.test.ts`（2）——帧内 `stop` 立即生效 / 帧内 `stop` 再 `start` 不重复排队
+- `game/__tests__/engine/lifecycle.test.ts`（2）——（已随迁移删除，同一契约现在由 `packages/engine/src/__tests__/game.test.ts` 覆盖）
 
 **实测完整对局**：
 
@@ -951,38 +1012,64 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 [再重开] phase=playing  警报=0
 ```
 
+### 迁移：切换到 `packages/engine`（2026-10-02 完成）
+
+**这不是玩法里程碑，而是基础设施迁移**（不占用 M8——那是音效 / 菜单 / 多关卡）。归在实施记录里以便对照。完整方案、决策与实测见独立文档：`saboteur 引擎迁移：切换到 engine 包.md`。
+
+**动机**：§1.3 的结论（「不复用、不抽取共享包」）不成立于新的前提——引擎已抽成独立包、`define` 改造完成、`createPool` / `createEvent` 已泛化。两套引擎同步维护的代价已经兑现：为帧内 `stop` 补的守卫在新引擎里丢了一次。
+
+**改动性质**：数据所有权反转（系统从「提供数据切片」变为「声明参与的字段」，数据由视图的 `state` 写全）。
+
+**交付**：
+
+| 模块 / 动作                    | 内容                                                                |
+| :----------------------------- | :------------------------------------------------------------------ |
+| 删除 `src/engine/`             | 260 行；`StyleMemo` / `createGame` 改从 `engine` 导入               |
+| 6 个系统                       | 各自声明 `Enter<Need>` + 导出 `spawn()`；帧写调用点 11 → 0          |
+| `views/actor.tsx` / `prop.tsx` | `state` 字面量组合各系统 `spawn()`，`define` 注册                   |
+| `game/instance.ts`             | 重开时显式 `start()`（修 §3.2 的既有缺陷）                          |
+| `__tests__/helpers.ts`         | 新增：共享测试台（`mountActor` / `makeActorState` / `countWrites`） |
+| 删除两个旧引擎测试             | 它们测的 API 已不存在；契约由 `packages/engine` 的测试接管          |
+
+**顺带修掉的两个真 bug**（不是测试写错，是迁移暴露的）：
+
+- `interaction` 读玩家用了渲染快照（`entity()`）而非活对象。快照只在帧末提交，帧内读到的是上一帧的值；玩家位置可能同帧被 `locomotion` 改过，会算错「手心格」。
+- **重开不恢复帧循环**（§3.2 记录的既有缺陷）：`restartRun()` 调了 `stop()` 但无处再 `start()`——`App.onMount(start)` 只在根组件挂载时执行一次，而重启只重建 `Each` 的子项。此前测试用 4 处手工 `start()` 掩盖了它（已删除）。
+
+**行数**：4164 → 3981（降 183）。迁移文档预测「可能上升」，又一次错误（历次为涨/涨/涨/降）——**四个数据点共同说明行数预测在这类重构上没有信息量**。
+
 ---
 
 ## 十二、当前状态与调参参考
 
-**状态：** M0–M7 完成，切片可完整玩通（`vp dev` 即可试玩）。M8（音效 / 菜单 / 多关卡）未开始。
+**状态：** M0–M7 完成，切片可完整玩通（`vp dev` 即可试玩）；引擎已于 2026-10-02 迁至 `packages/engine`。M8（音效 / 菜单 / 多关卡）未开始。
 
-**规模：** 源码 41 个文件（`.ts` / `.tsx`，不含测试与样式），测试 20 个文件 / 225 例。
+**规模：** 源码 37 个文件（`.ts` / `.tsx`，不含测试与样式；删去 `engine/` 4 个后，原计 41），测试 18 个文件 / 233 例。
 
-**分层：** `world/` 11 个源文件 + 6 个测试；`game/` 24 个源文件 + 14 个测试；`engine/` 4 个文件。
+**分层：** `world/` 11 个源文件 + 6 个测试；`game/` 22 个源文件 + 12 个测试；引擎已在 `packages/engine`（5 个源文件 / 2 个测试）。
 
 ### 12.1 全部可调参数
 
-| 参数                        | 当前值          | 位置                          | 影响                                        |
-| --------------------------- | --------------- | ----------------------------- | ------------------------------------------- |
-| `killGoal`                  | 2               | `world/levels/manor.ts`       | 通关所需击杀数                              |
-| `timeLimit`                 | 150s            | `world/levels/manor.ts`       | 单局时限                                    |
-| `SIGHT_RANGE`               | 7 格            | `game/systems/perception.ts`  | NPC 视距                                    |
-| `SIGHT_HALF_ARC`            | 30°（张角 60°） | `game/systems/perception.ts`  | 视锥宽度                                    |
-| `PERCEPTION_INTERVAL`       | 6 帧（~10Hz）   | `game/systems/perception.ts`  | 感知频率                                    |
-| `ALARM_PER_WITNESS`         | 12              | `game/systems/alarm.ts`       | 每次目击的警报增量（满值 100，即约 9 人次） |
-| `PANIC_DURATION`            | 30s             | `game/systems/alarm.ts`       | 恐慌持续时长                                |
-| `POISON_DELAY`              | 4.5s            | `game/systems/interaction.ts` | 下药后到毒发的时间                          |
-| `ACTOR_SIZE`                | 20px            | `game/systems/locomotion.ts`  | 角色碰撞尺寸                                |
-| 玩家速度                    | 190 px/s        | `game/views/actor.tsx`        |                                             |
-| 客人速度                    | 78 px/s         | `game/views/actor.tsx`        |                                             |
-| 潜行系数                    | 0.45            | `game/systems/locomotion.ts`  | 潜行时的速度倍率                            |
-| `ARRIVE_RADIUS`             | 4px             | `game/systems/navigation.ts`  | 到达路径点的判定半径                        |
-| `STUCK_TIMEOUT`             | 4s              | `game/systems/navigation.ts`  | 无推进多久后放弃当前路径                    |
-| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s      | `game/systems/navigation.ts`  | 到达后的驻足时长                            |
-| `FLEE_CANDIDATES`           | 12              | `game/systems/navigation.ts`  | 逃跑候选点数（取最远的前 N 个再随机选一）   |
-| `MAX_VIEW_W` / `MAX_VIEW_H` | 1280 / 800      | `game/config.ts`              | 视口上限（超出则启用相机卷轴）              |
-| `POISON_DELAY` 等常量       | —               | `game/systems/*.ts`           | 大多为文件内模块常量，改一处即生效          |
+| 参数                        | 当前值                                | 位置                          | 影响                                        |
+| --------------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------- |
+| `killGoal`                  | 2                                     | `world/levels/manor.ts`       | 通关所需击杀数                              |
+| `timeLimit`                 | 150s                                  | `world/levels/manor.ts`       | 单局时限                                    |
+| `SIGHT_RANGE`               | 7 格                                  | `game/systems/perception.ts`  | NPC 视距                                    |
+| `SIGHT_HALF_ARC`            | 30°（张角 60°）                       | `game/systems/perception.ts`  | 视锥宽度                                    |
+| `PERCEPTION_INTERVAL`       | 6 帧（~10Hz）                         | `game/systems/perception.ts`  | 感知频率                                    |
+| `ALARM_PER_WITNESS`         | 12                                    | `game/systems/alarm.ts`       | 每次目击的警报增量（满值 100，即约 9 人次） |
+| `PANIC_DURATION`            | 30s（`panic.duration`）               | `game/systems/states.ts`      | 恐慌持续时长（时长归状态对象所有）          |
+| `POISON_DELAY`              | 4.5s                                  | `game/systems/interaction.ts` | 下药后到毒发的时间                          |
+| `ACTOR_SIZE`                | 20px                                  | `game/systems/locomotion.ts`  | 角色碰撞尺寸                                |
+| 玩家速度                    | 190 px/s                              | `game/views/actor.tsx`        |                                             |
+| 客人速度                    | 78 px/s                               | `game/views/actor.tsx`        |                                             |
+| 潜行系数                    | 0.45                                  | `game/systems/locomotion.ts`  | 潜行时的速度倍率                            |
+| `ARRIVE_RADIUS`             | 4px                                   | `game/systems/navigation.ts`  | 到达路径点的判定半径                        |
+| `STUCK_TIMEOUT`             | 4s                                    | `game/systems/navigation.ts`  | 无推进多久后放弃当前路径                    |
+| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s（`REST_MIN` / `REST_MAX`） | `game/systems/states.ts`      | 到达后的驻足时长（状态对象内部）            |
+| `FLEE_CANDIDATES`           | 12                                    | `game/systems/navigation.ts`  | 逃跑候选点数（取最远的前 N 个再随机选一）   |
+| `MAX_VIEW_W` / `MAX_VIEW_H` | 1280 / 800                            | `game/config.ts`              | 视口上限（超出则启用相机卷轴）              |
+| `POISON_DELAY` 等常量       | —                                     | `game/systems/*.ts`           | 大多为文件内模块常量，改一处即生效          |
 
 ### 12.2 难度现状与倾向
 
@@ -1029,4 +1116,5 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 - **`class` 必须传信号才响应**。写普通三元或数组拼接会在渲染时求值一次后固定——这是本项目中反复踩到的坑（§11 的 M7 一节）。
 - **`gameState` 是模块级单例**。测试里跨用例共享，需在 `beforeEach` 复位。
 - **长时程用例要排除终局**。警报满值约 6~8 秒就会停帧循环，之后静止是正确行为。
-- **`useEntity` 的泛型可指定异形实体**。道具不是角色，用 `useEntity<PropEntity>(...)`。
+- **`entity()` 是渲染快照，`entity.state` 才是活对象**。需要写入实体时用后者——写信号会被下一帧 `flush` 覆盖（§5.2）。
+- **新增系统时**：字段需求用 `Enter<Pick<ActorEntity, ...>>` 声明，初值用 `spawn()` 纯函数产出，视图里组合。漏写字段会在 `define(...)(state)` 处报错。
