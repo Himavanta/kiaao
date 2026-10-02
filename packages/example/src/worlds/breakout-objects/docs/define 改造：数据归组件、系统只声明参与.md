@@ -1,0 +1,440 @@
+# define 改造：数据归组件、系统只声明参与
+
+**状态**：**已完成首轮实现**（类型通过、行为与原版逐值一致；行数未降，见 §5.3）
+**最后更新**：2026年10月2日
+**关联**：`packages/example/src/worlds/breakout-objects/`；对照实现 `packages/example/src/worlds/breakout/`（原版，不动）
+**读者行为**：定位查找——本文按条目组织改造动机、设计、类型方案与实施步骤
+
+> **声明**：本文代码块是设计意图的示意图。最终形态以落地代码为准。
+
+---
+
+## 一、为什么改
+
+### 1.1 起点：两类实体、两种诉求
+
+这个 demo 的实体天然分两半：
+
+|              | 例子                                | 诉求                                     |
+| :----------- | :---------------------------------- | :--------------------------------------- |
+| **同质实体** | 48 块砖、多个球                     | 共享一条处理管线（物理、碰撞）——ECS 擅长 |
+| **异质实体** | 挡板（跟随输入）、未来的 Boss、道具 | 各自的私有状态与行为——OOP 擅长           |
+
+现状用**一套机制**服务两者：所有实体都必须通过 `useEntity(ctx, ...enters)` 注册，数据由各系统的 `enter()` **切片**提供、`Object.assign` 合并。于是：
+
+- `breakout/systems.ts` 里有个 `BreakoutEntity` 类型，把 5 个系统的字段揉成一个联合类型（21 个字段）
+- 想知道"一个球有什么"，要在 `views.tsx` / `engine/systems.ts` / `breakout/systems.ts` 之间跳
+- 系统通过 `createMovementSystem<BreakoutEntity>()` 反向依赖这个联合类型
+
+**这个联合类型是"跳文件"的根因**，不是调度方式的问题。
+
+### 1.2 要验证的假设
+
+> **数据所有权应当归组件；系统只声明"我参与哪些实体"，不再提供数据。**
+
+副产物的期待：`BreakoutEntity` 联合类型消失；`enter` 退化成"登记函数"，不再是工厂。
+
+---
+
+## 二、设计
+
+### 2.1 目标写法
+
+```tsx
+function Ball({ data }: BallProps, ctx: Context) {
+  const state = {
+    // 物理字段：组件写全（不再由系统切片提供）
+    x: data.x, y: data.y, vx: data.vx, vy: data.vy,
+    w: BALL_SIZE, h: BALL_SIZE,
+    // 边界动作：扁平（原先是嵌套的 bounds 对象）
+    left: "bounce", right: "bounce", top: "bounce", bottom: "die",
+    // 碰撞形状
+    shape: "circle", enabled: true, breakable: false, drive: 0, points: 0,
+    // 私有字段（系统看不见，只有它自己用）
+    dataId: data.id,
+    isLive: true,
+    kill() { state.isLive = false; },
+  };
+
+  // 声明「参与哪些系统」——不再传递数据
+  const entity = define(ctx, movement, boundary, collision)(state);
+  ...
+}
+```
+
+### 2.2 三个变化
+
+|                | 现状                                     | 改造后                                |
+| :------------- | :--------------------------------------- | :------------------------------------ |
+| 数据从哪来     | `enter()` 返回切片，`Object.assign` 合并 | **组件直接写在 `state` 对象字面量里** |
+| `enter` 做什么 | 进池 + **提供数据**                      | **只进池**（登记），参数全部取消      |
+| 入口           | `useEntity(ctx, ...enters)`              | `define(ctx, ...enters)(state)`       |
+
+### 2.3 `enter` 的新形态
+
+参数取消后，`enter` 不再是工厂（不再 `enter(props) => (id, ctx) => slice`），而是**一个普通函数**：
+
+```ts
+// 现在
+const enter = (props: { w?: number; ... }) => (id: EntityId, ctx: Context) => {
+  onMount(() => pool.add(id));
+  return { w: props.w ?? 80, ... };
+};
+
+// 改造后
+const enter: Enter<Bounded> = (id, ctx) => {
+  const { onMount, onUnmount } = ctx;
+  onMount(() => pool.add(id));
+  onUnmount(() => pool.delete(id));
+};
+```
+
+三段柯里化变成两参数普通函数。**这正是"简化"的兑现点**——`enter` 的复杂度全部来自"提供数据"那件事。
+
+### 2.4 `bounds` 必须拍平
+
+现状系统读嵌套对象：
+
+```ts
+const { left, right } = e.bounds; // engine/systems.ts
+```
+
+改造后状态是扁平的 `e.left` / `e.right` / `e.top` / `e.bottom`。
+
+**理由不只是"方便"**：`flush` 用 `{...state}` 做**浅拷贝**，嵌套对象的引用会被共享——一个实体的 `bounds` 与渲染信号持有同一个对象。虽然当前 `bounds` 只读（只在 enter 时构造），但这是**靠约定活着**。拍平后顶层字段天然隔离。
+
+---
+
+## 三、类型方案（已实测验证）
+
+这是本次改造最容易卡住的地方，已用 TS 7.0.2 实测确认可行。
+
+### 3.1 核心手法：幻影类型 + 交集
+
+让每个 `enter` **携带"我要求实体有哪些字段"**：
+
+```ts
+/** `__need` 只存在于类型层，运行时是 undefined —— 幻影字段 */
+type Enter<N> = ((id: EntityId, ctx: Context) => void) & {
+  readonly __need?: (state: N) => void;
+};
+
+// 系统声明自己的最小字段需求
+const enter: Enter<Movable> = (id, ctx) => { ... };
+```
+
+`define` 收集所有 `enter` 的需求，求**交集**：
+
+```ts
+type U2I<U> = (U extends unknown ? (k: U) => void : never) extends (k: infer I) => void ? I : never;
+type NeedOf<E> = E extends Enter<infer N> ? N : never;
+
+function define<const Es extends readonly Enter<any>[]>(
+  ctx: Context,
+  ...enters: Es
+): <const S extends U2I<NeedOf<Es[number]>> & Record<string, unknown>>(state: S) => S;
+```
+
+- `U2I`（Union to Intersection）是标准技巧，把联合转成交集
+- `const Es`：保住字面量类型（`left: "bounce"` 不被宽化成 `string`）
+- `& Record<string, unknown>`：**放宽多余字段**（实体可以有系统不认识的私有字段）
+
+### 3.2 实测结果
+
+| 用例                                              | 预期             | 实测                                        |
+| :------------------------------------------------ | :--------------- | :------------------------------------------ |
+| 字段齐全                                          | 通过             | ✅ 通过                                     |
+| **缺 `left` 字段**                                | 报错并指出字段名 | ✅ `Property 'left' is missing in type ...` |
+| **多余字段**（`mood` / `kill`）                   | 允许             | ✅ 通过                                     |
+| 字面量联合（不加 `as const`）                     | 保住             | ✅ 保住                                     |
+| 自引用 state（`kill() { state.isLive = false }`） | 可用             | ✅ 可用                                     |
+| `createGame` 不再需要 `<T>`                       | 可行             | ✅ `Update<Movable>` 可赋给 `Update<any>`   |
+
+**这比预期更好**：改造不只是"简化"，还**换来一个真正的编译期保护**——写实体时漏了某个系统要的字段，TS 当场指出。而现状的 `enter` 切片合并**没有这个检查**（`Object.assign` 是运行时拼接）。
+
+### 3.3 已知代价
+
+`__need` 是幻影字段，运行时不存在。它只在类型层生效，**没有运行时代价**，但读代码的人需要知道这是约定。
+
+---
+
+## 四、实施步骤
+
+分四步，每步可独立验证。
+
+### 步骤 1+2：拍平 `bounds` + `enter` 去返回值（一起做）
+
+分不开——中间状态会不一致。
+
+**engine 侧**：
+
+- `engine/systems.ts`：`boundary` 改读 `e.left` 等扁平字段；`movement` / `boundary` / `collision` / `input` 的 `enter` 去掉柯里化与返回值；各系统加 `Enter<字段>` 类型标注
+- `engine/index.ts`：`useEntity` → `define`（接收 state，不再合并切片）
+
+**breakout 侧**：
+
+- `bricks.tsx` / `views.tsx`：三处实体注册改为"state 字面量 + `define`"
+- `breakout/systems.ts`：`rules.enter.paddle` / `rules.enter.brick` 去柯里化；**删掉 `BreakoutEntity` 类型**
+
+**验收**：端到端——球能弹、砖能碎（显示隐藏）、球出界销毁、生命递减、重开恢复。
+
+### 步骤 3：类型保护到位
+
+如果步骤 1+2 顺手就做了（因为不标注 `Enter<N>` 会报错），那这步已包含在内。
+
+### 步骤 4：抽 pool 辅助函数
+
+各系统里 `const pool = new Set<EntityId>()` + `onMount/onUnmount` 的模板重复 5 次：
+
+```ts
+// 可抽成
+function createPool(): {
+  enter: Enter<any>;
+  has: (id: EntityId) => boolean;
+  ids: () => Iterable<EntityId>;
+};
+```
+
+**先不做**——等步骤 1–3 跑通、看清真实重复形态之后再抽，避免抽错。
+
+---
+
+## 五、实现记录（2026-10-02）
+
+### 5.1 最终形态：`define(ctx, ...enters)(state)`
+
+```tsx
+const entity = define(
+  ctx,
+  movement.enter,
+  boundary.enter,
+  collision.enter,
+)({
+  x: data.x,
+  y: data.y,
+  vx: data.vx,
+  vy: data.vy,
+  moving: true,
+  w: BALL_SIZE,
+  h: BALL_SIZE,
+  left: "bounce",
+  right: "bounce",
+  top: "bounce",
+  bottom: "die",
+  shape: "circle",
+  enabled: true,
+  breakable: false,
+  drive: 0,
+  points: 0,
+  dataId: data.id, // 私有字段：系统不认识，但允许存在
+});
+```
+
+### 5.2 实现中修正的两处设计（预期之外）
+
+**① `define` 返回的是信号，不是 state**
+
+最初我让它返回 `state`（方便自引用）。但组件需要的是能传给 `use(entity, ...)` 的**信号**——否则渲染无从订阅。最终返回 `EntitySignal<S>`。
+
+自引用的需求由**闭包**满足（`state` 是 `const`，方法定义时就能捕获）：
+
+```tsx
+const state = { ..., kill() { state.isLive = false; } };
+const entity = define(ctx, ...)(state);   // 两者都在，互不干扰
+```
+
+**② `createGame` 必须接受异质的 `Update`**
+
+```ts
+// 改前（会报错：Update<Collidable> 不可赋给 Update<BoundedEntity>）
+updates: Array<Update<T>>;
+
+// 改后
+updates: ReadonlyArray<Update<any>>;
+```
+
+这是“**系统各自声明字段**”的必然要求：每个系统的 `Update` 参数类型不同，容器不能强求统一。`any` 在此是诚实的——容器**确实**不知道也不关心具体字段。
+
+### 5.3 三个系统各自声明的字段需求
+
+| 系统      | 需求类型                  | 字段                                            |
+| :-------- | :------------------------ | :---------------------------------------------- |
+| movement  | `Movable`                 | `x y vx vy moving`                              |
+| boundary  | `BoundedEntity`           | 上述 + `w h` + 四边动作 `left right top bottom` |
+| collision | `Collidable`              | 上述 + `shape enabled breakable drive points`   |
+| input     | `Record<string, unknown>` | 无（只借用生命周期钩子）                        |
+| rules     | `RuleEntity`              | `x y vx vy w h enabled` + `dataId?`             |
+
+`define` 把它们求交集作为必填项——**漏写任一个就在调用处报错**。
+
+### 5.4 未做（步骤 4）——已决定不做
+
+**没有抽 pool 辅助函数，且评估后决定不做。**
+
+原计划抽取的理由是「`const pool = new Set()` + `onMount/onUnmount` 重复」。实测后发现重复量比想象中小：
+
+| 系统      | 池形态                               | `enter` 行数 |
+| :-------- | :----------------------------------- | -----------: |
+| movement  | 双池（按 `moving` 路由）             |           10 |
+| collision | 双池（按 `moving` 路由）             |           10 |
+| boundary  | 单池                                 |            9 |
+| rules     | 双池（paddle / brick，**语义不同**） |         各 8 |
+| input     | **无池**（只挂事件监听）             |           10 |
+
+真正重复的只有 **3 处 × ~9 行 ≈ 27 行**。而抽象它要付出：
+
+1. 一个新概念 `createPool`（约 15–20 行）
+2. 调用处的间接——`pools.enter(id, ctx, state)` 不如直写看得清
+3. **rules 那个不整齐**：`paddlePool` 的用法是 `const [paddleId] = paddlePool`（当单例读），与「遍历池」不是一个模式；硬套抽象会别扭
+
+净收益约为零或为负。**因此放弃。** 若将来系统数量明显增多、且池语义趋于一致，再重新评估。
+
+**教训**：不要看到「有重复」就抽——先量一遍重复的总量、再估算抽象的成本与它的不匹配度。
+
+---
+
+## 六、基线与预期
+
+### 6.1 改造前基线（2026-10-02 实测）
+
+| 文件                        |     行数 |
+| :-------------------------- | -------: |
+| `engine/systems.ts`         |      471 |
+| `breakout/systems.ts`       |      320 |
+| `breakout/views.tsx`        |      202 |
+| `engine/index.ts`           |      185 |
+| `breakout/game-instance.ts` |       99 |
+| `breakout/bricks.tsx`       |       97 |
+| `breakout/game.tsx`         |       67 |
+| `breakout/assets.ts`        |       65 |
+| `engine/directives.tsx`     |       32 |
+| `breakout/index.tsx`        |       13 |
+| **合计**                    | **1551** |
+
+其它指标：
+
+- `BreakoutEntity` 联合类型：**21 个字段**
+- `.enter` 调用点：**12 处**
+- `bounds.` 嵌套读取：**8 处**（`engine/systems.ts`）
+
+### 6.2 预期（动手前写下，事后对照）
+
+| #   | 指标                   | 预期                           | 依据                                                        |
+| :-- | :--------------------- | :----------------------------- | :---------------------------------------------------------- |
+| P1  | `BreakoutEntity` 类型  | **删除**                       | 数据归组件后，联合类型无存在理由                            |
+| P2  | 读"一个球有什么"       | **一个文件内可见**             | 首次出现 state 字面量即全部字段                             |
+| P3  | `enter` 是否变短       | **变短**（去掉返回值与柯里化） | 复杂度来自"提供数据"                                        |
+| P4  | 总行数                 | **下降**，但幅度有限           | `define` + `Enter<N>` 引入新机制；`game-instance.ts` 要重写 |
+| P5  | 是否引入新的编译期保护 | **是**（意外收获）             | §3.2 实测                                                   |
+| P6  | 端到端行为             | **完全不变**                   | 纯重构                                                      |
+
+**P4 我不确信**——上一轮同类预测（"行数会降"）实际是 `409 → 532`（涨了 123 行）。写在这里供事后对照。
+
+### 6.3 事后对照（2026-10-02 改造完成后实测）
+
+| #   | 预测                   | 实测                                                             | 结论            |
+| :-- | :--------------------- | :--------------------------------------------------------------- | :-------------- |
+| P1  | `BreakoutEntity` 删除  | 已删除（换成 `RuleEntity` —— 规则系统自己的最小需求）            | ✅              |
+| P2  | 一个球在一个文件内可见 | `views.tsx` 的 `Ball` 里 state 字面量写全 13 个字段              | ✅              |
+| P3  | `enter` 变短           | 三段柯里化 → 两参数普通函数                                      | ✅              |
+| P4  | 总行数下降             | **1551 → 1573（+22）**                                           | ❌ **预测错误** |
+| P5  | 引入新的编译期保护     | 删掉 `left` 立刻报 `Property 'left' is missing in type 'Bounds'` | ✅              |
+| P6  | 端到端行为不变         | 与原版逐值一致（见下）                                           | ✅              |
+
+#### P4 为何没降（如实记录）
+
+三个地方在涨：
+
+1. **state 字面量很长**——`Ball` 一个实体要写 13 个字段（`views.tsx` 202 → 233）。旧版是 `movement.enter({x,y,vx,vy})` 这种短调用，现在是完整字段列表
+2. **`engine/index.ts` 185 → 242**——`Enter<N>` / `NeedOf` / `UnionToIntersection` / `Definer` 四个类型 + `createDefine` 工厂，约 60 行
+3. **`bricks.tsx` 97 → 118**——同上，字段写全
+
+减少的：`breakout/systems.ts` 320 → 300（删了 `BreakoutEntity` 的 21 字段声明与 `rules.enter` 的柯里化）。
+
+**又一个行数预测失败**——与上次重构（预测降、实际 409 → 532）同类型。**行数与心智负担不相关**，后面的评估不应再看行数。
+
+#### P6 的验证方式（逐值对照）
+
+同一个测试逻辑（固定 `Math.random` = 0.5、发球、400 帧），分别在改造版与原版上跑：
+
+```
+改造版 400 帧: 分数=2 隐藏砖块=2 球数=1 生命=3
+原  版 400 帧: 分数=2 隐藏砖块=2 球数=1 生命=3
+```
+
+另外单独验证的路径：
+
+| 路径                          | 结果                           |
+| :---------------------------- | :----------------------------- |
+| 挂载（54 个元素）             | ✅ 状态 ready                  |
+| 发球（球数 1、状态 running）  | ✅                             |
+| 球移动与渲染跟随              | ✅ `389px 528px → 435px 331px` |
+| 出界销毁 + 生命递减           | ✅ 生命 3 → 2                  |
+| 击碎（分数累加 + 砖块隐藏）   | ✅                             |
+| 重开（48 块砖恢复、分数归零） | ✅                             |
+
+---
+
+## 七、风险与已知取舍
+
+### 7.1 `flush` 会把方法拷进渲染信号
+
+```ts
+flush: () => signal({ ...state }); // state 上的 kill() 也被浅拷贝进去
+```
+
+**决定：接受**（作者明确表态）。理由：无害，且 `JSON.stringify` 会自然忽略函数。
+
+但要在 `engine/index.ts` 的 `flush` 处**加注释说明这是有意为之**，否则半年后看到信号里有函数会以为是 bug。
+
+### 7.2 方法不能用 `this`
+
+```ts
+kill() { state.isLive = false; }   // ✅ 闭包捕获 state
+kill() { this.isLive = false; }    // ⚠️ this 指向 state（Object.assign 后成立），但脆弱
+```
+
+**约定用闭包**。`frame` 是每帧新建的，方法本来就不能闭包捕获它，注定要显式传参——既然要传参，`this` 的语法糖就不值钱。
+
+### 7.3 跨实体逻辑仍必须留在系统
+
+判据：**要不要看别的实体**。
+
+| 行为                  | 看别人吗 | 归属       |
+| :-------------------- | :------- | :--------- |
+| `kill` / 道具自身效果 | 否       | state 方法 |
+| 碰撞 / 感知 / 寻路    | 是       | 系统       |
+
+这不是缺陷——是划分。系统负责"实体之间"，方法负责"实体自己"。
+
+### 7.4 `input` 系统有特殊性
+
+`input.enter()` 借用宿主实体的 `ctx` 钩子挂键盘监听，**不贡献数据，也不参与池遍历**（无 `update`）。改造后它是最"纯"的 `enter`——只借用生命周期。可作为"`enter` 只进池"的极端例证。
+
+---
+
+## 八、未决问题
+
+| #   | 问题                                                                                                | 状态                                                                        |
+| :-- | :-------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------- |
+| Q1  | `define` 的柯里化（`define(ctx, ...enters)(state)`）还是普通函数（`define(ctx, state, ...enters)`） | **柯里化**——便于类型推断，且读作"定义（这些系统参与的）实体"                |
+| Q2  | 是否抽 pool 辅助函数                                                                                | **已定：不抽**（见 §5.4——重复总量约 27 行，净收益为负）                     |
+| Q3  | `rules.enter.paddle` / `.brick` 的形态                                                              | 去柯里化，与 `engine` 各系统的 `enter` 同形                                 |
+| Q4  | 改造后 `game-instance.ts` 是否还需要                                                                | **需要**——系统实例仍需组装；但不再需要 `BreakoutEntity`                     |
+| Q5  | `RuleEntity` 里 `dataId` 为何是可选                                                                 | `onOut` 读它销毁球；只有球有，挡板/砖块没有。`Partial` 比另立一个类型更简单 |
+
+---
+
+## 附一、本改造与其它文档的关系
+
+- `docs/game/Kiaao ECS 框架设计文档.md`——**现状（v3）的权威定义**。本改造不推翻它，而是验证"`enter` 是否必须提供数据"这一条
+- `packages/example/src/worlds/crowd/docs/actor 模型实验：闭包状态 + 对象池.md`——上一个实验。那里的教训（帧首快照、跨实体读取顺序）在本改造中仍然适用
+- `packages/saboteur/docs/saboteur 游戏架构与实施规划.md`——现状方案的最大实践。若本改造成功，那份文档的 §5.2「实体结构」需要重新评估
+
+## 附二、文档修订记录
+
+| 日期       | 修订                                                                                                   |
+| :--------- | :----------------------------------------------------------------------------------------------------- |
+| 2026-10-02 | 初稿（规划）                                                                                           |
+| 2026-10-02 | **首轮实现完成**。补第五节实现记录、§6.3 事后对照（含 P4 行数预测失败）；§5.2 记录实现中修正的两处设计 |
+| 2026-10-02 | §5.4 补「不抽 pool」的量化评估（重复 ≈ 27 行 vs 抽象成本）；Q2 结案                                    |

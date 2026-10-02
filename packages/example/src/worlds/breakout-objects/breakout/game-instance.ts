@@ -24,8 +24,8 @@ import {
   createSoundSystem,
   LIVES,
   type BallData,
-  type BreakoutEntity,
   type GameState,
+  type RuleEntity,
 } from "./systems";
 
 // ── 全局状态信号（事件处理的产物——分数/生命/状态机/球目录）──
@@ -70,19 +70,21 @@ export const input = createInputSystem({
 });
 
 // 规则系统（事件系统：内部闭包队列，update 中处理）+ 音效系统路由
-export const rules = createRuleSystem<BreakoutEntity>({
+export const rules = createRuleSystem<RuleEntity>({
   ...gameState, // 全局状态信号注入（事件处理的产物）
   dir: input.dir,
   win: (p) => audio.emit.win(p),
   lose: (p) => audio.emit.lose(p),
 });
 
-export const movement = createMovementSystem<BreakoutEntity>();
-export const boundary = createBoundarySystem<BreakoutEntity>(
+// 各系统自己声明需要的字段（见 engine/systems.ts 的 Movable / BoundedEntity /
+// Collidable）——不再需要向 <BreakoutEntity> 传统一类型。
+export const movement = createMovementSystem();
+export const boundary = createBoundarySystem(
   { width: ARENA_W, height: ARENA_H },
   { onOut: (p) => rules.emit.out(p) },
 );
-export const collision = createCollisionSystem<BreakoutEntity>({
+export const collision = createCollisionSystem({
   onBreak: (p) => {
     rules.emit.break(p);
     audio.emit.break(p);
@@ -92,8 +94,8 @@ export const collision = createCollisionSystem<BreakoutEntity>({
 
 // ── 游戏实例（模块级，autostart: false——运行窗口由 Game 组件控制）──
 
-export const game = createGame<BreakoutEntity>(
+export const game = createGame(
   [movement.update, boundary.update, collision.update, rules.update, audio.update],
   { autostart: false },
 );
-export const { useEntity } = game;
+export const { define } = game;

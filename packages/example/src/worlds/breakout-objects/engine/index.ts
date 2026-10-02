@@ -67,6 +67,90 @@ function createFrameManager<T extends Record<string, any>>(
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 实体登记（数据归组件，系统只声明参与）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * 登记函数的类型：只做「把实体加进自己的池」，不再提供数据。
+ *
+ * `state` 参数是那个实体的完整状态（只读使用——`enter` 不应改它，数据由
+ * 组件写全）。系统可从它读注册时需要的字段（例如 `moving` 决定进哪个池）。
+ *
+ * `__need` 是**幻影字段**（只存在于类型层，运行时不存在）：它携带
+ * 「本系统要求实体有哪些字段」的信息，供 `define` 推导出调用方的必填项。
+ * 好处：漏写字段会在 `define(...)(state)` 处当场报错——而旧的切片合并
+ * （`Object.assign`）是运行时拼接，没有这个检查。
+ */
+export type Enter<N> = ((id: EntityId, ctx: Context, state: N) => void) & {
+  readonly __need?: (state: N) => void;
+};
+
+/** 从 `Enter` 上取出它声明的字段需求 */
+type NeedOf<E> = E extends Enter<infer N> ? N : never;
+
+/**
+ * 联合转交集（Union → Intersection 的标准写法）。
+ * 用途：把「各系统分别要的字段」合并成一个完整的必填项集合。
+ */
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
+  ? I
+  : never;
+
+/** 'define(...)' 返回的登记器：接收完整 state，返回**携带该 state 类型**的渲染信号 */
+export type Definer<Es extends readonly Enter<any>[]> = <
+  const S extends UnionToIntersection<NeedOf<Es[number]>> & Record<string, unknown>,
+>(
+  state: S,
+) => EntitySignal<S>;
+
+/**
+ * 创建实体：把 state 登记到各系统，并建立渲染信号。
+ *
+ * 与旧 `useEntity` 的差别：
+ * - **数据不再由系统提供**——state 由组件写全，这里只负责登记与信号
+ * - `...enters` 是**函数本身**（不再调用，不再传参）
+ *
+ * 类型推导：`const Es` 保住字面量类型（`left: "bounce"` 不被宽化），
+ * `& Record<string, unknown>` 放宽多余字段（实体可以有系统不认识的私有字段）。
+ */
+export function createDefine<T extends Record<string, any>>(options: {
+  register: (ctx: Context, id: EntityId, entry: PoolEntry<T>) => void;
+}) {
+  return <const Es extends readonly Enter<any>[]>(ctx: Context, ...enters: Es): Definer<Es> => {
+    const id = Symbol();
+
+    return <const S extends UnionToIntersection<NeedOf<Es[number]>> & Record<string, unknown>>(
+      state: S,
+    ): EntitySignal<S> => {
+      const { use } = ctx;
+
+      // 1. 各系统登记：只往自己的池里放 id，不再返回数据
+      for (const enter of enters) {
+        enter(id, ctx, state);
+      }
+
+      // 2. 渲染信号：必须持有 state 的**浅拷贝**（新引用）。
+      //    若直接把 state 交给信号，原地修改就不会改变引用，按引用比较的
+      //    传播机制不会触发——视图永远不更新。
+      const signal = use({ ...state }) as EntitySignal<S>;
+      signal.id = id;
+
+      // 3. 存入数据池：引擎只见 { state, flush }，不见 signal
+      //    flush 把 state 浅拷贝给信号。注意：**方法（函数）也会被拷进去**，
+      //    这是有意接受的——渲染层只读需要的字段，多出的函数无害。
+      options.register(ctx, id, {
+        state: state as unknown as T,
+        flush: () => signal({ ...state }),
+      });
+
+      return signal;
+    };
+  };
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 游戏引擎
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -80,11 +164,11 @@ export type Update<T extends Record<string, any> = Record<string, any>> = (
  * 创建游戏：持有帧循环与主数据池。
  * 系统形态统一：工厂返回对象（含 update），createGame 只收集 update 按序执行；
  * 事件队列/emit 等能力由系统自持（闭包），系统间通过组装层注入的 emit 引用连接。
- * - useEntity(ctx, ...enters)：组件注册实体，合并各系统切片为完整实体
+ * - define(ctx, ...enters)(state)：组件定义实体（state 写全，enters 只进池）
  * - dispose()：停止帧循环（组件卸载、游戏结束等场景）
  */
 export function createGame<T extends Record<string, any> = Record<string, any>>(
-  updates: Array<Update<T>>,
+  updates: ReadonlyArray<Update<any>>,
   options?: { autostart?: boolean },
 ) {
   // 主数据池：id → { state, flush }
@@ -130,48 +214,21 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
 
   if (options?.autostart !== false) start();
 
-  // ─── useEntity: 组件注册实体 ─────────────────────────
-  // 实体 = 信号（组件绑定句柄）+ id（帧循环身份）——id 挂在信号上，一个对象两个身份
-  const useEntity = (
-    ctx: Context,
-    ...enters: Array<(id: EntityId, ctx: Context) => Partial<T>>
-  ): EntitySignal<T> => {
-    const { use, onMount, onUnmount } = ctx;
-    const id = Symbol();
-
-    // 1. 合并各系统数据切片
-    // 框架契约：注册的系统切片合并后构成完整实体；
-    // 系统 update 消费的字段（如碰撞的 w/h）必须由注册的某系统切片提供
-    const state = {} as T;
-    for (const enter of enters) {
-      Object.assign(state, enter(id, ctx));
-    }
-
-    // 2. 渲染信号：必须持有 state 的**浅拷贝**（新引用）。
-    //    若直接把 state 交给信号，原地修改就不会改变引用，按引用比较的
-    //    传播机制不会触发——视图永远不更新。
-    const signal = use<T>({ ...state }) as EntitySignal<T>;
-    signal.id = id;
-
-    // 3. 存入数据池：引擎只见 { state, flush }，不见 signal
-    const entry: PoolEntry<T> = {
-      state,
-      flush: () => signal({ ...state }),
-    };
-
-    onMount(() => {
-      gamePool.set(id, entry);
-    });
-
-    onUnmount(() => {
-      gamePool.delete(id);
-    });
-
-    return signal;
-  };
+  // ─── define: 组件定义实体 ─────────────────────────
+  // 数据归组件（state 由组件写全），系统只声明参与（enter 只进池）
+  const define = createDefine<T>({
+    register: (ctx, id, entry) => {
+      ctx.onMount(() => {
+        gamePool.set(id, entry);
+      });
+      ctx.onUnmount(() => {
+        gamePool.delete(id);
+      });
+    },
+  });
 
   return {
-    useEntity,
+    define,
     // 开始/恢复帧循环（幂等；恢复时重置时间基准，不跳帧）
     start,
     // 停止/暂停帧循环（幂等；状态保留在数据中，start 可恢复）

@@ -1,39 +1,29 @@
 import { type Context, type Signal } from "kiaao";
 
-import type { EntityId, FrameManager } from "../engine";
-import type { Bounds, Shape } from "../engine/systems";
+import type { EntityId, Enter, FrameManager } from "../engine";
 import type { SoundName } from "./assets";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 打砖块实体（球 / 挡板 / 砖块 / 状态实体共用同一结构）
+// 打砖块实体字段
+//
+// **不再有 BreakoutEntity 联合类型**。早期版本把各系统的字段揉成一个类型，
+// 那正是「读一个实体要在几个文件间跳」的根因。现在字段由组件在 state
+// 字面量里写全，系统各自声明自己的最小需求（见 engine/systems.ts）。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/**
- * 打砖块实体：所有实体共用同一类型（并集语义）。
- * 物理字段由基础系统切片提供；状态字段仅状态实体注册（其余实体为 undefined）。
- */
-export type BreakoutEntity = {
-  // 物理字段（movement / boundary / collision 切片）
+/** 球的私有字段：关联实体目录数组项（规则系统按它声明式销毁） */
+export type WithDataId = { dataId: number };
+
+/** 规则系统需要的实体字段（球 / 挡板 / 砖块共用部分） */
+export type RuleEntity = {
   x: number;
   y: number;
   vx: number;
   vy: number;
   w: number;
   h: number;
-  bounds: Bounds;
-  shape: Shape;
   enabled: boolean;
-  breakable: boolean;
-  drive: number;
-  points: number;
-  // 出生标识（球注册时提供：关联实体目录数组项）
-  dataId: number;
-  // 状态字段（仅状态实体注册：实体目录 + 游戏状态）
-  balls: BallData[];
-  score: number;
-  lives: number;
-  state: GameState;
-};
+} & Partial<WithDataId>;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 游戏常量
@@ -112,7 +102,7 @@ export type RuleDeps = {
  * 挡板/砖块实体注册进本系统的池（像普通系统的 pool 一样持有实体）；
  * 全局状态（分数/生命/状态机/球目录）不在实体中——是事件处理的产物，由 deps 注入的信号承载。
  */
-export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
+export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   // 闭包事件队列（每类型一个）
   const breakQueue: BreakPayload[] = [];
   const outQueue: OutPayload[] = [];
@@ -133,34 +123,28 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
     restart: (p: RestartPayload) => restartQueue.push(p),
   };
 
-  // enter：实体进入接口（与 emit 对称——实体进入 / 事件进入）
+  // enter：实体进入接口——只进池，不提供数据（与 emit 对称）
   const enter = {
     // 挡板（供发球时读取位置）
-    paddle: () => {
-      return (id: EntityId, ctx: Context) => {
-        const { onMount, onUnmount } = ctx;
-        onMount(() => {
-          paddlePool.add(id);
-        });
-        onUnmount(() => {
-          paddlePool.delete(id);
-        });
-        return {};
-      };
-    },
+    paddle: ((id: EntityId, ctx: Context) => {
+      const { onMount, onUnmount } = ctx;
+      onMount(() => {
+        paddlePool.add(id);
+      });
+      onUnmount(() => {
+        paddlePool.delete(id);
+      });
+    }) as Enter<RuleEntity>,
     // 砖块（供重开时统一恢复 enabled）
-    brick: () => {
-      return (id: EntityId, ctx: Context) => {
-        const { onMount, onUnmount } = ctx;
-        onMount(() => {
-          brickPool.add(id);
-        });
-        onUnmount(() => {
-          brickPool.delete(id);
-        });
-        return {};
-      };
-    },
+    brick: ((id: EntityId, ctx: Context) => {
+      const { onMount, onUnmount } = ctx;
+      onMount(() => {
+        brickPool.add(id);
+      });
+      onUnmount(() => {
+        brickPool.delete(id);
+      });
+    }) as Enter<RuleEntity>,
   };
 
   // 挡板跟随优化：方向不变时零写入（避免无谓信号传播）
@@ -189,7 +173,7 @@ export function createRuleSystem<T extends BreakoutEntity>(deps: RuleDeps) {
 }
 
 /** 击碎：禁用砖块 + 球加速 + 加分；分数满则胜利（链式发射 win） */
-function onBreak(frame: FrameManager<BreakoutEntity>, payload: BreakPayload, deps: RuleDeps) {
+function onBreak(frame: FrameManager<RuleEntity>, payload: BreakPayload, deps: RuleDeps) {
   const b = frame(payload.id);
   if (!b || !b.enabled) return; // 幂等：已被击碎（同帧多球撞击）
 
@@ -212,7 +196,7 @@ function onBreak(frame: FrameManager<BreakoutEntity>, payload: BreakPayload, dep
 }
 
 /** 出界：按 dataId 声明式销毁该球；球全没则减命，生命耗尽失败（链式发射 lose） */
-function onOut(frame: FrameManager<BreakoutEntity>, payload: OutPayload, deps: RuleDeps) {
+function onOut(frame: FrameManager<RuleEntity>, payload: OutPayload, deps: RuleDeps) {
   if (deps.state() !== "running") return; // 非运行状态不处理出界
 
   const b = frame(payload.id);
@@ -232,11 +216,7 @@ function onOut(frame: FrameManager<BreakoutEntity>, payload: OutPayload, deps: R
 }
 
 /** 发球：ready 且无球时，从挡板上方生成第一个球 */
-function onLaunch(
-  frame: FrameManager<BreakoutEntity>,
-  paddleId: EntityId | undefined,
-  deps: RuleDeps,
-) {
+function onLaunch(frame: FrameManager<RuleEntity>, paddleId: EntityId | undefined, deps: RuleDeps) {
   if (!paddleId) return;
   if (deps.state() !== "ready" || deps.balls().length > 0) return;
 
@@ -268,7 +248,7 @@ function onClick(payload: ClickPayload, deps: RuleDeps) {
 }
 
 /** 重开：重置全局状态 + 遍历砖块池恢复 enabled */
-function onRestart(frame: FrameManager<BreakoutEntity>, brickPool: Set<EntityId>, deps: RuleDeps) {
+function onRestart(frame: FrameManager<RuleEntity>, brickPool: Set<EntityId>, deps: RuleDeps) {
   deps.balls([]);
   deps.score(0);
   deps.lives(LIVES);

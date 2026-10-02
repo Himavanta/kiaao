@@ -1,13 +1,13 @@
-import { use, type Context, type Signal } from "kiaao";
+import { use, type Signal } from "kiaao";
 
-import type { EntityId, FrameManager } from "./index";
+import type { EntityId, Enter, FrameManager } from "./index";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 系统字段需求
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/** 移动系统字段需求：实体具备位置与速度 */
-export type Movable = { x: number; y: number; vx: number; vy: number };
+/** 移动系统字段需求：位置、速度、池路由（moving 决定进哪个池） */
+export type Movable = { x: number; y: number; vx: number; vy: number; moving: boolean };
 /** 边界/碰撞系统字段需求：实体具备尺寸 */
 export type Bounded = Movable & { w: number; h: number };
 
@@ -20,28 +20,15 @@ export function createMovementSystem<T extends Movable = Movable>() {
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  // enter: 接收配置，返回初始化函数
-  const enter = (props: { x?: number; y?: number; vx?: number; vy?: number; moving?: boolean }) => {
-    return (id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      const isMoving = props.moving ?? true;
-
-      onMount(() => {
-        (isMoving ? movePool : staticPool).add(id);
-      });
-      onUnmount(() => {
-        movePool.delete(id);
-        staticPool.delete(id);
-      });
-
-      // 返回数据切片：静止实体的速度恒为 0
-      return {
-        x: props.x ?? 0,
-        y: props.y ?? 0,
-        vx: isMoving ? (props.vx ?? 0) : 0,
-        vy: isMoving ? (props.vy ?? 0) : 0,
-      };
-    };
+  const enter: Enter<T> = (id, ctx, state) => {
+    const { onMount, onUnmount } = ctx;
+    onMount(() => {
+      (state.moving ? movePool : staticPool).add(id);
+    });
+    onUnmount(() => {
+      movePool.delete(id);
+      staticPool.delete(id);
+    });
   };
 
   // update: 帧逻辑，只遍历移动池（静止池实体不参与帧写入）
@@ -72,11 +59,14 @@ export type Bounds = {
   bottom: BoundAction;
 };
 
-/** 默认动作：四边反弹（与旧版行为一致） */
-const DEFAULT_BOUNDS: Bounds = { left: "bounce", right: "bounce", top: "bounce", bottom: "bounce" };
-
-/** 边界系统字段需求：实体具备尺寸与边界动作 */
-export type BoundedEntity = Bounded & { bounds: Bounds };
+/**
+ * 边界系统字段需求：尺寸 + **扁平的**四边动作。
+ *
+ * 动作刻意不放在嵌套的 `bounds: {}` 里：`flush` 用浅拷贝提交状态，嵌套对象
+ * 会与渲染信号共享引用（当前 `bounds` 只读所以安全，但那是靠约定活着）。
+ * 拍平后顶层字段天然隔离。
+ */
+export type BoundedEntity = Bounded & Bounds;
 
 /** 边界系统事件路由：die 边出界（由组装层绑定消费者） */
 export type BoundaryRoutes = { onOut?: (payload: { id: EntityId }) => void };
@@ -90,28 +80,19 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
 ) {
   const pool = new Set<EntityId>();
 
-  const enter = (props: { w?: number; h?: number; bounds?: Partial<Bounds> }) => {
-    return (id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      onMount(() => {
-        pool.add(id);
-      });
-      onUnmount(() => {
-        pool.delete(id);
-      });
-
-      // 返回数据切片：边界动作参与帧判定
-      return {
-        w: props.w ?? 80,
-        h: props.h ?? 80,
-        bounds: { ...DEFAULT_BOUNDS, ...props.bounds },
-      };
-    };
+  const enter: Enter<T> = (id, ctx) => {
+    const { onMount, onUnmount } = ctx;
+    onMount(() => {
+      pool.add(id);
+    });
+    onUnmount(() => {
+      pool.delete(id);
+    });
   };
 
   // 水平边处理：left / right（die 边由 update 提前拦截并报告事件）
   const applyHorizontal = (e: T, maxX: number) => {
-    const { left, right } = e.bounds;
+    const { left, right } = e;
     if (e.x < 0) {
       if (left === "bounce") {
         e.x = 0;
@@ -134,7 +115,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
 
   // 垂直边处理：top / bottom（die 边由 update 提前拦截并报告事件）
   const applyVertical = (e: T, maxY: number) => {
-    const { top, bottom } = e.bounds;
+    const { top, bottom } = e;
     if (e.y < 0) {
       if (top === "bounce") {
         e.y = 0;
@@ -157,23 +138,21 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
 
   // 是否存在需要处理的越界（pass 边忽略）
   const isOutOfBounds = (e: T, maxX: number, maxY: number) => {
-    const { bounds } = e;
     return (
-      (e.x < 0 && bounds.left !== "pass") ||
-      (e.x + e.w > maxX && bounds.right !== "pass") ||
-      (e.y < 0 && bounds.top !== "pass") ||
-      (e.y + e.h > maxY && bounds.bottom !== "pass")
+      (e.x < 0 && e.left !== "pass") ||
+      (e.x + e.w > maxX && e.right !== "pass") ||
+      (e.y < 0 && e.top !== "pass") ||
+      (e.y + e.h > maxY && e.bottom !== "pass")
     );
   };
 
   // 是否存在 die 边出界（出界事实由游戏规则处理）
   const hasDieEdge = (e: T, maxX: number, maxY: number) => {
-    const { bounds } = e;
     return (
-      (e.x < 0 && bounds.left === "die") ||
-      (e.x + e.w > maxX && bounds.right === "die") ||
-      (e.y < 0 && bounds.top === "die") ||
-      (e.y + e.h > maxY && bounds.bottom === "die")
+      (e.x < 0 && e.left === "die") ||
+      (e.x + e.w > maxX && e.right === "die") ||
+      (e.y < 0 && e.top === "die") ||
+      (e.y + e.h > maxY && e.bottom === "die")
     );
   };
 
@@ -297,40 +276,25 @@ export type CollisionRoutes = {
   onBounce?: (payload: { id: EntityId; by: EntityId }) => void;
 };
 
+/**
+ * 碰撞系统：命中检测与分离。
+ *
+ * 早期版本从 `e.bounds` 读尺寸，现在改读扁平字段（见 `BoundedEntity`）。
+ */
 export function createCollisionSystem<T extends Collidable = Collidable>(routes?: CollisionRoutes) {
   // 移动池 + 静止池：配对只发生在移动实体侧，静止×静止不检测
   const movePool = new Set<EntityId>();
   const staticPool = new Set<EntityId>();
 
-  const enter = (props: {
-    moving?: boolean;
-    shape?: Shape;
-    enabled?: boolean;
-    breakable?: boolean;
-    drive?: number;
-    points?: number;
-  }) => {
-    return (id: EntityId, ctx: Context) => {
-      const { onMount, onUnmount } = ctx;
-      const isMoving = props.moving ?? true;
-
-      onMount(() => {
-        (isMoving ? movePool : staticPool).add(id);
-      });
-      onUnmount(() => {
-        movePool.delete(id);
-        staticPool.delete(id);
-      });
-
-      // 返回数据切片：形状/开关/可击碎/传导系数/击碎奖励参与碰撞判定
-      return {
-        shape: props.shape ?? "rect",
-        enabled: props.enabled ?? true,
-        breakable: props.breakable ?? false,
-        drive: props.drive ?? 0,
-        points: props.points ?? 0,
-      };
-    };
+  const enter: Enter<T> = (id, ctx, state) => {
+    const { onMount, onUnmount } = ctx;
+    onMount(() => {
+      (state.moving ? movePool : staticPool).add(id);
+    });
+    onUnmount(() => {
+      movePool.delete(id);
+      staticPool.delete(id);
+    });
   };
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
@@ -421,7 +385,8 @@ export type InputRoutes = {
 
 /** 输入系统：源系统——DOM 事件到即转发（压入消费者队列），无自己的队列 */
 export type InputSystem = {
-  enter: () => (id: EntityId, ctx: Context) => Record<string, never>;
+  /** 只借用宿主实体的生命周期钩子挂监听，不参与池遍历（无字段需求） */
+  enter: Enter<Record<string, unknown>>;
   /** 持续状态：方向信号（-1 左 / 0 停 / 1 右），帧逻辑每帧读取 */
   dir: Signal<number>;
 };
@@ -452,19 +417,17 @@ export function createInputSystem(routes: InputRoutes): InputSystem {
     }
   };
 
-  // enter 工厂：与其他系统同形（接收配置，返回初始化函数）——无配置，仅借用生命周期钩子
-  const enter = () => {
-    return (_id: EntityId, ctx: Context) => {
-      ctx.onMount(() => {
-        window.addEventListener("keydown", onKeyDown);
-        window.addEventListener("keyup", onKeyUp);
-      });
-      ctx.onUnmount(() => {
-        window.removeEventListener("keydown", onKeyDown);
-        window.removeEventListener("keyup", onKeyUp);
-      });
-      return {};
-    };
+  // enter：与其他系统同形（不再接收参数、不再返回数据）——
+  // 本系统无池、无 update，只借用宿主实体的 ctx 钩子挂监听。
+  const enter: Enter<Record<string, unknown>> = (_id, ctx) => {
+    ctx.onMount(() => {
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("keyup", onKeyUp);
+    });
+    ctx.onUnmount(() => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    });
   };
 
   return { enter, dir };

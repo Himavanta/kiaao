@@ -1,8 +1,7 @@
 import { Show, type Context, type Signal } from "kiaao";
 
 import { StyleMemo } from "../engine/directives";
-import type { Bounds } from "../engine/systems";
-import { boundary, collision, gameState, input, movement, rules, useEntity } from "./game-instance";
+import { boundary, collision, define, gameState, input, movement, rules } from "./game-instance";
 import {
   ARENA_H,
   ARENA_W,
@@ -11,11 +10,8 @@ import {
   PADDLE_H,
   PADDLE_W,
   type BallData,
-  type BreakoutEntity,
   type GameState,
 } from "./systems";
-
-const PADDLE_BOUNDS: Bounds = { left: "clamp", right: "clamp", top: "pass", bottom: "pass" };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 球实体组件：声明式生命周期的承载者（数组驱动挂载/卸载）
@@ -29,18 +25,32 @@ type BallProps = {
 function Ball({ data }: BallProps, ctx: Context) {
   const { use } = ctx;
 
-  // dataId 关联球实体目录数组项（规则系统出界时按此销毁）
-  const entity = useEntity(
+  const entity = define(
     ctx,
-    () => ({ dataId: data.id }),
-    movement.enter({ x: data.x, y: data.y, vx: data.vx, vy: data.vy }),
-    boundary.enter({
-      w: BALL_SIZE,
-      h: BALL_SIZE,
-      bounds: { left: "bounce", right: "bounce", top: "bounce", bottom: "die" },
-    }),
-    collision.enter({ moving: true, shape: "circle" }),
-  );
+    movement.enter,
+    boundary.enter,
+    collision.enter,
+  )({
+    x: data.x,
+    y: data.y,
+    vx: data.vx,
+    vy: data.vy,
+    moving: true,
+    w: BALL_SIZE,
+    h: BALL_SIZE,
+    // 四边：三边反弹、底边出界
+    left: "bounce",
+    right: "bounce",
+    top: "bounce",
+    bottom: "die",
+    shape: "circle",
+    enabled: true,
+    breakable: false,
+    drive: 0,
+    points: 0,
+    // 私有字段：关联球目录数组项（规则系统出界时按此销毁）
+    dataId: data.id,
+  });
 
   return (
     <StyleMemo
@@ -66,16 +76,34 @@ function Ball({ data }: BallProps, ctx: Context) {
 function PaddleView(_: Record<string, never>, ctx: Context) {
   const { use } = ctx;
 
-  // 挡板实体在拥有它的组件内注册（声明式生命周期：球在 Ball、砖在 Brick、挡板在此）
+  // 挡板实体在拥有它的组件内定义（声明式生命周期）
   // 顺带 enter 输入系统：借用 ctx 钩子挂载/移除键盘监听（随游戏运行窗口）
-  const paddle = useEntity(
+  const paddle = define(
     ctx,
-    rules.enter.paddle(),
-    input.enter(),
-    movement.enter({ x: (ARENA_W - PADDLE_W) / 2, y: ARENA_H - 48, vx: 0, vy: 0 }),
-    boundary.enter({ w: PADDLE_W, h: PADDLE_H, bounds: PADDLE_BOUNDS }),
-    collision.enter({ moving: false, shape: "rect", drive: 0.5 }),
-  );
+    rules.enter.paddle,
+    input.enter,
+    movement.enter,
+    boundary.enter,
+    collision.enter,
+  )({
+    x: (ARENA_W - PADDLE_W) / 2,
+    y: ARENA_H - 48,
+    vx: 0,
+    vy: 0,
+    moving: false,
+    w: PADDLE_W,
+    h: PADDLE_H,
+    // 四边：左右夹住、上下不参与
+    left: "clamp",
+    right: "clamp",
+    top: "pass",
+    bottom: "pass",
+    shape: "rect",
+    enabled: true,
+    breakable: false,
+    drive: 0.5,
+    points: 0,
+  });
 
   return (
     <>
@@ -101,7 +129,10 @@ function PaddleView(_: Record<string, never>, ctx: Context) {
 // 待发球：ready 状态显示的虚拟球（纯 UI 跟随挡板，无实体）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function ReadyBall({ paddle }: { paddle: Signal<BreakoutEntity> }, ctx: Context) {
+function ReadyBall<T extends { x: number; y: number; w: number }>(
+  { paddle }: { paddle: Signal<T> },
+  ctx: Context,
+) {
   const { use } = ctx;
 
   const isReady = use(gameState.state, () => gameState.state() === "ready");

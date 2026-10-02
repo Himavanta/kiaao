@@ -1,8 +1,7 @@
 import { type Context } from "kiaao";
 
 import { StyleMemo } from "../engine/directives";
-import type { Bounds } from "../engine/systems";
-import { boundary, collision, movement, rules, useEntity } from "./game-instance";
+import { boundary, collision, define, movement, rules } from "./game-instance";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 砖块布局
@@ -48,10 +47,9 @@ export function createBrickGrid(
   return bricks;
 }
 
-// 砖块尺寸与边界（全 pass：不参与边界系统处理）
+// 砖块尺寸与四边动作（全 pass：不参与边界系统处理）
 export const BRICK_W = 84;
 export const BRICK_H = 26;
-export const PASS_BOUNDS: Bounds = { left: "pass", right: "pass", top: "pass", bottom: "pass" };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 砖块组件（模块级游戏实例：直接 import 引用系统与注册入口）
@@ -65,17 +63,40 @@ type BrickProps = {
  * 砖块：静止实体，碰撞可击碎。
  * 击碎事实由碰撞系统经路由发射、规则系统落地（enabled 置 false）；
  * 组件只订阅实体数据隐藏，不承载任何游戏逻辑。
+ *
+ * 数据全部写在 state 字面量里（系统不再提供切片）——读到这里就知道
+ * “一块砖有什么”。
  */
 function Brick({ data }: BrickProps, ctx: Context) {
   const { use } = ctx;
 
-  const entity = useEntity(
+  const entity = define(
     ctx,
-    movement.enter({ x: data.x, y: data.y, moving: false }),
-    boundary.enter({ w: BRICK_W, h: BRICK_H, bounds: PASS_BOUNDS }),
-    collision.enter({ moving: false, enabled: true, breakable: true, points: data.points }),
-    rules.enter.brick(),
-  );
+    movement.enter,
+    boundary.enter,
+    collision.enter,
+    rules.enter.brick,
+  )({
+    // 物理
+    x: data.x,
+    y: data.y,
+    vx: 0,
+    vy: 0,
+    moving: false,
+    w: BRICK_W,
+    h: BRICK_H,
+    // 边界：全 pass（砖块不参与边界处理）
+    left: "pass",
+    right: "pass",
+    top: "pass",
+    bottom: "pass",
+    // 碰撞
+    shape: "rect",
+    enabled: true,
+    breakable: true,
+    drive: 0,
+    points: data.points,
+  });
 
   return (
     <StyleMemo
