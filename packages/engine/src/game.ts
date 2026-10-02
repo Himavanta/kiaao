@@ -7,8 +7,17 @@ import type { Context, Signal } from "kiaao";
 /** 实体标识：Symbol 天然唯一，全链路统一使用 */
 export type EntityId = symbol;
 
-/** 实体信号：组件的绑定句柄，id 为帧循环身份（挂在信号上） */
-export type EntitySignal<T> = Signal<T> & { id: EntityId };
+/**
+ * 实体信号：组件的绑定句柄。
+ *
+ * 它携带两个视图：
+ * - **调用它（`entity()`）**读渲染快照——帧末由 `flush` 提交，驱动 DOM
+ * - **`entity.state`**是系统读写的**同一个活对象**
+ *
+ * 两者是不同的对象（快照靠新引用才能触发传播）。需要写入实体时应该用
+ * `state`：写信号只会被下一帧的 `flush` 覆盖。
+ */
+export type EntitySignal<T> = Signal<T> & { id: EntityId; state: T };
 
 /**
  * 池里的条目：活状态对象 + 提交函数。
@@ -136,6 +145,10 @@ export function createDefine<T extends Record<string, any>>(options: {
       //    传播机制不会触发——视图永远不更新。
       const signal = use({ ...state }) as EntitySignal<S>;
       signal.id = id;
+      // 同时挂上活对象引用：信号是组件拿到的唯一句柄，
+      // 而系统读写的是这个活对象。需要写入实体时必须走它
+      // （写信号只会被下一帧的 flush 覆盖）。
+      signal.state = state;
 
       // 3. 存入数据池：引擎只见 { state, flush }，不见 signal
       //    flush 把 state 浅拷贝给信号。注意：**方法（函数）也会被拷进去**，

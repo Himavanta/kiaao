@@ -22,7 +22,11 @@ export const StyleMemo = direct((el, props, { use }) => {
       // 信号：值变化 → 仅更新该属性
       use(val, () => {
         const v = (val as Signal<any>)();
-        (style as any)[key] = v;
+        // null / undefined 写 `""` 才能真的移除属性。
+        // 直接写 `null` 不行：CSSStyleDeclaration 会静默忽略
+        // `null`（`left` 保留旧值），而 `zIndex` 这类会把字面量
+        // `null` 写进去（`z-index: null;`）。
+        (style as any)[key] = v ?? "";
       });
     } else if (val != null) {
       // 静态值：挂载时写入一次

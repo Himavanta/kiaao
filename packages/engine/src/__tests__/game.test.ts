@@ -225,6 +225,35 @@ describe("dispose", () => {
 
     raf.restore();
   });
+
+  test("dispose 清空实体池：frame 返回 undefined", () => {
+    const raf = createRaf();
+    const seen: Array<unknown> = [];
+    const game = createGame<{ x: number }>(
+      [
+        (frame) => {
+          seen.push(frame(entityId));
+        },
+      ],
+      { autostart: false },
+    );
+
+    const { ctx, mounts } = createTestContext();
+    const signal = game.define(ctx)({ x: 0 }) as unknown as { id: symbol };
+    const entityId = signal.id;
+    mounts.forEach((fn) => fn());
+
+    game.start();
+    raf.tick();
+    expect(seen[0]).toBeDefined();
+
+    game.dispose();
+    game.start();
+    raf.tick();
+    expect(seen[1]).toBeUndefined();
+
+    raf.restore();
+  });
 });
 
 describe("定义实体与帧末提交", () => {
@@ -282,6 +311,49 @@ describe("定义实体与帧末提交", () => {
     unmounts.forEach((fn) => fn());
     raf.tick();
     expect(seen[1]).toBeUndefined();
+
+    raf.restore();
+  });
+
+  test("信号的 state 就是系统读写的活对象（同一引用）", () => {
+    const raf = createRaf();
+    const state = { x: 0 };
+    const game = createGame<{ x: number }>([], { autostart: false });
+
+    const { ctx, mounts } = createTestContext();
+    const signal = game.define(ctx)(state) as unknown as { state: { x: number } };
+    mounts.forEach((fn) => fn());
+
+    expect(signal.state).toBe(state);
+
+    // 改 state：跑一帧后渲染快照跟上
+    signal.state.x = 42;
+    game.start();
+    raf.tick();
+    expect((signal as unknown as () => { x: number })().x).toBe(42);
+
+    raf.restore();
+  });
+
+  test("写信号会被下一帧 flush 覆盖（故写入必须走 state）", () => {
+    const raf = createRaf();
+    const state = { x: 0 };
+    const game = createGame<{ x: number }>([], { autostart: false });
+
+    const { ctx, mounts } = createTestContext();
+    const signal = game.define(ctx)(state) as unknown as {
+      (value: { x: number }): void;
+      (): { x: number };
+    };
+    mounts.forEach((fn) => fn());
+
+    signal({ x: 99 });
+    expect(signal().x).toBe(99);
+
+    // 活对象没变，flush 把 { x: 0 } 又提交回去
+    game.start();
+    raf.tick();
+    expect(signal().x).toBe(0);
 
     raf.restore();
   });
