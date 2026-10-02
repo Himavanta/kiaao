@@ -315,19 +315,19 @@ describe("定义实体与帧末提交", () => {
     raf.restore();
   });
 
-  test("信号的 state 就是系统读写的活对象（同一引用）", () => {
+  test("game.frame(id) 拿到系统读写的同一活对象", () => {
     const raf = createRaf();
     const state = { x: 0 };
     const game = createGame<{ x: number }>([], { autostart: false });
 
     const { ctx, mounts } = createTestContext();
-    const signal = game.define(ctx)(state) as unknown as { state: { x: number } };
+    const signal = game.define(ctx)(state) as unknown as { id: symbol };
     mounts.forEach((fn) => fn());
 
-    expect(signal.state).toBe(state);
+    expect(game.frame(signal.id)).toBe(state);
 
-    // 改 state：跑一帧后渲染快照跟上
-    signal.state.x = 42;
+    // 改活对象：跑一帧后渲染快照跟上
+    game.frame(signal.id)!.x = 42;
     game.start();
     raf.tick();
     expect((signal as unknown as () => { x: number })().x).toBe(42);
@@ -335,7 +335,30 @@ describe("定义实体与帧末提交", () => {
     raf.restore();
   });
 
-  test("写信号会被下一帧 flush 覆盖（故写入必须走 state）", () => {
+  test("帧管理器不随帧重建：每帧交给系统的是同一个函数", () => {
+    const raf = createRaf();
+    const seen: Array<unknown> = [];
+    const game = createGame<{ x: number }>(
+      [
+        (frame) => {
+          seen.push(frame);
+        },
+      ],
+      { autostart: false },
+    );
+
+    game.start();
+    raf.tick();
+    raf.tick();
+
+    expect(seen.length).toBe(2);
+    expect(seen[0]).toBe(seen[1]);
+    expect(seen[0]).toBe(game.frame);
+
+    raf.restore();
+  });
+
+  test("写信号会被下一帧 flush 覆盖（故写入必须走 game.frame）", () => {
     const raf = createRaf();
     const state = { x: 0 };
     const game = createGame<{ x: number }>([], { autostart: false });

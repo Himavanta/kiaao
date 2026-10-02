@@ -15,7 +15,7 @@ import { use, type Context } from "kiaao";
 
 import type { ActorEntity } from "../types";
 
-/** 各系统切片字段齐全的实体（默认值覆盖 locomotion/behaviour/perception/alarm/interaction） */
+/** 字段齐全的实体（默认值覆盖 locomotion / behaviour / perception / alarm / interaction 的需求） */
 export function makeActorState(overrides: Partial<ActorEntity> = {}): ActorEntity {
   const base: ActorEntity = {
     // locomotion

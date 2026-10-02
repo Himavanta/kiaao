@@ -10,14 +10,13 @@ export type EntityId = symbol;
 /**
  * 实体信号：组件的绑定句柄。
  *
- * 它携带两个视图：
- * - **调用它（`entity()`）**读渲染快照——帧末由 `flush` 提交，驱动 DOM
- * - **`entity.state`**是系统读写的**同一个活对象**
+ * 调用它（`entity()`）读**渲染快照**——帧末由 `flush` 提交，驱动 DOM。
  *
- * 两者是不同的对象（快照靠新引用才能触发传播）。需要写入实体时应该用
- * `state`：写信号只会被下一帧的 `flush` 覆盖。
+ * 它**不携带活状态**。「读写实体数据」是系统的职责，入口是 `frame(id)`
+ * （系统从 `update` 参数拿到，外部从 `game.frame` 拿到）。两者刻意分开：
+ * 快照走响应式通道，活对象走帧事务通道，混在一起会让「写哪个」变得含糊。
  */
-export type EntitySignal<T> = Signal<T> & { id: EntityId; state: T };
+export type EntitySignal<T> = Signal<T> & { id: EntityId };
 
 /**
  * 池里的条目：活状态对象 + 提交函数。
@@ -145,10 +144,6 @@ export function createDefine<T extends Record<string, any>>(options: {
       //    传播机制不会触发——视图永远不更新。
       const signal = use({ ...state }) as EntitySignal<S>;
       signal.id = id;
-      // 同时挂上活对象引用：信号是组件拿到的唯一句柄，
-      // 而系统读写的是这个活对象。需要写入实体时必须走它
-      // （写信号只会被下一帧的 flush 覆盖）。
-      signal.state = state;
 
       // 3. 存入数据池：引擎只见 { state, flush }，不见 signal
       //    flush 把 state 浅拷贝给信号。注意：**方法（函数）也会被拷进去**，
@@ -187,6 +182,10 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
   // 主数据池：id → { state, flush }
   const gamePool = new Map<EntityId, PoolEntry<T>>();
 
+  // 帧管理器**只闭包了 gamePool**，与帧循环无关，所以建一次就够。
+  // 外部（工具、测试、调试层）要拿实体活对象时用它：`game.frame(id)`。
+  const { frame, flush } = createFrameManager(gamePool);
+
   let prevTime = performance.now();
   let rafId = 0;
   let running = false;
@@ -202,9 +201,6 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
     const now = performance.now();
     const delta = Math.min((now - prevTime) / 1000, 0.05);
     prevTime = now;
-
-    // 创建帧管理器（活状态对象）
-    const { frame, flush } = createFrameManager(gamePool);
 
     // 按序执行所有系统（事件系统的 update 在此处理各自的闭包队列）
     for (const update of updates) {
@@ -254,6 +250,10 @@ export function createGame<T extends Record<string, any> = Record<string, any>>(
 
   return {
     define,
+    // 实体活对象入口：与系统 update 收到的 frame 是同一个函数。
+    // 工具/调试/测试需要读到「系统正在读写的那个对象」时用它——
+    // 不要用实体信号的快照（它只在帧末提交）。
+    frame,
     // 开始/恢复帧循环（幂等；恢复时重置时间基准，不跳帧）
     start,
     // 停止/暂停帧循环（幂等；状态保留在数据中，start 可恢复）

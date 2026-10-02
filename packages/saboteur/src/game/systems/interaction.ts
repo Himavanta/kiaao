@@ -190,10 +190,13 @@ export function createInteractionSystem(options: {
     const entity = player();
     if (!entity) return;
 
-    // 读**活对象**而不是渲染快照：快照只在帧末提交，帧内读到的是上一帧的值。
-    // 玩家位置可能在同帧被 locomotion 改过，用快照会算错手心格。
-    const me = access.actors<ActorEntity>(entity.id) ?? entity.state;
-    if (me.dead) return;
+    // 读**活对象**（帧管理器）而不是渲染快照：快照只在帧末提交，
+    // 帧内读到的是上一帧的值。玩家位置可能在同帧被 locomotion 改过，
+    // 用快照会算错手心格。
+    // 玩家一定在角色池里（`Actor` 为 role="player" 也注册 `interaction.enter`），
+    // 故这里不需要回退分支。
+    const me = access.actors<ActorEntity>(entity.id);
+    if (!me || me.dead) return;
 
     const cell = frontCell(me);
 

@@ -1,8 +1,16 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 游戏实体结构：各系统切片的并集
+// 游戏实体结构：全部实体的字段清单
 //
-// 每个字段标注【写者】——帧循环里谁写它必须唯一且明确，
-// 其余系统只读。写入冲突是 ECS 最常见的数据竞争来源。
+// 字段不来自任何系统——它由视图的 `state` 字面量写全（各系统的
+// `spawn()` 产出各自负责的那部分）。本文件的作用有两个：
+//
+// 1. **注册表与调试层的共享类型**（`playerEntity` / `listActors()`）
+// 2. **字段与写者的文档**——每个字段标注【写者】，帧循环里谁写它必须
+//    唯一且明确，其余系统只读。写入冲突是 ECS 最常见的数据竞争来源。
+//
+// 各系统**实际会读到哪些字段**不在这里声明，而在各自的
+// `Enter<Pick<ActorEntity, ...>>`（如 `locomotion.ts` 的 `Movable`）——
+// 那个交集检查会在漏写字段时报错。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import type { EntityId } from "engine";
@@ -34,7 +42,7 @@ export function facingFromVector(dx: number, dy: number): Facing | undefined {
 }
 
 export type ActorEntity = {
-  // ── locomotion 切片 ──
+  // ── 【locomotion 写】位置与速度 ──
   /** 【locomotion 写】世界坐标位置（px，角色左上角） */
   x: number;
   y: number;
@@ -45,7 +53,7 @@ export type ActorEntity = {
   /** 【locomotion 写】当前是否潜行中 */
   sneaking: boolean;
 
-  // ── navigation 切片 ──
+  // ── 【behaviour 写】行为与路径 ──
   /** 【navigation 写】待走的格序列（不含当前格）；空表示已到达或未规划 */
   path: Cell[];
   /** 【navigation 写】当前目标格；null 表示无目的（停留中） */
@@ -55,7 +63,7 @@ export type ActorEntity = {
   /** 【navigation 写】距上次路径推进的时长（秒）；超时即放弃，防卡死 */
   followTime: number;
 
-  // ── perception 切片 ──
+  // ── 【perception 写】视锥与结果栅 ──
   /** 【perception 写】视距（px） */
   sightRange: number;
   /** 【perception 写】视锥半角（弧度） */
@@ -63,13 +71,13 @@ export type ActorEntity = {
   /** 【perception 写】当前能看见的实体 id 列表（每轮扫描后更新） */
   visibleIds: EntityId[];
 
-  // ── behaviour 切片 ──
+  // ── 【behaviour 写】行为与计时 ──
   /** 【behaviour 写】当前行为与计时 */
   mood: Mood;
   /** 【behaviour 写】当前行为的剩余时长（秒） */
   moodLeft: number;
 
-  // ── alarm 切片 ──
+  // ── 【alarm 写】目击记忆与逃离参照 ──
   /** 【alarm 写】是否已目击到异常（尸体或恐慌者）；panic 一旦置位不再清除 */
   witnessed: boolean;
   /** 【alarm 写】恐慌时逃离的参照点（目击位置，世界坐标） */
@@ -78,11 +86,11 @@ export type ActorEntity = {
   // ── 跨系统共享字段 ──
   /**
    * 【locomotion 写，其余系统只读】最后移动方向。
-   * 刻意不归入任何系统切片——交互与感知都读它（规划文档 5.2）。
+   * 刻意不归入任何系统——交互与感知都读它（规划文档 5.2）。
    */
   facing: Facing;
 
-  // ── interaction 切片 ──
+  // ── 【interaction 写】持有、死亡与中毒 ──
   /** 【interaction 写】持有的道具；null 表示空手 */
   held: ItemKind | null;
   /**
@@ -94,7 +102,7 @@ export type ActorEntity = {
   /** 【interaction 写】中毒后的剩余存活时间（秒）；null 表示未中毒 */
   poisonLeft: number | null;
 
-  // ── 身份切片 ──
+  // ── 【注册时定】身份 ──
   /** 【身份，注册时定】角色类型，渲染与规则按此分支 */
   role: Role;
 };

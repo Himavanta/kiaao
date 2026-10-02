@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 import App from "../../app";
 import { alarm, frameSystem, level, resetGameState, rules, stop } from "../instance";
 import { gameState, listActors } from "../state";
+import { setState } from "./live";
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -202,7 +203,7 @@ describe("M7 / 胜负判定", () => {
 
     // 直接让一个客人中毒致死
     const guest = guestsOf()[0];
-    Object.assign(guest.state, { poisonLeft: 0.01 });
+    setState(guest, { poisonLeft: 0.01 });
     driver.tickTimes(5);
 
     expect(gameState.kills()).toBe(1);
@@ -280,7 +281,7 @@ describe("M7 / 重开", () => {
 
     // 先把一个客人挪走并杀死
     const guest = guestsOf()[0];
-    Object.assign(guest.state, { x: 999, y: 999, dead: true });
+    setState(guest, { x: 999, y: 999, dead: true });
     driver.tickTimes(2);
 
     rules.restart();

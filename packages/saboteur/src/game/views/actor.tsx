@@ -47,7 +47,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
 
   // 客人注册导航与行为系统（玩家不入池——它的意图来自输入）
   // 两类角色都注册 locomotion / perception / interaction：
-  // 交互切片承载 held / dead / poisonLeft——玩家需要（持有与下药），
+  // 交互字段承载 held / dead / poisonLeft——玩家需要（持有与下药），
   // 客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
   const common = [locomotion.enter, perception.enter, interaction.enter, alarm.enter({ role })];
 

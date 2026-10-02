@@ -107,7 +107,7 @@ export const game = createGame<ActorEntity>(
   { autostart: false },
 );
 
-export const { define, start, stop } = game;
+export const { define, frame, start, stop } = game;
 
 // ── 规则与重开 ─────────────────────────────────────────
 

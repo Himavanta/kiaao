@@ -287,14 +287,15 @@ describe("M4 / 感知能真正检测到目标", () => {
     });
 
     // 两个观测者：仅本轮扫描的 frame 需要同时看到两者，故合并两个 id 的活对象
-    const frame = ((id: symbol) => {
+    // （a / b 来自 mountActor，其 id 与 state 都在测试台本地，不经过 App 的 frame）
+    const frameOf = ((id: symbol) => {
       if (id === a.id) return a.state;
       if (id === b.id) return b.state;
       return undefined;
     }) as FrameManager<ActorEntity>;
 
     // 推 6 帧让定频扫描跑一轮
-    for (let i = 0; i < 6; i += 1) perception.update(frame);
+    for (let i = 0; i < 6; i += 1) perception.update(frameOf);
 
     return { a: a.entity, b: b.entity, aId: a.id, bId: b.id };
   }

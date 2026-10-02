@@ -144,7 +144,7 @@ export function createPerceptionSystem(options: { grid: Grid }): PerceptionSyste
 /**
  * 两个 id 列表是否相同（按位置逐一比较）。
  *
- * 旧引擎里 `visibleIds` 可能是 `undefined`（切片未初始化），故签名带 `| undefined`。
+ * 旧引擎里 `visibleIds` 可能是 `undefined`（尚未写出初值），故签名带 `| undefined`。
  * 现在 `perception.spawn()` 保证它初始化为空数组，但类型上仍是数组——
  * 保留 `?? []` 式的宽松处理已无必要。
  */
