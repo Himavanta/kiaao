@@ -13,6 +13,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "engine": "workspace:^",
     "kiaao": "workspace:^",
     "sass-embedded": "catalog:",
     "typescript": "catalog:",

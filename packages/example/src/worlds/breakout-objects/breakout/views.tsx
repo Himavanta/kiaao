@@ -1,6 +1,6 @@
+import { StyleMemo } from "engine";
 import { Show, type Context, type Signal } from "kiaao";
 
-import { StyleMemo } from "../engine/directives";
 import { boundary, collision, define, gameState, input, movement, rules } from "./game-instance";
 import {
   ARENA_H,

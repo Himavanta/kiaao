@@ -1,8 +1,7 @@
+import type { EntityId, FrameManager } from "engine";
+import { createEvent, createPool } from "engine";
 import { type Signal } from "kiaao";
 
-import type { EntityId, FrameManager } from "../engine";
-import { createEvent } from "../engine/events";
-import { createPool } from "../engine/pool";
 import type { SoundName } from "./assets";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

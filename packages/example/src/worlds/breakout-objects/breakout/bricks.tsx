@@ -1,6 +1,6 @@
+import { StyleMemo } from "engine";
 import { type Context } from "kiaao";
 
-import { StyleMemo } from "../engine/directives";
 import { boundary, collision, define, rules } from "./game-instance";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

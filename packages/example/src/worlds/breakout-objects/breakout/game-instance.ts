@@ -7,9 +7,9 @@
 // - 全局状态（分数/生命/状态机/球目录）= 模块级信号（事件处理的产物，不是实体）
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { createGame } from "engine";
 import { use } from "kiaao";
 
-import { createGame } from "../engine";
 import {
   createBoundarySystem,
   createCollisionSystem,

@@ -12,7 +12,7 @@
 // 这是**系统作者的工具**，不是框架核心——`createGame` 不需要它。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId, Enter } from "./index";
+import type { EntityId, Enter } from "./game";
 
 /**
  * 创建实体池：收下所有登记到它的实体。

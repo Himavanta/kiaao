@@ -17,7 +17,7 @@
 // 这是**系统作者的工具**，不是框架核心——`createGame` 不需要它。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { FrameManager } from "./index";
+import type { FrameManager } from "./game";
 
 /**
  * 创建事件单元。
