@@ -3,7 +3,7 @@ import { Each, type Context } from "kiaao";
 import type { Assets } from "./assets";
 import { Brick, createBrickGrid, BRICK_H, BRICK_W } from "./bricks";
 import { game, gameState, rules } from "./game-instance";
-import { ARENA_H, ARENA_W, COLS, ROWS } from "./systems";
+import { ARENA_H, ARENA_W, COLS, ROWS } from "./systems/rules";
 import { Ball, Hud, Overlay, PaddleView } from "./views";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -11,7 +11,7 @@ import {
   PADDLE_W,
   type BallData,
   type GameState,
-} from "./systems";
+} from "./systems/rules";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 球实体组件：声明式生命周期的承载者（数组驱动挂载/卸载）

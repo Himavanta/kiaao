@@ -2,7 +2,7 @@ import type { EntityId, FrameManager } from "engine";
 import { createEvent, createPool } from "engine";
 import { type Signal } from "kiaao";
 
-import type { SoundName } from "./assets";
+import type { SoundName } from "../assets";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 打砖块实体字段
