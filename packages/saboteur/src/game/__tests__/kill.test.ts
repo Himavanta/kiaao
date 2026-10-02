@@ -122,8 +122,7 @@ describe("M5 / 端到端击杀链", () => {
     const before = { ...player() };
 
     // 把玩家挪到酒瓶左侧一格并朝东
-    (player as any)({
-      ...player(),
+    Object.assign(player.state, {
       x: (prop.col - 1) * 32,
       y: prop.row * 32,
       facing: "east",
@@ -153,7 +152,7 @@ describe("M5 / 端到端击杀链", () => {
 
     const initialCount = visibleProps();
 
-    (player as any)({ ...player(), x: (prop.col - 1) * 32, y: prop.row * 32, facing: "east" });
+    Object.assign(player.state, { x: (prop.col - 1) * 32, y: prop.row * 32, facing: "east" });
     press("Space");
     driver.tick();
     release("Space");
@@ -171,8 +170,7 @@ describe("M5 / 端到端击杀链", () => {
     const guest = listActors().find((e) => e().role === "guest")!;
 
     // 玩家站到客人左侧、面朝客人，但手中无道具
-    (player as any)({
-      ...player(),
+    Object.assign(player.state, {
       x: guest().x - 32,
       y: guest().y,
       facing: "east",
@@ -197,8 +195,7 @@ describe("M5 / 端到端击杀链", () => {
     const guest = listActors().find((e) => e().role === "guest")!;
 
     // 玩家持酒瓶、站到客人左侧并面朝客人
-    (player as any)({
-      ...player(),
+    Object.assign(player.state, {
       x: guest().x - 32,
       y: guest().y,
       facing: "east",
@@ -237,7 +234,7 @@ describe("M5 / 端到端击杀链", () => {
     app.mount("#app");
 
     const guest = listActors().find((e) => e().role === "guest")!;
-    (guest as any)({ ...guest(), dead: true, path: [], goal: null });
+    Object.assign(guest.state, { dead: true, path: [], goal: null });
 
     const pos = { x: guest().x, y: guest().y };
     driver.tickTimes(300);
@@ -261,7 +258,7 @@ describe("M5 / 端到端击杀链", () => {
     };
 
     const alive = styleOf();
-    (guest as any)({ ...guest(), dead: true });
+    Object.assign(guest.state, { dead: true });
     driver.tick();
     const dead = styleOf();
 
@@ -286,7 +283,7 @@ describe("M5 / 端到端击杀链", () => {
     const aliveClass = classOf();
     expect(aliveClass).not.toBe("");
 
-    (guest as any)({ ...guest(), dead: true });
+    Object.assign(guest.state, { dead: true });
     driver.tick();
 
     // class 绑定若写成 `class={cond ? a : b}` 的普通三元（非信号），
@@ -320,8 +317,7 @@ describe("M5 / 交互键的边沿语义", () => {
     const player = playerOf();
     const guest = listActors().find((e) => e().role === "guest")!;
 
-    (player as any)({
-      ...player(),
+    Object.assign(player.state, {
       x: guest().x - 32,
       y: guest().y,
       facing: "east",
@@ -351,7 +347,7 @@ describe("M5 / 交互键的边沿语义", () => {
     const player = playerOf();
     const [prop] = level.propSpawns;
 
-    (player as any)({ ...player(), x: (prop.col - 1) * 32, y: prop.row * 32, facing: "east" });
+    Object.assign(player.state, { x: (prop.col - 1) * 32, y: prop.row * 32, facing: "east" });
 
     press("Space");
     driver.tick();

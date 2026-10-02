@@ -13,7 +13,8 @@
 // 于是路径永不弹出、NPC 卡死。超过阈值无推进即放弃当前路径。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId, FrameManager } from "../../engine/types";
+import type { EntityId, FrameManager } from "engine";
+
 import {
   cellAt,
   cellCenter,
@@ -96,11 +97,11 @@ export function createNavigationService(options: {
     // 注意不能写 `path ? ...`：空数组是 truthy，会把这种情况当成成功。
     const usable = path !== null && path.length > 0;
 
-    frame(id, (e) => {
-      e.path = usable ? [...path] : [];
-      e.goal = usable ? goal : null;
-      e.followTime = 0;
-    });
+    const target = frame(id);
+    if (!target) return;
+    target.path = usable ? [...path] : [];
+    target.goal = usable ? goal : null;
+    target.followTime = 0;
   };
 
   /**
@@ -124,24 +125,24 @@ export function createNavigationService(options: {
 
     const stuckTime = entity.followTime + delta;
     if (!arrived && stuckTime > STUCK_TIMEOUT) {
-      frame(id, (e) => {
-        e.path = [];
-        e.goal = null;
-        e.followTime = 0;
-      });
+      const target = frame(id);
+      if (!target) return;
+      target.path = [];
+      target.goal = null;
+      target.followTime = 0;
       return;
     }
 
-    frame(id, (e) => {
-      if (!arrived) {
-        e.followTime = stuckTime;
-        return;
-      }
-      // 到达：弹出首点。走完最后一点时清掉目标——状态据此得知「到了」
-      e.path = e.path.slice(1);
-      e.followTime = 0;
-      if (e.path.length === 0) e.goal = null;
-    });
+    const target = frame(id);
+    if (!target) return;
+    if (!arrived) {
+      target.followTime = stuckTime;
+      return;
+    }
+    // 到达：弹出首点。走完最后一点时清掉目标——状态据此得知「到了」
+    target.path = target.path.slice(1);
+    target.followTime = 0;
+    if (target.path.length === 0) target.goal = null;
   };
 
   const moveTowardGoal = (frame: FrameManager<ActorEntity>, id: EntityId, delta: number): void => {

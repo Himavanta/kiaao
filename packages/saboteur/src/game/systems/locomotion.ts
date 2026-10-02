@@ -10,9 +10,8 @@
 // 写者只有本系统，其它系统只读——保持「每个字段一个写者」的纪律。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { Context } from "kiaao";
+import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
 
-import type { EntityId, FrameManager } from "../../engine/types";
 import { moveRect, type Grid } from "../../world";
 import { facingFromVector, type ActorEntity, type Facing, type Role } from "../types";
 
@@ -32,14 +31,39 @@ export type IntentSource = (entity: Readonly<ActorEntity>) => Intent;
 /** 静止意图 */
 export const IDLE: Intent = { dx: 0, dy: 0, sneaking: false };
 
+/**
+ * 移动系统字段需求。
+ *
+ * 除位置与速度外还包括 `role`（按角色分派意图来源）与 `dead`（死者不动）——
+ * `Need` 声明的是「本系统会读到什么」，不是「本系统写什么」。
+ */
+export type Movable = Pick<
+  ActorEntity,
+  "x" | "y" | "speed" | "sneakFactor" | "sneaking" | "facing" | "role" | "dead"
+>;
+
+/** 出生参数：位置与速度（由视图给出关卡相关的那部分） */
+export type LocomotionSpawn = {
+  /** 出生位置（像素，角色左上角） */
+  x: number;
+  y: number;
+  /** 基础移动速度（px/s） */
+  speed: number;
+  /** 初始朝向 */
+  facing: Facing;
+};
+
 export type LocomotionSystem = {
-  enter: (props: {
-    /** 出生位置（像素，角色左上角） */
-    x: number;
-    y: number;
-    speed: number;
-    facing: Facing;
-  }) => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
+  enter: Enter<Movable>;
+  /**
+   * 初值（D2 方案 B）：本系统拥有的字段的出生值。
+   *
+   * 纯函数、不接触 `ctx`、不进池——与 `enter` 职责分离：
+   * `enter` 只登记参与，`spawn` 只算初值。
+   */
+  spawn: (
+    props: LocomotionSpawn,
+  ) => Pick<ActorEntity, "x" | "y" | "speed" | "sneakFactor" | "sneaking" | "facing">;
   /** 帧逻辑：把移动池内实体按意图推进 */
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
   /**
@@ -56,33 +80,21 @@ const NO_INTENT: IntentSource = () => IDLE;
 
 export function createLocomotionSystem(grid: Grid): LocomotionSystem {
   // 移动池：每帧按意图推进；静止实体不入池，零帧写入
-  const pool = new Set<EntityId>();
+  const [pool, enter] = createPool<Movable>();
 
   // 意图来源按角色分派；未注册的角色的默认静止，保证系统可独立测试
   const sources = new Map<Role, IntentSource>();
   const readIntent = (entity: Readonly<ActorEntity>): Intent =>
     (sources.get(entity.role) ?? NO_INTENT)(entity);
 
-  const enter =
-    (props: { x: number; y: number; speed: number; facing: Facing }) =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      // 实体存活窗口 = 池成员窗口
-      ctx.onMount(() => {
-        pool.add(id);
-      });
-      ctx.onUnmount(() => {
-        pool.delete(id);
-      });
-
-      return {
-        x: props.x,
-        y: props.y,
-        speed: props.speed,
-        sneakFactor: 0.45,
-        sneaking: false,
-        facing: props.facing,
-      };
-    };
+  const spawn = (props: LocomotionSpawn) => ({
+    x: props.x,
+    y: props.y,
+    speed: props.speed,
+    sneakFactor: 0.45,
+    sneaking: false,
+    facing: props.facing,
+  });
 
   // 单个实体：意图 → 位移 → 碰撞解算 → 写回
   const step = (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => {
@@ -97,11 +109,7 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
 
     if (!moving) {
       // 静止：只同步潜行标记（Shift 可原地按住）
-      if (entity.sneaking !== intent.sneaking) {
-        frame(id, (e) => {
-          e.sneaking = intent.sneaking;
-        });
-      }
+      if (entity.sneaking !== intent.sneaking) entity.sneaking = intent.sneaking;
       return;
     }
 
@@ -115,12 +123,10 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
       moved.y !== entity.y ? intent.dy : 0,
     );
 
-    frame(id, (e) => {
-      e.x = moved.x;
-      e.y = moved.y;
-      e.sneaking = intent.sneaking;
-      if (turned) e.facing = turned;
-    });
+    entity.x = moved.x;
+    entity.y = moved.y;
+    entity.sneaking = intent.sneaking;
+    if (turned) entity.facing = turned;
   };
 
   const update = (frame: FrameManager<ActorEntity>, delta: number) => {
@@ -129,6 +135,7 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
 
   return {
     enter,
+    spawn,
     update,
     setIntent: (role: Role, source: IntentSource) => {
       sources.set(role, source);

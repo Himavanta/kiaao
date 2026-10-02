@@ -9,6 +9,7 @@
     "preview": "vp preview"
   },
   "devDependencies": {
+    "engine": "workspace:^",
     "kiaao": "workspace:^",
     "sass-embedded": "catalog:",
     "typescript": "catalog:",

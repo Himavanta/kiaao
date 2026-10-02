@@ -12,9 +12,8 @@
 // 此基础上把「看见异常」变成目击事件。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { Context } from "kiaao";
+import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
 
-import type { EntityId, FrameManager } from "../../engine/types";
 import { canSee, TILE, type Grid, type Vec2 } from "../../world";
 import { FACING_ANGLES, type ActorEntity } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
@@ -28,12 +27,25 @@ export const SIGHT_HALF_ARC = Math.PI / 6;
 /** 视距（px）：约 7 格 */
 export const SIGHT_RANGE = 7 * TILE;
 
+/**
+ * 感知系统字段需求。
+ *
+ * 观测者侧需要位置、朝向、视锥参数与结果栅；被观测者侧只需位置
+ * （实体池是同一个，两边的字段需求合并在一起）。
+ */
+export type Perceivable = Pick<ActorEntity, "x" | "y" | "facing" | "dead" | "visibleIds">;
+
+/** 出生参数：视锥形状（缺省用系统默认） */
+export type PerceptionSpawn = {
+  range?: number;
+  halfArc?: number;
+};
+
 export type PerceptionSystem = {
-  enter: (props?: {
-    range?: number;
-    halfArc?: number;
-  }) => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
-  update: (frame: FrameManager<ActorEntity>, delta: number) => void;
+  enter: Enter<Perceivable>;
+  /** 初值（D2 方案 B）：视距、视锥半角与结果栅（空列表） */
+  spawn: (props?: PerceptionSpawn) => Pick<ActorEntity, "sightRange" | "sightArc" | "visibleIds">;
+  update: (frame: FrameManager<ActorEntity>) => void;
   /** 当前帧的感知快照（调试与视锥可视化用） */
   snapshot: () => { tick: number; visible: number };
 };
@@ -50,28 +62,18 @@ export function sightAngle(entity: Readonly<ActorEntity>): number {
 
 export function createPerceptionSystem(options: { grid: Grid }): PerceptionSystem {
   const { grid } = options;
-  const pool = new Set<EntityId>();
+  const [pool, enter] = createPool<Perceivable>();
 
   // 帧计数器：定频的时钟
   let tick = 0;
   // 最近一轮的可见对数（调试面板展示）
   let visiblePairs = 0;
 
-  const enter =
-    (props?: { range?: number; halfArc?: number }) =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      ctx.onMount(() => {
-        pool.add(id);
-      });
-      ctx.onUnmount(() => {
-        pool.delete(id);
-      });
-
-      return {
-        sightRange: props?.range ?? SIGHT_RANGE,
-        sightArc: props?.halfArc ?? SIGHT_HALF_ARC,
-      } as Partial<ActorEntity>;
-    };
+  const spawn = (props?: PerceptionSpawn) => ({
+    sightRange: props?.range ?? SIGHT_RANGE,
+    sightArc: props?.halfArc ?? SIGHT_HALF_ARC,
+    visibleIds: [],
+  });
 
   /**
    * 一轮扫描：每个观察者对所有其他实体做三级判定。
@@ -114,9 +116,7 @@ export function createPerceptionSystem(options: { grid: Grid }): PerceptionSyste
 
       // 只写实际变化的结果：无变化时零帧写入（memo 生效的前提）
       if (!sameIds(observer.visibleIds, seen)) {
-        frame(observerId, (e) => {
-          e.visibleIds = seen;
-        });
+        observer.visibleIds = seen;
       }
     }
 
@@ -135,6 +135,7 @@ export function createPerceptionSystem(options: { grid: Grid }): PerceptionSyste
 
   return {
     enter,
+    spawn,
     update,
     snapshot: () => ({ tick, visible: visiblePairs }),
   };
@@ -143,12 +144,12 @@ export function createPerceptionSystem(options: { grid: Grid }): PerceptionSyste
 /**
  * 两个 id 列表是否相同（按位置逐一比较）。
  *
- * 对未初始化的列表（`visibleIds` 尚未写出）返回 false，促使写入初值——
- * 用 length 直接比较会在 undefined 上抛错，而「未初始化」是合法的中间态
- * （实体已入池但还没跑过一轮扫描）。
+ * 旧引擎里 `visibleIds` 可能是 `undefined`（切片未初始化），故签名带 `| undefined`。
+ * 现在 `perception.spawn()` 保证它初始化为空数组，但类型上仍是数组——
+ * 保留 `?? []` 式的宽松处理已无必要。
  */
-function sameIds(a: EntityId[] | undefined, b: EntityId[]): boolean {
-  if (!a || a.length !== b.length) return false;
+function sameIds(a: EntityId[], b: EntityId[]): boolean {
+  if (a.length !== b.length) return false;
   for (const [i, id] of a.entries()) {
     if (id !== b[i]) return false;
   }

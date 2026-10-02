@@ -277,6 +277,9 @@ importers:
 
   packages/saboteur:
     devDependencies:
+      engine:
+        specifier: workspace:^
+        version: link:../engine
       kiaao:
         specifier: workspace:^
         version: link:../..

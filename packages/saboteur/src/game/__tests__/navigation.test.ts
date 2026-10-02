@@ -7,12 +7,10 @@
 // 可以直接喂给它一个上下文，断言它请求了什么。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { use } from "kiaao";
 import { setAdapter } from "kiaao/adapter";
 import { browserAdapter } from "kiaao/dom";
 import { describe, expect, test } from "vite-plus/test";
 
-import { createGame } from "../../engine/game";
 import { createGrid, createRandom, setTile, Tile, type Cell } from "../../world";
 import { createBehaviourSystem } from "../systems/behaviour";
 import { createLocomotionSystem } from "../systems/locomotion";
@@ -20,36 +18,11 @@ import { ACTOR_SIZE } from "../systems/locomotion";
 import { createNavigationService, pathIntent } from "../systems/navigation";
 import { createStates, type StateContext } from "../systems/states";
 import type { ActorEntity } from "../types";
+import { makeActorState, mountActor } from "./helpers";
 
 setAdapter(browserAdapter);
 
 const openGrid = () => createGrid(20, 20);
-
-/** 帧管理器替身：写回真实信号 */
-function createHarness(signal: () => ActorEntity | undefined, id: symbol) {
-  const cache = new Map<symbol, ActorEntity>();
-
-  const frame: any = (target: symbol, mutate?: (v: ActorEntity) => void) => {
-    if (target !== id) return;
-    if (mutate) {
-      let base = cache.get(id);
-      if (!base) {
-        base = { ...(signal() as ActorEntity) };
-        cache.set(id, base);
-      }
-      mutate(base);
-      return;
-    }
-    return cache.get(id) ?? signal();
-  };
-
-  const flush = () => {
-    for (const data of cache.values()) (signal as any)(data);
-    cache.clear();
-  };
-
-  return { frame, flush };
-}
 
 describe("导航服务 / 挑目的地", () => {
   test("随机目标不落在当前格", () => {
@@ -104,40 +77,18 @@ describe("导航服务 / 走一帧", () => {
   function setup(options: { cols?: number; rows?: number } = {}) {
     const grid = createGrid(options.cols ?? 20, options.rows ?? 20);
     const nav = createNavigationService({ grid, random: createRandom(7) });
-    const game = createGame<ActorEntity>([], { autostart: false });
-
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
-
-    const entity = game.useEntity(ctx, () => ({
-      x: 5 * 32,
-      y: 5 * 32,
-      path: [] as Cell[],
-      goal: null as Cell | null,
-      followTime: 0,
-      dead: false,
-      mood: "wander" as const,
-      moodLeft: 100,
-      idleLeft: 0,
-      role: "guest" as const,
-    })) as any;
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, entity.id);
-    return { grid, nav, entity, harness };
+    const actor = mountActor({
+      enters: [],
+      state: makeActorState({ x: 5 * 32, y: 5 * 32, moodLeft: 100 }),
+    });
+    return { grid, nav, ...actor };
   }
 
   test("无路径时规划：产生路径且终点即目标", () => {
-    const { nav, entity, harness } = setup();
-    (entity as any)({ ...entity(), goal: { col: 15, row: 15 } });
+    const { nav, entity, frame, id } = setup();
+    entity({ goal: { col: 15, row: 15 } });
 
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    nav.moveTowardGoal(frame, id, 1 / 60);
 
     expect(entity().path.length).toBeGreaterThan(0);
     expect(entity().path[entity().path.length - 1]).toEqual({ col: 15, row: 15 });
@@ -149,91 +100,69 @@ describe("导航服务 / 走一帧", () => {
     for (let row = 0; row < 10; row += 1) setTile(grid, 5, row, Tile.Wall);
 
     const nav = createNavigationService({ grid, random: createRandom(11) });
-    const game = createGame<ActorEntity>([], { autostart: false });
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
-    const entity = game.useEntity(ctx, () => ({
-      x: 1 * 32,
-      y: 5 * 32,
-      path: [] as Cell[],
-      goal: { col: 9, row: 5 } as Cell | null,
-      followTime: 0,
-      dead: false,
-      mood: "wander" as const,
-      moodLeft: 100,
-      idleLeft: 0,
-      role: "guest" as const,
-    })) as any;
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, entity.id);
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    const actor = mountActor({
+      enters: [],
+      state: makeActorState({
+        x: 1 * 32,
+        y: 5 * 32,
+        goal: { col: 9, row: 5 },
+        moodLeft: 100,
+      }),
+    });
+    const { entity, frame } = actor;
+    nav.moveTowardGoal(frame, actor.id, 1 / 60);
 
     expect(entity().goal).toBeNull();
     expect(entity().path).toEqual([]);
   });
 
   test("到达路径点即弹出", () => {
-    const { nav, entity, harness } = setup();
-    (entity as any)({ ...entity(), goal: { col: 15, row: 15 } });
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    const { nav, entity, frame, id } = setup();
+    entity({ goal: { col: 15, row: 15 } });
+    nav.moveTowardGoal(frame, id, 1 / 60);
 
     const before = entity().path.length;
     expect(before).toBeGreaterThan(0);
 
     // 搬到首个路径点中心
     const [first] = entity().path;
-    (entity as any)({
-      ...entity(),
+    entity({
       x: first.col * 32 + (32 - ACTOR_SIZE) / 2,
       y: first.row * 32 + (32 - ACTOR_SIZE) / 2,
     });
 
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    nav.moveTowardGoal(frame, id, 1 / 60);
 
     expect(entity().path.length).toBe(before - 1);
   });
 
   test("走完最后一点即清空目标（状态据此得知「到了」）", () => {
-    const { nav, entity, harness } = setup();
+    const { nav, entity, frame, id } = setup();
     // 目标就是相邻格：路径只有一步
-    (entity as any)({ ...entity(), goal: { col: 6, row: 5 } });
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    entity({ goal: { col: 6, row: 5 } });
+    nav.moveTowardGoal(frame, id, 1 / 60);
 
     const last = entity().path[entity().path.length - 1];
-    (entity as any)({
-      ...entity(),
+    entity({
       x: last.col * 32 + (32 - ACTOR_SIZE) / 2,
       y: last.row * 32 + (32 - ACTOR_SIZE) / 2,
     });
 
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    nav.moveTowardGoal(frame, id, 1 / 60);
 
     expect(entity().path).toEqual([]);
     expect(entity().goal).toBeNull();
   });
 
   test("看门狗：长时间无推进则放弃路径", () => {
-    const { nav, entity, harness } = setup();
-    (entity as any)({ ...entity(), goal: { col: 15, row: 15 } });
-    nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-    harness.flush();
+    const { nav, entity, frame, id } = setup();
+    entity({ goal: { col: 15, row: 15 } });
+    nav.moveTowardGoal(frame, id, 1 / 60);
     expect(entity().path.length).toBeGreaterThan(0);
 
     // 不动，推进 5 秒
     for (let i = 0; i < 300; i += 1) {
-      nav.moveTowardGoal(harness.frame, entity.id, 1 / 60);
-      harness.flush();
+      nav.moveTowardGoal(frame, id, 1 / 60);
     }
 
     expect(entity().path).toEqual([]);
@@ -241,11 +170,10 @@ describe("导航服务 / 走一帧", () => {
   });
 
   test("未知死者的位置不推进（x/y 未写出的瞬间）", () => {
-    const { nav, entity, harness } = setup();
-    (entity as any)({ ...entity(), x: Number.NaN, goal: { col: 15, row: 15 } });
+    const { nav, entity, frame, id } = setup();
+    entity({ x: Number.NaN, goal: { col: 15, row: 15 } });
 
-    expect(() => nav.moveTowardGoal(harness.frame, entity.id, 1 / 60)).not.toThrow();
-    harness.flush();
+    expect(() => nav.moveTowardGoal(frame, id, 1 / 60)).not.toThrow();
     expect(entity().path).toEqual([]);
   });
 });
@@ -433,17 +361,8 @@ describe("行为系统 / 状态机驱动", () => {
   test("初始为闲游", () => {
     const nav = createNavigationService({ grid: openGrid(), random: createRandom(1) });
     const bhv = createBehaviourSystem({ random: createRandom(1), navigation: nav });
-    const game = createGame<ActorEntity>([bhv.update], { autostart: false });
 
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
-    const entity = game.useEntity(ctx, bhv.enter(), () => ({ role: "guest" as const })) as any;
-    mounts.forEach((fn) => fn());
+    const { entity } = mountActor({ enters: [bhv.enter], state: makeActorState(bhv.spawn()) });
 
     expect(entity().mood).toBe("wander");
     expect(entity().moodLeft).toBeGreaterThan(0);
@@ -452,22 +371,13 @@ describe("行为系统 / 状态机驱动", () => {
   test("死者不被驱动（尸体不入状态机）", () => {
     const nav = createNavigationService({ grid: openGrid(), random: createRandom(1) });
     const bhv = createBehaviourSystem({ random: createRandom(1), navigation: nav });
-    const game = createGame<ActorEntity>([bhv.update], { autostart: false });
 
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
-    const entity = game.useEntity(ctx, bhv.enter(), () => ({ role: "guest" as const })) as any;
-    mounts.forEach((fn) => fn());
+    const { entity, frame } = mountActor({
+      enters: [bhv.enter],
+      state: makeActorState({ ...bhv.spawn(), dead: true, moodLeft: 5 }),
+    });
 
-    (entity as any)({ ...entity(), dead: true, moodLeft: 5 });
-    const harness = createHarness(entity, entity.id);
-    bhv.update(harness.frame, 1);
-    harness.flush();
+    bhv.update(frame, 1);
 
     // moodLeft 不变：死者不被处理
     expect(entity().moodLeft).toBe(5);
@@ -483,43 +393,29 @@ describe("行为系统 / 状态机驱动", () => {
 
     // 必须连 locomotion 一起装：behaviour 只决定「去哪」，
     // 真正的位移由 locomotion 消费 `path` 完成
-    const game = createGame<ActorEntity>([bhv.update, loco.update], { autostart: false });
-
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
-
     const guests = Array.from({ length: 3 }, () =>
-      game.useEntity(
-        ctx,
-        loco.enter({ x: 5 * 32, y: 5 * 32, speed: 78, facing: "south" }),
-        bhv.enter(),
-        () => ({ role: "guest" as const }),
-      ),
-    ) as any[];
-    mounts.forEach((fn) => fn());
+      mountActor({
+        enters: [loco.enter, bhv.enter],
+        state: makeActorState({
+          ...loco.spawn({ x: 5 * 32, y: 5 * 32, speed: 78, facing: "south" }),
+          ...bhv.spawn(),
+        }),
+      }),
+    );
 
-    // 每个实体一个独立替身
-    const harnesses = guests.map((g) => createHarness(g, g.id));
-
-    const start = guests.map((g) => ({ x: g().x, y: g().y }));
+    const start = guests.map((g) => ({ x: g.entity().x, y: g.entity().y }));
 
     // 跑 20 秒：behaviour 决定去哪、locomotion 真正位移，两者缺一不可
     for (let f = 0; f < 1200; f += 1) {
-      for (const h of harnesses) {
-        bhv.update(h.frame, 1 / 60);
-        loco.update(h.frame, 1 / 60);
+      for (const g of guests) {
+        bhv.update(g.frame, 1 / 60);
+        loco.update(g.frame, 1 / 60);
       }
-      for (const h of harnesses) h.flush();
     }
 
     // 至少有一个 NPC 真的移动过——若状态机在某处卡死，这里会失败
     const moved = guests.filter(
-      (g, i) => Math.abs(g().x - start[i].x) > 1 || Math.abs(g().y - start[i].y) > 1,
+      (g, i) => Math.abs(g.entity().x - start[i].x) > 1 || Math.abs(g.entity().y - start[i].y) > 1,
     );
     expect(moved.length).toBeGreaterThan(0);
   });

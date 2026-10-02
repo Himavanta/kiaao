@@ -7,9 +7,9 @@
 // 一局重置走声明式：替换实体目录信号，见规划文档 4.6。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { createGame } from "engine";
 import { use } from "kiaao";
 
-import { createGame } from "../engine";
 import { createRandom, manor, parseLevel } from "../world";
 import { resetGameState } from "./state";
 import { playerEntity } from "./state";
@@ -107,7 +107,7 @@ export const game = createGame<ActorEntity>(
   { autostart: false },
 );
 
-export const { useEntity, start, stop } = game;
+export const { define, start, stop } = game;
 
 // ── 规则与重开 ─────────────────────────────────────────
 
@@ -120,15 +120,26 @@ export const { useEntity, start, stop } = game;
  */
 export const runId = use(0);
 
-/** 玩家是否已注册（重开时用来等视图层重建完成） */
+/**
+ * 开始新的一局。
+ *
+ * 帧循环的重启必须在这里完成，不能指望「组件重建时会 start」——
+ * `start()` 只在根组件 `onMount` 时执行一次，而递增 `runId` 只重建
+ * `Each` 的子项，根组件不会重新挂载。少了这一步，重开后画面会冻在
+ * 终局那一帧（既有缺陷，见迁移文档 §3.2）。
+ */
 function restartRun(): void {
   // 先停帧循环：重建期间不该跑帧（否则会读到半旧的实体状态）
   stop();
   // 警报与全局状态归零
   alarm.reset();
   resetGameState(level.objective.timeLimit);
-  // 递增局号：视图层的 Each 会重建全部角色与道具
+  // 递增局号：视图层的 Each 会同步重建全部角色与道具
+  // （实测：这是同步完成的，重建后所有实体已入池）
   runId(runId() + 1);
+  // 重建已完成，恢复帧循环。放在最后：前面若是 start 再重建，
+  // 首帧会读到正在被卸载的旧实体
+  start();
 }
 
 export const rules = createRulesSystem({

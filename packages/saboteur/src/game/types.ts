@@ -5,7 +5,8 @@
 // 其余系统只读。写入冲突是 ECS 最常见的数据竞争来源。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId } from "../engine";
+import type { EntityId } from "engine";
+
 import type { Cell } from "../world";
 
 /** 朝向：4 向，等于最后一次移动方向 */

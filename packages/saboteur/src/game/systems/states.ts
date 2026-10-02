@@ -12,7 +12,8 @@
 // 是 navigation 的服务。状态不碰寻路细节，也不必互相知道。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId, FrameManager } from "../../engine/types";
+import type { EntityId, FrameManager } from "engine";
+
 import type { Cell } from "../../world";
 import type { Random } from "../../world/random";
 import type { ActorEntity, Mood } from "../types";
@@ -36,7 +37,16 @@ export type ActorServices = {
 export type StateContext = {
   readonly frame: FrameManager<ActorEntity>;
   readonly id: EntityId;
-  /** 实体数据的只读快照 */
+  /**
+   * 实体数据的**活对象引用**（不是快照）。
+   *
+   * 与旧引擎的区别：旧版 `self` 是写时拷贝的快照，`patch` 后不回读；
+   * 现在 `self` 与 `patch` 作用于同一对象，写入立即可见。
+   *
+   * **约定不变**：状态若需在同一个 `update` 里用到「旧值」，应就近存进
+   * 局部变量（`const left = self.moodLeft - delta` 就是这种写法），
+   * 而不是写完再回读。
+   */
   readonly self: Readonly<ActorEntity>;
   /** 当前所在格 */
   readonly cell: Cell;

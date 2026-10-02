@@ -6,9 +6,9 @@
 // 下游派生天然获得 memo 收益。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import type { FrameManager } from "engine";
 import { use, type Signal } from "kiaao";
 
-import type { FrameManager } from "../../engine/types";
 import { FPS_SAMPLE_MS } from "../config";
 
 /** 帧统计系统的对外能力 */

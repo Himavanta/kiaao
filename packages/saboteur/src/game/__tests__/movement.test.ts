@@ -5,72 +5,22 @@
 // 输入映射的错误（键码写错、方向反了）不会崩溃，只会「按了没反应」
 // 或「走向反方向」；移动系统的错误（朝向不更新、潜行不生效）同理。
 // 这类问题靠肉眼极难定位，须在纯逻辑与系统层分别锁死。
+//
+// 迁移后的差别：`frame(id)` 返回**活对象**，改完立即可读，不再需要
+// 手工 flush 缓存。测试台见 `helpers.ts`。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { use } from "kiaao";
 import { setAdapter } from "kiaao/adapter";
 import { browserAdapter } from "kiaao/dom";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import { createGame } from "../../engine/game";
 import { createGrid, setTile, TILE, Tile } from "../../world";
 import { createInputSystem, DIRECTION_KEYS, readDirection } from "../systems/input";
 import { ACTOR_SIZE, createLocomotionSystem, IDLE } from "../systems/locomotion";
-import { facingFromVector, type ActorEntity } from "../types";
+import { facingFromVector } from "../types";
+import { countWrites, makeActorState, mountActor } from "./helpers";
 
 setAdapter(browserAdapter);
-
-// ── 测试台：真实 createGame + 真实 use，池行为完全一致 ──
-
-/**
- * 测试台：帧管理器替身 + 把提交写回真实信号。
- *
- * 必须写回信号——否则验的是测试内部的 Map，而不是框架行为。
- */
-function createHarness(signal: () => ActorEntity | undefined, id: symbol) {
-  const cache = new Map<symbol, ActorEntity>();
-
-  const frame: any = (target: symbol, mutate?: (v: ActorEntity) => void) => {
-    if (target !== id) return;
-    if (mutate) {
-      let base = cache.get(id);
-      if (!base) {
-        base = { ...(signal() as ActorEntity) };
-        cache.set(id, base);
-      }
-      mutate(base);
-      return;
-    }
-    return cache.get(id) ?? signal();
-  };
-
-  const flush = () => {
-    // 信号写入走 setter 形态（带参调用），与引擎的 flush 一致
-    for (const data of cache.values()) (signal as any)(data);
-    cache.clear();
-  };
-
-  return { frame, flush };
-}
-
-/** 用真实引擎注册实体，返回实体信号与测试台 */
-function mountActor(
-  game: ReturnType<typeof createGame<ActorEntity>>,
-  enters: Array<(id: symbol, ctx: any) => Partial<ActorEntity>>,
-) {
-  const mounts: Array<() => void> = [];
-  const unmounts: Array<() => void> = [];
-  const ctx = {
-    use,
-    onMount: (fn: () => void) => mounts.push(fn),
-    onUnmount: (fn: () => void) => unmounts.push(fn),
-    owner: {},
-  } as any;
-
-  // 注册 role 切片：intent 按 role 分派，缺了它来源匹配不上
-  const entity = game.useEntity(ctx, ...(enters as any), () => ({ role: "player" as const }));
-  return { entity, mounts, unmounts };
-}
 
 describe("readDirection / 方向映射", () => {
   test("四方向键码映射正确", () => {
@@ -120,27 +70,27 @@ describe("facingFromVector", () => {
 });
 
 describe("locomotion / 位移", () => {
-  /** 装好移动系统与一个实体的测试台 */
+  /** 装好移动系统与一个实体 */
   function setup(options: { cols?: number; rows?: number } = {}) {
     const grid = createGrid(options.cols ?? 20, options.rows ?? 20);
     const locomotion = createLocomotionSystem(grid);
-    const game = createGame<ActorEntity>([locomotion.update], { autostart: false });
 
-    return { grid, locomotion, game };
+    const actor = mountActor({
+      enters: [locomotion.enter],
+      state: makeActorState({
+        ...locomotion.spawn({ x: 100, y: 100, speed: 200, facing: "south" }),
+        role: "player",
+      }),
+    });
+
+    return { grid, locomotion, ...actor };
   }
 
   test("按意图方向移动，距离 = 速度 × 时间", () => {
-    const { locomotion, game } = setup();
+    const { locomotion, entity, frame } = setup();
     locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: false }));
 
-    const { entity, mounts } = mountActor(game, [
-      locomotion.enter({ x: 100, y: 100, speed: 200, facing: "south" }),
-    ]);
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, (entity as any).id);
-    locomotion.update(harness.frame, 0.5);
-    harness.flush();
+    locomotion.update(frame, 0.5);
 
     // 200 px/s × 0.5s = 100px
     expect(entity().x).toBeCloseTo(200, 6);
@@ -148,39 +98,22 @@ describe("locomotion / 位移", () => {
   });
 
   test("无意图时位置不变，且不产生帧写入", () => {
-    const { locomotion, game } = setup();
+    const { locomotion, state, id } = setup();
     locomotion.setIntent("player", () => IDLE);
 
-    const { entity, mounts } = mountActor(game, [
-      locomotion.enter({ x: 100, y: 100, speed: 200, facing: "south" }),
-    ]);
-    mounts.forEach((fn) => fn());
+    // 代理帧管理器：任何属性赋值都被计入
+    const counter = countWrites(state, id);
+    locomotion.update(counter.frame, 0.5);
 
-    const harness = createHarness(entity, (entity as any).id);
-    const writes = vi.fn();
-    const frame: any = (id: symbol, mutate?: any) => {
-      if (mutate) writes();
-      return harness.frame(id, mutate);
-    };
-
-    locomotion.update(frame, 0.5);
-
-    expect(writes).not.toHaveBeenCalled();
-    expect(entity().x).toBe(100);
+    expect(counter.writes()).toBe(0);
+    expect(state.x).toBe(100);
   });
 
   test("潜行降低速度", () => {
-    const { locomotion, game } = setup();
+    const { locomotion, entity, frame } = setup();
     locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: true }));
 
-    const { entity, mounts } = mountActor(game, [
-      locomotion.enter({ x: 0, y: 0, speed: 200, facing: "south" }),
-    ]);
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, (entity as any).id);
-    locomotion.update(harness.frame, 1);
-    harness.flush();
+    locomotion.update(frame, 1);
 
     expect(entity().x).toBeGreaterThan(0);
     expect(entity().x).toBeLessThan(200); // 慢于常速
@@ -192,26 +125,23 @@ describe("locomotion / 朝向", () => {
   function setup() {
     const grid = createGrid(30, 30);
     const locomotion = createLocomotionSystem(grid);
-    const game = createGame<ActorEntity>([locomotion.update], { autostart: false });
-
     let intent = { dx: 1, dy: 0, sneaking: false };
     locomotion.setIntent("player", () => intent);
 
-    const { entity, mounts } = mountActor(game, [
-      locomotion.enter({ x: 100, y: 100, speed: 100, facing: "north" }),
-    ]);
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, (entity as any).id);
+    const actor = mountActor({
+      enters: [locomotion.enter],
+      state: makeActorState({
+        ...locomotion.spawn({ x: 100, y: 100, speed: 100, facing: "north" }),
+        role: "player",
+      }),
+    });
 
     return {
-      entity,
+      ...actor,
       move(dx: number, dy: number) {
         intent = { dx, dy, sneaking: false };
-        locomotion.update(harness.frame, 0.1);
-        harness.flush();
+        locomotion.update(actor.frame, 0.1);
       },
-      facing: () => entity().facing,
     };
   }
 
@@ -219,16 +149,16 @@ describe("locomotion / 朝向", () => {
     const t = setup();
 
     t.move(1, 0);
-    expect(t.facing()).toBe("east");
+    expect(t.entity().facing).toBe("east");
 
     t.move(0, 1);
-    expect(t.facing()).toBe("south");
+    expect(t.entity().facing).toBe("south");
 
     t.move(-1, 0);
-    expect(t.facing()).toBe("west");
+    expect(t.entity().facing).toBe("west");
 
     t.move(0, -1);
-    expect(t.facing()).toBe("north");
+    expect(t.entity().facing).toBe("north");
   });
 
   test("顶着墙走不改变朝向（无位移即无转向）", () => {
@@ -239,22 +169,26 @@ describe("locomotion / 朝向", () => {
     setTile(grid, 3, 3, Tile.Wall);
 
     const locomotion = createLocomotionSystem(grid);
-    const game = createGame<ActorEntity>([locomotion.update], { autostart: false });
     locomotion.setIntent("player", () => ({ dx: 1, dy: 0, sneaking: false }));
 
-    const { entity, mounts } = mountActor(game, [
-      locomotion.enter({ x: startX, y: 3 * TILE + offset, speed: 100, facing: "north" }),
-    ]);
-    mounts.forEach((fn) => fn());
-
-    const harness = createHarness(entity, (entity as any).id);
+    const actor = mountActor({
+      enters: [locomotion.enter],
+      state: makeActorState({
+        ...locomotion.spawn({
+          x: startX,
+          y: 3 * TILE + offset,
+          speed: 100,
+          facing: "north",
+        }),
+        role: "player",
+      }),
+    });
 
     // 向右移动但已贴墙 → x 不变 → 朝向保持 north
-    locomotion.update(harness.frame, 0.5);
-    harness.flush();
+    locomotion.update(actor.frame, 0.5);
 
-    expect(entity().x).toBe(startX);
-    expect(entity().facing).toBe("north");
+    expect(actor.entity().x).toBe(startX);
+    expect(actor.entity().facing).toBe("north");
   });
 });
 

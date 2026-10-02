@@ -13,9 +13,15 @@
 // 因此本系统只负责把活人变死人，不做任何暴露判定。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { use, type Context, type Signal } from "kiaao";
+import {
+  createPool,
+  type EntityId,
+  type EntitySignal,
+  type Enter,
+  type FrameManager,
+} from "engine";
+import { use, type Signal } from "kiaao";
 
-import type { EntityId, EntitySignal, FrameManager } from "../../engine/types";
 import { cellAt, cellInFront, TILE, type Vec2 } from "../../world";
 import { gameState } from "../state";
 import type { ActorEntity, ItemKind } from "../types";
@@ -30,6 +36,8 @@ export const POISON_DELAY = 4.5;
  * 有位置但**不入移动池**——它们不动，参与交互判定即可。
  * 位置留在实体上而非外挂一张表：实体本就是数据的载体，
  * 外挂表会让「同一份数据两处存放」。
+ *
+ * 位置（x / y）由本系统的 `spawnProp` 从格子坐标换算。
  */
 export type PropEntity = {
   /** 【身份，注册时定】道具类型 */
@@ -41,14 +49,21 @@ export type PropEntity = {
   taken: boolean;
 };
 
+/** 角色侧字段需求：交互判定读位置/朝向/状态，写持有与中毒 */
+export type Interactable = Pick<
+  ActorEntity,
+  "x" | "y" | "facing" | "dead" | "held" | "poisonLeft" | "path" | "goal"
+>;
+
 export type InteractionSystem = {
   /** 注册角色（含玩家与客人） */
-  enter: () => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
-  /** 注册可交互物 */
-  enterProp: (props: {
-    kind: ItemKind;
-    cell: { col: number; row: number };
-  }) => (id: EntityId, ctx: Context) => Partial<PropEntity>;
+  enter: Enter<Interactable>;
+  /** 注册可交互物（异形实体） */
+  enterProp: Enter<PropEntity>;
+  /** 初值（D2 方案 B）：持有 / 死亡 / 中毒 */
+  spawn: () => Pick<ActorEntity, "held" | "dead" | "poisonLeft">;
+  /** 初值（D2 方案 B）：道具的格子 → 像素换算 */
+  spawnProp: (props: { kind: ItemKind; cell: { col: number; row: number } }) => PropEntity;
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
   /** 玩家当前持有的道具（HUD 展示） */
   heldItem: Signal<ItemKind | null>;
@@ -57,7 +72,7 @@ export type InteractionSystem = {
 };
 
 /** 本系统跨两个池读写：角色与道具。泛型由调用点收敛，id 不会混用。 */
-type ReadWrite = <T>(id: EntityId, mutate?: (value: T) => void) => T | undefined;
+type ReadWrite = <T>(id: EntityId) => T | undefined;
 
 /** 道具与角色的帧读写入口（两者共用一个 frame） */
 export type FrameAccess = {
@@ -79,8 +94,8 @@ export function createInteractionSystem(options: {
 }): InteractionSystem {
   const { interactTicks, player } = options;
 
-  const actorPool = new Set<EntityId>();
-  const propPool = new Set<EntityId>();
+  const [actorPool, enter] = createPool<Interactable>();
+  const [propPool, enterProp] = createPool<PropEntity>();
 
   const heldItem = use<ItemKind | null>(null);
   const hint = use("");
@@ -88,36 +103,19 @@ export function createInteractionSystem(options: {
   // 上次处理的交互键计数：只在「新值 > 旧值」时触发（边沿检测，无需清零）
   let lastInteract = interactTicks();
 
-  const enter =
-    () =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      ctx.onMount(() => {
-        actorPool.add(id);
-      });
-      ctx.onUnmount(() => {
-        actorPool.delete(id);
-      });
+  // 持有 / 死亡 / 中毒的初值（D2 方案 B）
+  const spawn = () => ({ held: null, dead: false, poisonLeft: null });
 
-      return { held: null, dead: false, poisonLeft: null } as Partial<ActorEntity>;
-    };
-
-  const enterProp =
-    (props: { kind: ItemKind; cell: { col: number; row: number } }) =>
-    (id: EntityId, ctx: Context): Partial<PropEntity> => {
-      ctx.onMount(() => {
-        propPool.add(id);
-      });
-      ctx.onUnmount(() => {
-        propPool.delete(id);
-      });
-
-      return {
-        kind: props.kind,
-        x: props.cell.col * TILE + TILE / 2,
-        y: props.cell.row * TILE + TILE / 2,
-        taken: false,
-      } as Partial<PropEntity>;
-    };
+  // 道具的初值：格子坐标 → 像素中心
+  const spawnProp = (props: {
+    kind: ItemKind;
+    cell: { col: number; row: number };
+  }): PropEntity => ({
+    kind: props.kind,
+    x: props.cell.col * TILE + TILE / 2,
+    y: props.cell.row * TILE + TILE / 2,
+    taken: false,
+  });
 
   // ── 查询 ──────────────────────────────────────────────
 
@@ -170,31 +168,32 @@ export function createInteractionSystem(options: {
       return;
     }
 
-    access.props<PropEntity>(propId, (p) => {
-      p.taken = true;
-    });
-    access.actors<ActorEntity>(meId, (e) => {
-      e.held = prop.kind;
-    });
+    const target = access.props<PropEntity>(propId);
+    if (!target) return;
+    target.taken = true;
+    const holder = access.actors<ActorEntity>(meId);
+    if (holder) holder.held = prop.kind;
     heldItem(prop.kind);
     hint(`拾取了${labelOf(prop.kind)}`);
   };
 
   const poison = (access: FrameAccess, meId: EntityId, victimId: EntityId): void => {
-    access.actors<ActorEntity>(victimId, (e) => {
-      e.poisonLeft = POISON_DELAY;
-    });
-    access.actors<ActorEntity>(meId, (e) => {
-      e.held = null;
-    });
+    const victim = access.actors<ActorEntity>(victimId);
+    if (victim) victim.poisonLeft = POISON_DELAY;
+    const me = access.actors<ActorEntity>(meId);
+    if (me) me.held = null;
     heldItem(null);
     hint("已下药");
   };
 
   const tryInteract = (access: FrameAccess) => {
     const entity = player();
-    const me = entity?.();
-    if (!entity || !me || me.dead) return;
+    if (!entity) return;
+
+    // 读**活对象**而不是渲染快照：快照只在帧末提交，帧内读到的是上一帧的值。
+    // 玩家位置可能在同帧被 locomotion 改过，用快照会算错手心格。
+    const me = access.actors<ActorEntity>(entity.id) ?? entity.state;
+    if (me.dead) return;
 
     const cell = frontCell(me);
 
@@ -230,19 +229,15 @@ export function createInteractionSystem(options: {
 
       const left = actor.poisonLeft - delta;
       if (left > 0) {
-        frame(id, (e) => {
-          e.poisonLeft = left;
-        });
+        actor.poisonLeft = left;
         continue;
       }
 
-      frame(id, (e) => {
-        e.dead = true;
-        e.poisonLeft = null;
-        // 尸体原地不动：清空路径与目标，避免死后还继续「走」
-        e.path = [];
-        e.goal = null;
-      });
+      actor.dead = true;
+      actor.poisonLeft = null;
+      // 尸体原地不动：清空路径与目标，避免死后还继续「走」
+      actor.path = [];
+      actor.goal = null;
 
       // 击杀计数在此累加而非由规则系统轮询：死亡是本系统判定的事实，
       // 「谁死了」的真相源只有一处。规则系统只读计数、决定何时终局。
@@ -266,7 +261,7 @@ export function createInteractionSystem(options: {
     tickPoison(frame, delta);
   };
 
-  return { enter, enterProp, update, heldItem, hint };
+  return { enter, enterProp, spawn, spawnProp, update, heldItem, hint };
 }
 
 /** 道具的展示名（HUD 用） */

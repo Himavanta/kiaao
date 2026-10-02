@@ -127,7 +127,7 @@ describe("僵死回归 / 长期运行", () => {
 
     // 大厅中央放一具尸体，触发完整传播链
     const victim = guestsOf()[0];
-    (victim as any)({ ...victim(), x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
+    Object.assign(victim.state, { x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
 
     const worst = driver.run(runFrames);
 
@@ -149,15 +149,21 @@ describe("僵死回归 / 长期运行", () => {
     const keep = [witness, corpse];
 
     // 先放好尸体（它是目击的对象），再让 witness 正对它
-    (corpse as any)({ ...corpse(), x: 7 * 32, y: 10 * 32, dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { x: 7 * 32, y: 10 * 32, dead: true, path: [], goal: null });
 
     for (let i = 0; i < 40 && !witness().witnessed; i += 1) {
       for (const g of guestsOf()) {
         if (keep.includes(g)) continue;
-        (g as any)({ ...g(), x: 38, y: 38, facing: "north", path: [], goal: null, idleLeft: 1e6 });
+        Object.assign(g.state, {
+          x: 38,
+          y: 38,
+          facing: "north",
+          path: [],
+          goal: null,
+          idleLeft: 1e6,
+        });
       }
-      (witness as any)({
-        ...witness(),
+      Object.assign(witness.state, {
         x: 5 * 32,
         y: 10 * 32,
         facing: "east",
@@ -189,7 +195,7 @@ describe("僵死回归 / 长期运行", () => {
     app.mount("#app");
 
     const victim = guestsOf()[0];
-    (victim as any)({ ...victim(), x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
+    Object.assign(victim.state, { x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
 
     // 每帧压回警报：本用例要跨过恐慌全程，而警报满值会让游戏在约 6 秒
     // 就结束（终局后帧循环停止，之后静止是正常的，不是僵死）。
@@ -218,7 +224,7 @@ describe("僵死回归 / 长期运行", () => {
     app.mount("#app");
 
     const victim = guestsOf()[0];
-    (victim as any)({ ...victim(), x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
+    Object.assign(victim.state, { x: 16 * 32, y: 11 * 32, dead: true, path: [], goal: null });
 
     driver.run(runFrames - 30);
 

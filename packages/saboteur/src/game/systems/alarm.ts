@@ -13,15 +13,25 @@
 // 消除暴露，题材的紧迫感会消失。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { use, type Context, type Signal } from "kiaao";
+import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
+import { use, type Signal } from "kiaao";
 
-import type { EntityId, FrameManager } from "../../engine/types";
 import { cellAt, type Cell } from "../../world";
 import type { ActorEntity, Role } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 
 /** 每发现一个异常，警报值的增量 */
 export const ALARM_PER_WITNESS = 12;
+
+/**
+ * 报警系统字段需求。
+ *
+ * `dead` 用于排除已死的观察者；`visibleIds` 是异常源发现链的输入。
+ */
+export type Alarmable = Pick<
+  ActorEntity,
+  "dead" | "witnessed" | "fleeFrom" | "visibleIds" | "x" | "y"
+>;
 
 export type AlarmSystem = {
   /**
@@ -31,7 +41,9 @@ export type AlarmSystem = {
    * 在注册侧完成（而不是在 update 里判 role）：入池即代表「此人参与
    * 恐慌链」，判据是身份而非每帧数据。
    */
-  enter: (props: { role: Role }) => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
+  enter: (props: { role: Role }) => Enter<Alarmable>;
+  /** 初值（D2 方案 B）：目击记忆与逃离参照点 */
+  spawn: () => Pick<ActorEntity, "witnessed" | "fleeFrom">;
   update: (frame: FrameManager<ActorEntity>) => void;
   /** 警报值 0~100：满值即报警（M7 据此判失败） */
   alarm: Signal<number>;
@@ -52,7 +64,7 @@ export function createAlarmSystem(options: {
   onPanic: (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => void;
 }): AlarmSystem {
   const { onPanic } = options;
-  const pool = new Set<EntityId>();
+  const [pool, enterPool] = createPool<Alarmable>();
   const alarm = use(0);
   const witnessCount = use(0);
 
@@ -60,23 +72,21 @@ export function createAlarmSystem(options: {
   // 缺了这层去重，站着的目击者会每轮扫描都 +12，警报瞬间爆表。
   const accounted = new Map<EntityId, Set<EntityId>>();
 
+  // 只有客人入池：玩家不会恐慌，也不该计入目击者。
+  // 字段（witnessed / fleeFrom）玩家同样需要初值——由 spawn 提供。
+  //
+  // 返回值标注为 `Enter<Alarmable>`：幻影字段靠它传播，玩家的 `define`
+  // 才能据此要求 `witnessed` / `fleeFrom`。
   const enter =
-    (props: { role: Role }) =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      // 玩家不入池：它不会恐慌，也不该计入目击者
-      if (props.role !== "player") {
-        ctx.onMount(() => {
-          pool.add(id);
-        });
-        ctx.onUnmount(() => {
-          pool.delete(id);
-          accounted.delete(id);
-        });
-      }
-
-      // 字段仍要返回：玩家也需要有初值（渲染层读它是安全的）
-      return { witnessed: false, fleeFrom: null } as Partial<ActorEntity>;
+    (props: { role: Role }): Enter<Alarmable> =>
+    (id, ctx, state) => {
+      if (props.role !== "player") enterPool(id, ctx, state);
+      ctx.onUnmount(() => {
+        accounted.delete(id);
+      });
     };
+
+  const spawn = () => ({ witnessed: false, fleeFrom: null });
 
   /** 目标是否为「异常」：尸体，或已陷入恐慌的人 */
   const isAbnormal = (target: Readonly<ActorEntity>): boolean => target.dead || target.witnessed;
@@ -94,7 +104,7 @@ export function createAlarmSystem(options: {
     const seen = accounted.get(id) ?? new Set<EntityId>();
     const fresh: EntityId[] = [];
 
-    for (const targetId of observer.visibleIds ?? []) {
+    for (const targetId of observer.visibleIds) {
       if (seen.has(targetId)) continue;
       const target = frame(targetId);
       if (!target || !isAbnormal(target)) continue;
@@ -116,10 +126,11 @@ export function createAlarmSystem(options: {
    * 写入者始终只有状态机一处。
    */
   const report = (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => {
-    frame(id, (e) => {
+    const self = frame(id);
+    if (self) {
       // witnessed 是记忆，永久保留——它属于本系统的语义
-      e.witnessed = true;
-    });
+      self.witnessed = true;
+    }
     onPanic(frame, id, threat);
   };
 
@@ -156,6 +167,7 @@ export function createAlarmSystem(options: {
 
   return {
     enter,
+    spawn,
     update,
     alarm,
     witnessCount,

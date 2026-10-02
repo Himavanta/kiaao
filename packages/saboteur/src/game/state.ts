@@ -5,9 +5,9 @@
 // 其余是信号**。此处的信号都不参与帧变换，故不建实体。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import type { EntitySignal } from "engine";
 import { use } from "kiaao";
 
-import type { EntitySignal } from "../engine";
 import type { ActorEntity } from "./types";
 
 /**

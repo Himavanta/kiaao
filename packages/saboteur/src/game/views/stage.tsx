@@ -8,9 +8,9 @@
 // 地图，相机可移动范围为 0，整张地图（含四周边界墙）一屏可见。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { StyleMemo } from "engine";
 import { type Context, type Signal } from "kiaao";
 
-import { StyleMemo } from "../../engine/directives";
 import { TILE, type Grid } from "../../world";
 import { computeViewport } from "../config";
 

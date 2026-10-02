@@ -68,8 +68,7 @@ function place(
   pos: { x: number; y: number },
   facing: ActorEntity["facing"],
 ) {
-  (entity as any)({
-    ...entity(),
+  Object.assign(entity.state, {
     x: pos.x,
     y: pos.y,
     facing,
@@ -86,8 +85,7 @@ function pin(
   pos: { x: number; y: number },
   facing: ActorEntity["facing"],
 ) {
-  (entity as any)({
-    ...entity(),
+  Object.assign(entity.state, {
     x: pos.x,
     y: pos.y,
     facing,
@@ -173,7 +171,7 @@ describe("M6 / 目击与恐慌", () => {
     const victim = guestsOf()[1];
     // 尸体在客人正东 2 格
     place(victim, { x: 7 * 32, y: 10 * 32 }, "west");
-    (victim as any)({ ...victim(), dead: true, path: [], goal: null });
+    Object.assign(victim.state, { dead: true, path: [], goal: null });
 
     holdIsolation([guest, victim], 40, driver, () => {
       pin(guest, { x: 5 * 32, y: 10 * 32 }, "east");
@@ -194,7 +192,7 @@ describe("M6 / 目击与恐慌", () => {
     const guest = guestsOf()[0];
     const victim = guestsOf()[1];
     place(victim, { x: 7 * 32, y: 10 * 32 }, "west");
-    (victim as any)({ ...victim(), dead: true, path: [], goal: null });
+    Object.assign(victim.state, { dead: true, path: [], goal: null });
 
     // 隔离其他角色：否则它们会发现尸体并传播恐慌，污染本用例
     holdIsolation([guest, victim], 40, driver, () => {
@@ -214,7 +212,7 @@ describe("M6 / 目击与恐慌", () => {
     const guest = guestsOf()[0];
     const victim = guestsOf()[1];
     place(victim, { x: 7 * 32, y: 10 * 32 }, "west");
-    (victim as any)({ ...victim(), dead: true, path: [], goal: null });
+    Object.assign(victim.state, { dead: true, path: [], goal: null });
 
     // 让感知跑多轮（每 6 帧一轮）
     holdIsolation([guest, victim], 120, driver, () => {
@@ -234,7 +232,7 @@ describe("M6 / 目击与恐慌", () => {
     const guest = guestsOf()[0];
     const victim = guestsOf()[1];
     place(victim, { x: 7 * 32, y: 10 * 32 }, "west");
-    (victim as any)({ ...victim(), dead: true, path: [], goal: null });
+    Object.assign(victim.state, { dead: true, path: [], goal: null });
 
     holdIsolation([guest, victim], 40, driver, () => {
       pin(guest, { x: 5 * 32, y: 10 * 32 }, "east");
@@ -275,7 +273,7 @@ describe("M6 / 传播链", () => {
     const b = guestsOf()[2];
 
     place(corpse, { x: 7 * 32, y: 10 * 32 }, "west");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     // A 朝东正对尸体；B 在 A 的正西、面朝东（能看见 A）。
     // 三者都逐帧钉住——传的是「A 的恐慌状态」，不是位置变化。
@@ -298,7 +296,7 @@ describe("M6 / 传播链", () => {
 
     const corpse = guestsOf()[0];
     place(corpse, { x: 16 * 32, y: 11 * 32 }, "south");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     // 把观察者放在尸体的同侧、彼此背对的位置。
     // 不能围成一圈：两侧的观察者会互相进入对方视野，于是「看见尸体」
@@ -350,7 +348,7 @@ describe("M6 / 玩家不参与恐慌链", () => {
 
     const corpse = guestsOf()[0];
     place(corpse, { x: 7 * 32, y: 10 * 32 }, "west");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     driver.perceive();
 
@@ -368,7 +366,7 @@ describe("M6 / 玩家不参与恐慌链", () => {
     const guest = guestsOf()[0];
     const corpse = guestsOf()[1];
     place(corpse, { x: 7 * 32, y: 10 * 32 }, "west");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     holdIsolation([guest, corpse], 40, driver, () => {
       pin(guest, { x: 5 * 32, y: 10 * 32 }, "east");
@@ -403,7 +401,7 @@ describe("M6 / 恐慌者逃离", () => {
     const guest = guestsOf()[0];
     const corpse = guestsOf()[1];
     place(corpse, { x: 7 * 32, y: 10 * 32 }, "west");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     // 逐帧钉住直到恐慌发生（隔离其余角色）。
     // 帧数需覆盖至少一轮感知（间隔 6 帧）
@@ -427,7 +425,7 @@ describe("M6 / 恐慌者逃离", () => {
     const guest = guestsOf()[0];
     const corpse = guestsOf()[1];
     place(corpse, { x: 7 * 32, y: 10 * 32 }, "west");
-    (corpse as any)({ ...corpse(), dead: true, path: [], goal: null });
+    Object.assign(corpse.state, { dead: true, path: [], goal: null });
 
     // 钉住到恐慌发生为止（其余角色隔离），随后放开让它跑
     for (let i = 0; i < 40 && !guest().witnessed; i += 1) {

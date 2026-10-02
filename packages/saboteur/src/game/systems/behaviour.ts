@@ -10,9 +10,8 @@
 // 这样「恐慌」不再散落在 alarm / navigation / behaviour 三处。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { Context } from "kiaao";
+import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
 
-import type { EntityId, FrameManager } from "../../engine/types";
 import { cellAt, type Cell } from "../../world";
 import type { Random } from "../../world/random";
 import type { ActorEntity, Mood } from "../types";
@@ -20,8 +19,35 @@ import { ACTOR_SIZE } from "./locomotion";
 import type { NavigationService } from "./navigation";
 import { createStates, type ActorState, type StateContext } from "./states";
 
+/**
+ * 行为系统字段需求。
+ *
+ * 包含位置（状态上下文要算当前格）与 `dead`（死者不入状态机）。
+ */
+export type Behaving = Pick<
+  ActorEntity,
+  | "mood"
+  | "moodLeft"
+  | "path"
+  | "goal"
+  | "idleLeft"
+  | "followTime"
+  | "witnessed"
+  | "fleeFrom"
+  | "dead"
+  | "x"
+  | "y"
+>;
+
 export type BehaviourSystem = {
-  enter: () => (id: EntityId, ctx: Context) => Partial<ActorEntity>;
+  enter: Enter<Behaving>;
+  /**
+   * 初值（D2 方案 B）：行为字段。
+   *
+   * `moodLeft` 需要掷定时长，故必须闭包持有 `states`（时长常量在里面）——
+   * 这是把它做成系统方法而非独立导出函数的原因。
+   */
+  spawn: () => Pick<ActorEntity, "mood" | "moodLeft" | "path" | "goal" | "idleLeft" | "followTime">;
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
   /**
    * 让某实体进入恐慌态。
@@ -39,7 +65,7 @@ export function createBehaviourSystem(options: {
   navigation: NavigationService;
 }): BehaviourSystem {
   const { random, navigation } = options;
-  const pool = new Set<EntityId>();
+  const [pool, enter] = createPool<Behaving>();
   const states = createStates(random);
 
   const rollDuration = (state: ActorState): number => {
@@ -47,45 +73,40 @@ export function createBehaviourSystem(options: {
     return min + random() * (max - min);
   };
 
-  const enter =
-    () =>
-    (id: EntityId, ctx: Context): Partial<ActorEntity> => {
-      ctx.onMount(() => {
-        pool.add(id);
-      });
-      ctx.onUnmount(() => {
-        pool.delete(id);
-      });
-
-      // 移动相关字段（path / goal / idleLeft / followTime）由本系统初始化：
-      // navigation 现在是**服务**而非系统，它不再有 `enter`。谁驱动移动，
-      // 谁就负责给出这些字段的初值——否则状态机会读到 `undefined`。
-      return {
-        mood: "wander" as Mood,
-        moodLeft: rollDuration(states.wander),
-        path: [],
-        goal: null,
-        idleLeft: 0,
-        followTime: 0,
-      } as Partial<ActorEntity>;
-    };
+  // 移动相关字段（path / goal / idleLeft / followTime）由本系统初始化：
+  // navigation 现在是**服务**而非系统，它不再有 `enter`。谁驱动移动，
+  // 谁就负责给出这些字段的初值——否则状态机会读到 `undefined`。
+  const spawn = () => ({
+    mood: "wander" as Mood,
+    moodLeft: rollDuration(states.wander),
+    path: [],
+    goal: null,
+    idleLeft: 0,
+    followTime: 0,
+  });
 
   /**
    * 构造状态上下文。
    *
-   * 每帧构造一次：`self` 是只读快照（状态读它），`patch` 是写回通道
-   * （状态改它）。快照在 `patch` 后不会自动更新——状态若需读自己刚写的
-   * 值，应当写进局部变量而不是回读。
+   * 每帧构造一次：`self` 是活对象引用（状态读它即读当前值），
+   * `patch` 是写回通道（改的就是同一对象）。
    *
-   * `transition` 捕获了 `current` 变量，因此一个状态在一次 `update` 内
-   * 调用多次 `transition` 时，最后一次生效。
+   * 与旧引擎的区别：旧版 `self` 是快照，`patch` 后不回读；现在两者是同一
+   * 对象。已核对三个状态（wander / linger / panic）均无「写完某字段又回读」
+   * 的用法，故行为一致。
+   *
+   * `transition` 在一次 `update` 内被多次调用时，最后一次生效
+   * （因为它们按顺序执行，后一次覆盖前一次写的 `mood` / `moodLeft`）。
    */
   const makeContext = (
     frame: FrameManager<ActorEntity>,
     id: EntityId,
     self: Readonly<ActorEntity>,
   ): StateContext => {
-    const cell = cellAt(self.x + ACTOR_SIZE / 2, self.y + ACTOR_SIZE / 2) ?? { col: 0, row: 0 };
+    const cell = cellAt(self.x + ACTOR_SIZE / 2, self.y + ACTOR_SIZE / 2) ?? {
+      col: 0,
+      row: 0,
+    };
 
     const ctx: StateContext = {
       frame,
@@ -93,16 +114,17 @@ export function createBehaviourSystem(options: {
       self,
       cell,
       patch: (fn) => {
-        frame(id, fn);
+        const target = frame(id);
+        if (target) fn(target);
       },
       transition: (next) => {
         // 切换：写 mood、掷定新时长、跑目标状态的 enter
         const nextState = states[next];
-        frame(id, (e) => {
-          e.mood = next;
-          e.moodLeft = rollDuration(nextState);
-        });
-        nextState.enter?.({ ...ctx, self: frame(id) as Readonly<ActorEntity> });
+        const target = frame(id);
+        if (!target) return;
+        target.mood = next;
+        target.moodLeft = rollDuration(nextState);
+        nextState.enter?.({ ...ctx, self: target as Readonly<ActorEntity> });
       },
       services: navigation,
     };
@@ -140,15 +162,13 @@ export function createBehaviourSystem(options: {
     // `PANIC_DURATION` 已移入 `states.ts` 的 `panic.duration`——
     // 时长归状态本身所有，外部不再需要知道它。
 
-    frame(id, (e) => {
-      // witnessed 是记忆，永久保留——它属于 alarm 的语义
-      e.witnessed = true;
-      e.fleeFrom = threat;
-    });
+    // witnessed 是记忆，永久保留——它属于 alarm 的语义
+    self.witnessed = true;
+    self.fleeFrom = threat;
 
     // 走正规切换路径：写 mood、掷定时长、跑 panic.enter()
-    makeContext(frame, id, frame(id) as Readonly<ActorEntity>).transition("panic");
+    makeContext(frame, id, self).transition("panic");
   };
 
-  return { enter, update, panic };
+  return { enter, spawn, update, panic };
 }

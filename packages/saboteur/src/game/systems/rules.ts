@@ -86,8 +86,8 @@ export function createRulesSystem(options: {
 
   const restart = () => {
     result("playing");
+    // 帧循环的开/停由组装层的 onRestart 负责（它知道重建何时完成）
     onRestart();
-    // 重开后帧循环由组件重新 start（Show 分支重建时 onMount 会触发）
   };
 
   return { update, objective, restart };

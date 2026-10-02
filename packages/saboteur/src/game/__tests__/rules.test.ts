@@ -11,7 +11,7 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import App from "../../app";
-import { alarm, level, resetGameState, rules, start, stop } from "../instance";
+import { alarm, frameSystem, level, resetGameState, rules, stop } from "../instance";
 import { gameState, listActors } from "../state";
 
 function createDriver(stepMs = 16) {
@@ -202,7 +202,7 @@ describe("M7 / 胜负判定", () => {
 
     // 直接让一个客人中毒致死
     const guest = guestsOf()[0];
-    (guest as any)({ ...guest(), poisonLeft: 0.01 });
+    Object.assign(guest.state, { poisonLeft: 0.01 });
     driver.tickTimes(5);
 
     expect(gameState.kills()).toBe(1);
@@ -236,13 +236,37 @@ describe("M7 / 重开", () => {
     rules.restart();
     driver.tickTimes(2);
 
-    // restart 内部 stop 了帧循环，需重新启动（组件重建时会 start）
-    start();
-    driver.tickTimes(2);
-
     expect(gameState.phase()).toBe("playing");
     expect(gameState.kills()).toBe(0);
     expect(gameState.timeLeft()).toBeGreaterThan(0);
+
+    app.unmount();
+  });
+
+  /**
+   * 回归：重开后帧循环必须真的恢复。
+   *
+   * 此前 `restart` 只调 `stop()`，以为「组件重建时会 start」——但 `start()`
+   * 只在根组件 `onMount` 执行一次，递增 `runId` 只重建 `Each` 的子项。
+   * 结果是重开后画面冻在终局那一帧。此用例用帧计数锁定这条契约。
+   */
+  test("重开后帧循环恢复（不依赖组件重新挂载）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+    driver.tickTimes(3);
+
+    alarm.alarm(100);
+    driver.tickTimes(3);
+    expect(gameState.phase()).toBe("caught");
+
+    const framesAtEnd = frameSystem.frames();
+
+    rules.restart();
+    driver.tickTimes(5);
+
+    expect(frameSystem.frames()).toBeGreaterThan(framesAtEnd);
+    // 时限确实在前进（而不只是帧计数在动）
+    expect(gameState.timeLeft()).toBeLessThan(level.objective.timeLimit);
 
     app.unmount();
   });
@@ -256,11 +280,10 @@ describe("M7 / 重开", () => {
 
     // 先把一个客人挪走并杀死
     const guest = guestsOf()[0];
-    (guest as any)({ ...guest(), x: 999, y: 999, dead: true });
+    Object.assign(guest.state, { x: 999, y: 999, dead: true });
     driver.tickTimes(2);
 
     rules.restart();
-    start();
     driver.tickTimes(2);
 
     // 实体数不变（旧的已卸载、新的已挂载），不是翻倍
@@ -282,7 +305,6 @@ describe("M7 / 重开", () => {
     driver.tickTimes(3);
 
     rules.restart();
-    start();
     driver.tickTimes(2);
 
     expect(alarm.alarm()).toBe(0);
@@ -304,7 +326,6 @@ describe("M7 / 重开", () => {
       expect(driver.pending).toBe(0);
 
       rules.restart();
-      start();
       driver.tickTimes(2);
     }
 
@@ -320,7 +341,6 @@ describe("M7 / 重开", () => {
     expect(gameState.phase()).toBe("caught");
 
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyR" }));
-    start();
     driver.tickTimes(2);
 
     expect(gameState.phase()).toBe("playing");

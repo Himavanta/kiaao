@@ -6,13 +6,17 @@
 // 验收标准。此处验证：开关生效、多边形确实被算出、遮挡被反映。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import type { FrameManager } from "engine";
 import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import App from "../../app";
 import { level, perception, stop } from "../instance";
 import { listActors, showVision } from "../state";
+import { createPerceptionSystem } from "../systems/perception";
+import type { ActorEntity } from "../types";
 import { computeCones } from "../views/vision";
+import { makeActorState, mountActor } from "./helpers";
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -264,111 +268,77 @@ describe("M4 / Tab 开关", () => {
 
 describe("M4 / 感知能真正检测到目标", () => {
   /** 直接使用感知系统：不依赖 App，位置可控 */
-  async function setupPair(options: {
+  function setupPair(options: {
     aFacing: "north" | "east" | "south" | "west";
     aAt: { x: number; y: number };
     bAt: { x: number; y: number };
   }) {
-    const { createGame } = await import("../../engine/game");
-    const { createPerceptionSystem } = await import("../systems/perception");
-    const { use } = await import("kiaao");
-
     const grid = level.grid;
     const perception = createPerceptionSystem({ grid });
-    const game = createGame<any>([perception.update], { autostart: false });
 
-    const mounts: Array<() => void> = [];
-    const ctx = {
-      use,
-      onMount: (fn: () => void) => mounts.push(fn),
-      onUnmount: () => {},
-      owner: {},
-    } as any;
+    // 两个观测者：只有一个 frame 替身能同时看到两者，故每个实体各持一份
+    const a = mountActor({
+      enters: [perception.enter],
+      state: makeActorState({ ...perception.spawn(), ...options.aAt, facing: options.aFacing }),
+    });
+    const b = mountActor({
+      enters: [perception.enter],
+      state: makeActorState({ ...perception.spawn(), ...options.bAt }),
+    });
 
-    const a = game.useEntity(
-      ctx,
-      () => ({ ...options.aAt, facing: options.aFacing }),
-      perception.enter(),
-      () => ({ role: "guest" as const }),
-    );
-    const b = game.useEntity(
-      ctx,
-      () => ({ ...options.bAt, facing: "south" as const }),
-      perception.enter(),
-      () => ({ role: "guest" as const }),
-    );
-    mounts.forEach((fn) => fn());
+    // 两个观测者：仅本轮扫描的 frame 需要同时看到两者，故合并两个 id 的活对象
+    const frame = ((id: symbol) => {
+      if (id === a.id) return a.state;
+      if (id === b.id) return b.state;
+      return undefined;
+    }) as FrameManager<ActorEntity>;
 
     // 推 6 帧让定频扫描跑一轮
-    const cache = new Map<any, any>();
-    const frame: any = (id: any, mutate?: any) => {
-      const src = id === (a as any).id ? a : id === (b as any).id ? b : undefined;
-      if (!src) return;
-      if (mutate) {
-        let base = cache.get(id);
-        if (!base) {
-          base = { ...src() };
-          cache.set(id, base);
-        }
-        mutate(base);
-        return;
-      }
-      return cache.get(id) ?? src();
-    };
+    for (let i = 0; i < 6; i += 1) perception.update(frame);
 
-    for (let i = 0; i < 6; i += 1) {
-      perception.update(frame, 0);
-      for (const [id, data] of cache) {
-        const src = id === (a as any).id ? a : b;
-        (src as any)(data);
-      }
-      cache.clear();
-    }
-
-    return { a, b };
+    return { a: a.entity, b: b.entity, aId: a.id, bId: b.id };
   }
 
-  test("正对目标且在射程内：检测到", async () => {
+  test("正对目标且在射程内：检测到", () => {
     // 玩家出生点附近的开阔处，A 朝东、B 在其正东 3 格
-    const { a, b } = await setupPair({
+    const { a, bId } = setupPair({
       aFacing: "east",
       aAt: { x: 11 * 32, y: 10 * 32 },
       bAt: { x: 14 * 32, y: 10 * 32 },
     });
 
-    expect(a().visibleIds).toContain((b as any).id);
+    expect(a().visibleIds).toContain(bId);
   });
 
-  test("背对目标：检测不到", async () => {
-    const { a } = await setupPair({
+  test("背对目标：检测不到", () => {
+    const { a } = setupPair({
       aFacing: "west",
       aAt: { x: 11 * 32, y: 10 * 32 },
       bAt: { x: 14 * 32, y: 10 * 32 },
     });
 
-    expect(a().visibleIds).not.toContain((a as any).id);
-    expect((a().visibleIds ?? []).length).toBe(0);
+    expect(a().visibleIds.length).toBe(0);
   });
 
-  test("超出射程：检测不到", async () => {
+  test("超出射程：检测不到", () => {
     // 相隔 12 格，视距只有 7 格
-    const { a } = await setupPair({
+    const { a } = setupPair({
       aFacing: "east",
       aAt: { x: 2 * 32, y: 11 * 32 },
       bAt: { x: 14 * 32, y: 11 * 32 },
     });
 
-    expect((a().visibleIds ?? []).length).toBe(0);
+    expect(a().visibleIds.length).toBe(0);
   });
 
-  test("中间隔墙：检测不到", async () => {
+  test("中间隔墙：检测不到", () => {
     // 第 6 行是墙带；A 在墙上方的第 5 行，B 在墙下方的第 7 行
-    const { a } = await setupPair({
+    const { a } = setupPair({
       aFacing: "south",
       aAt: { x: 3 * 32, y: 5 * 32 },
       bAt: { x: 3 * 32, y: 7 * 32 },
     });
 
-    expect((a().visibleIds ?? []).length).toBe(0);
+    expect(a().visibleIds.length).toBe(0);
   });
 });

@@ -6,22 +6,22 @@
 // 不写 DOM。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { StyleMemo } from "engine";
 import { Show, type Context } from "kiaao";
 
-import { StyleMemo } from "../../engine/directives";
 import { TILE } from "../../world";
 import {
   alarm,
   behaviour,
+  define,
   entityCount,
   interaction,
   locomotion,
   perception,
-  useEntity,
 } from "../instance";
 import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
-import type { Facing, Role } from "../types";
+import type { ActorEntity, Facing, Role } from "../types";
 
 import style from "./actor.module.scss";
 
@@ -49,17 +49,32 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 两类角色都注册 locomotion / perception / interaction：
   // 交互切片承载 held / dead / poisonLeft——玩家需要（持有与下药），
   // 客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
-  const common = [
-    locomotion.enter(speedProps(col, row, role, facing)),
-    perception.enter(),
-    interaction.enter(),
-    alarm.enter({ role }),
-  ];
+  const common = [locomotion.enter, perception.enter, interaction.enter, alarm.enter({ role })];
 
   // 客人多一个行为状态机（玩家由输入驱动，不跑状态机）
-  const enters = role === "guest" ? [...common, behaviour.enter()] : common;
+  const enters = role === "guest" ? [...common, behaviour.enter] : common;
 
-  const entity = useEntity(ctx, ...enters, () => ({ role }));
+  // 数据归组件：state 写全各系统需要的字段。
+  // 初值由各系统的 spawn 纯函数产出（D2 方案 B）——「初值怎么算」
+  // 留在系统侧（它最清楚自己的字段），视图只负责组合与渲染。
+  //
+  // 行为字段**两类角色都给**（实体形态统一）：谁跑状态机由「注册了
+  // 哪个 enter」决定，而非由字段有无决定。玩家不入行为池，其 mood / path
+  // 等字段永不被读写。
+  //
+  // **必须注解为 `ActorEntity`**：`Signal` 在 TS 里是不变的，
+  // 若让 `state` 保持字面量类型，`define` 返回的 `EntitySignal<字面量>`
+  // 就无法赋给 `EntitySignal<ActorEntity>`（注册表需要它）。
+  const state: ActorEntity = {
+    ...locomotion.spawn(speedProps(col, row, role, facing)),
+    ...perception.spawn(),
+    ...interaction.spawn(),
+    ...alarm.spawn(),
+    ...behaviour.spawn(),
+    role,
+  };
+
+  const entity = define(ctx, ...enters)(state);
 
   // 全局注册表：玩家供相机跟随，全部角色供视锥调试层遍历。
   // 卸载时反注册，避免调试层指向已销毁的信号。
