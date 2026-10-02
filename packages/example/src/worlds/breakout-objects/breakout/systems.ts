@@ -1,6 +1,7 @@
 import { type Signal } from "kiaao";
 
 import type { EntityId, FrameManager } from "../engine";
+import { createEvent } from "../engine/events";
 import { createPool } from "../engine/pool";
 import type { SoundName } from "./assets";
 
@@ -98,39 +99,6 @@ export type RuleDeps = {
 };
 
 /**
- * 事件单元：把「队列 + 发射口 + 处理函数」封在一个定义点。
- *
- * 以前一个事件被切在五处：类型 / `const xxxQueue = []` / `emit.xxx` /
- * `update` 里的 `onXxx(...)` 派发 / 90 行之外的 `function onXxx`。
- * 现在是这个形状：
- *
- * ```ts
- * const breaking = createEvent<BreakPayload>((p, frame) => {
- *   // 处理逻辑就在这里，`frame` 与 `deps` 都可见
- * });
- * breaking.emit(...)   // 发射
- * breaking.drain(frame) // 帧循环里消费
- * ```
- *
- * `drain` 用 `splice(0)` 取快照——**处理中新压入的事件留到下一帧**，
- * 与改造前的语义一致（避免链式事件在帧内无限展开）。
- */
-function createEvent<P>(handle: (payload: P, frame: FrameManager<RuleEntity>) => void) {
-  const queue: P[] = [];
-  return {
-    emit: (payload: P) => {
-      queue.push(payload);
-    },
-    /** 消费本帧全部事件（splice 取快照：处理中新压入的留到下一帧） */
-    drain: (frame: FrameManager<any>) => {
-      for (const payload of queue.splice(0)) {
-        handle(payload, frame);
-      }
-    },
-  };
-}
-
-/**
  * 规则系统：内部维护多个闭包事件队列（每事件类型一个），
  * emit 方法绑定各队列（类型由签名锁定），update 在帧循环中处理队列。
  * 挡板/砖块实体注册进本系统的池（像普通系统的 pool 一样持有实体）；
@@ -138,11 +106,11 @@ function createEvent<P>(handle: (payload: P, frame: FrameManager<RuleEntity>) =>
  */
 export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   // 实体池（登记即持有 id）
-  const paddlePool = createPool<RuleEntity>();
-  const brickPool = createPool<RuleEntity>();
+  const [paddlePool, enterPaddle] = createPool<T>();
+  const [brickPool, enterBrick] = createPool<T>();
 
   // ── 击碎：禁用砖 + 球加速 + 加分；分数满则胜 ──────────────
-  const breaking = createEvent<BreakPayload>((p, frame) => {
+  const [emitBreak, drainBreak] = createEvent<T, BreakPayload>((p, frame) => {
     const b = frame(p.id);
     if (!b || !b.enabled) return; // 幂等：已被击碎（同帧多球撞击）
 
@@ -165,7 +133,7 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   });
 
   // ── 出界：按 dataId 声明式销毁该球；球全没则减命，生命耗尽则败 ──
-  const outing = createEvent<OutPayload>((p, frame) => {
+  const [emitOut, drainOut] = createEvent<T, OutPayload>((p, frame) => {
     if (deps.state() !== "running") return; // 非运行状态不处理出界
 
     const b = frame(p.id);
@@ -186,8 +154,8 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   });
 
   // ── 发球：ready 且无球时，从挡板上方生成第一个球 ──────────
-  const launching = createEvent<LaunchPayload>((_p, frame) => {
-    const [paddleId] = paddlePool.ids;
+  const [emitLaunch, drainLaunch] = createEvent<T, LaunchPayload>((_p, frame) => {
+    const [paddleId] = paddlePool;
     if (!paddleId) return;
     if (deps.state() !== "ready" || deps.balls().length > 0) return;
 
@@ -208,7 +176,7 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   });
 
   // ── 点击：运行中生成一个奖励球（多球玩法，演示声明式实体创建） ──
-  const clicking = createEvent<ClickPayload>((p) => {
+  const [emitClick, drainClick] = createEvent<T, ClickPayload>((p) => {
     if (deps.state() !== "running") return;
 
     const angle = Math.random() * Math.PI * 2;
@@ -219,12 +187,12 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
   });
 
   // ── 重开：重置全局状态 + 遍历砖块池恢复 enabled ──────────
-  const restarting = createEvent<RestartPayload>((_p, frame) => {
+  const [emitRestart, drainRestart] = createEvent<T, RestartPayload>((_p, frame) => {
     deps.balls([]);
     deps.score(0);
     deps.lives(LIVES);
     deps.state("ready");
-    for (const id of brickPool.ids) {
+    for (const id of brickPool) {
       // brickPool 与数据池同步（结构保证）；砖块从不销毁
       frame(id)!.enabled = true;
     }
@@ -232,19 +200,19 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
 
   // emit：每个事件类型一个方法，绑定对应队列
   const emit = {
-    break: breaking.emit,
-    out: outing.emit,
-    launch: launching.emit,
-    click: clicking.emit,
-    restart: restarting.emit,
+    break: emitBreak,
+    out: emitOut,
+    launch: emitLaunch,
+    click: emitClick,
+    restart: emitRestart,
   };
 
   // enter：实体进入接口——只进池，不提供数据（与 emit 对称）
   const enter = {
     // 挡板（供发球时读取位置）
-    paddle: paddlePool.enter,
+    paddle: enterPaddle,
     // 砖块（供重开时统一恢复 enabled）
-    brick: brickPool.enter,
+    brick: enterBrick,
   };
 
   // 挡板跟随优化：方向不变时零写入（避免无谓信号传播）
@@ -252,7 +220,7 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
 
   // update：挡板跟随 + 按序消费各事件队列（顺序即原来的队列处理顺序）
   const update = (frame: FrameManager<T>) => {
-    const [paddleId] = paddlePool.ids;
+    const [paddleId] = paddlePool;
 
     // 挡板跟随：持续输入状态 → 实体数据（仅在变化时写入）
     const d = deps.dir();
@@ -262,11 +230,11 @@ export function createRuleSystem<T extends RuleEntity>(deps: RuleDeps) {
       lastDir = d;
     }
 
-    breaking.drain(frame);
-    outing.drain(frame);
-    launching.drain(frame);
-    clicking.drain(frame);
-    restarting.drain(frame);
+    drainBreak(frame);
+    drainOut(frame);
+    drainLaunch(frame);
+    drainClick(frame);
+    drainRestart(frame);
   };
 
   return { enter, emit, update };

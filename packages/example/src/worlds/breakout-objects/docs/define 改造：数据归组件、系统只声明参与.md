@@ -305,6 +305,8 @@ onUnmount(() => {
 
 **做。** 采用 `createPool`（池与其 enter 封为一体，放 `engine/pool.ts`），而不是只抽 enter。理由：二者天然配对，可避免“用 A 池的 enter 却往 B 池加”这类错误。
 
+> **2026-10-02 后续修正**：最初还做了 `createMovingPools`（双池路由），**已删除**——它不该存在。详见 §6.4。
+
 ---
 
 ---
@@ -388,6 +390,84 @@ restarting.drain(frame);
 ### 6.3 未做：音效系统拆出去
 
 `sound system` 与规则系统无关，只是碰巧也是系统。但那是「文件职责」问题，与「碎片化」不是同一件事，**未做**。
+
+---
+
+### 6.4 泛化：两个辅助收进 engine，改为数组返回值
+
+作者提出两点要求：**① 泛化（不耦合 demo 类型）；② 返回值用数组**（强制解构命名）。已实施。
+
+#### `createPool` → `engine/pool.ts`
+
+删掉了上一版的 `createMovingPools`——它不该存在。证据：`movement` 只用 `pools.moving`，**从不读 `pools.statics`**：
+
+```ts
+for (const id of pools.moving) { … }   // 只有这一处
+```
+
+静止池在那里纯粹是陪衬，仅为“不被遍历”而存在。正确的原语是**带筛选的单池**：
+
+```ts
+createPool<T>((s) => s.moving); // 移动系统：只收移动的
+createPool<T>((s) => !s.moving); // 碰撞系统：静止侧
+createPool<T>(); // 全部（boundary）
+```
+
+一个原语覆盖所有情况，`createMovingPools` 只是它的特例。
+
+#### `createEvent` → `engine/events.ts`
+
+原实现**硬编码了 `RuleEntity`**（`frame: FrameManager<RuleEntity>`），不可复用。泛化为两个类型参数：
+
+```ts
+createEvent<T extends Record<string, any>, P>(
+  handle: (payload: P, frame: FrameManager<T>) => void,
+): [emit: (payload: P) => void, drain: (frame: FrameManager<T>) => void]
+```
+
+**注意顺序是 `<T, P>` 而不是 `<P, T>`**：实测过 `<P, T>` 有逆变问题——当 `T` 来自外层泛型 `createRuleSystem<T>` 时，`FM<T>` 无法赋给 `FM<Record<string, any>>`。
+
+现在两个文件都不再依赖 demo 类型：`pool.ts` 只依赖 `EntityId` / `Enter<N>`，`events.ts` 只依赖 `FrameManager`。
+
+#### 数组返回值
+
+```ts
+const [movers, enter] = createPool<T>((s) => s.moving);
+const [paddlePool, enterPaddle] = createPool<T>();
+
+const [emitBreak, drainBreak] = createEvent<T, BreakPayload>((p, frame) => { … });
+```
+
+**强制解构命名**——名字由使用者按语义取（`emitBreak` / `drainBreak`、`movers` / `enter`），而不是被固定的属性名（`.emit` / `.drain`）绑死。同一系统里五个事件各自的 `emit`/`drain` 不会再靠 `.emit` 这种同名字段区分。
+
+#### 实现中的两处取舍
+
+1. **`event<P>()` 两层调用被放弃**，改为直接 `createEvent<T, P>`。前者能简化书写（`T` 不用重复写），但多一层闭包阅读更绕；实测单层写法同样能通过类型检查。
+2. **`frame` 参数可省略类型标注**——从 `createEvent` 的签名推断得出，不必在每个事件里重复写 `frame: FrameManager<T>`。
+
+#### 副作用：`engine/systems.ts` 变了
+
+`collision` 原本是“一个 enter 路由到两个池”，现在是“两个独立池 + 各自筛选，enter 同时登记两边”：
+
+```ts
+const [movers, enterMovers] = createPool<T>((s) => s.moving);
+const [statics, enterStatics] = createPool<T>((s) => !s.moving);
+
+const enter = ((id, ctx, state) => {
+  enterMovers(id, ctx, state);
+  enterStatics(id, ctx, state);
+}) as Enter<T>;
+```
+
+（一次 `Enter` 调用里两个池各判一次 `accept`，所以“双池路由”在语义上并没丢。）
+
+**行为验证**（同条件对照，与泛化前逐值一致）：
+
+```
+400 帧: 分数=2 隐藏砖块=2 球数=1 生命=3
+重开: 可见砖块=48 状态=ready 分数=0
+砖块 translate = 36px 48px（moving=false 不入移动池，400 帧未位移）
+```
 
 ---
 
@@ -531,9 +611,10 @@ kill() { this.isLive = false; }    // ⚠️ this 指向 state（Object.assign �
 
 ## 附二、文档修订记录
 
-| 日期       | 修订                                                                                                    |
-| :--------- | :------------------------------------------------------------------------------------------------------ |
-| 2026-10-02 | 初稿（规划）                                                                                            |
-| 2026-10-02 | **首轮实现完成**。补第五节实现记录、§6.3 事后对照（含 P4 行数预测失败）；§5.2 记录实现中修正的两处设计  |
-| 2026-10-02 | §5.4 补「不抽 pool」的量化评估（重复 ≈ 27 行 vs 抽象成本）；Q2 结案                                     |
-| 2026-10-02 | 新增第六节：`createEvent` 重组（规则系统）、pool 抽象的二次评估；§5.4 改为「先否后取」；Q2 反转为「抽」 |
+| 日期       | 修订                                                                                                                         |
+| :--------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-02 | 初稿（规划）                                                                                                                 |
+| 2026-10-02 | **首轮实现完成**。补第五节实现记录、§6.3 事后对照（含 P4 行数预测失败）；§5.2 记录实现中修正的两处设计                       |
+| 2026-10-02 | §5.4 补「不抽 pool」的量化评估（重复 ≈ 27 行 vs 抽象成本）；Q2 结案                                                          |
+| 2026-10-02 | 新增第六节：`createEvent` 重组（规则系统）、pool 抽象的二次评估；§5.4 改为「先否后取」；Q2 反转为「抽」                      |
+| 2026-10-02 | §6.4：删除 `createMovingPools`（改为带筛选的 `createPool`）；`createEvent` 泛化并移入 `engine/events.ts`；两者改为数组返回值 |

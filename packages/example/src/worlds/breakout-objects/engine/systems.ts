@@ -18,13 +18,11 @@ export type Bounded = Movable & { w: number; h: number };
 
 export function createMovementSystem<T extends Movable = Movable>() {
   // 只收移动实体：静止实体不入池，帧循环里根本不出现（零开销）
-  const pool = createPool<T>((s) => s.moving);
-
-  const enter = pool.enter;
+  const [movers, enter] = createPool<T>((s) => s.moving);
 
   // update: 帧逻辑，只遍历移动池
   const update = (frame: FrameManager<T>, delta: number) => {
-    for (const id of pool.ids) {
+    for (const id of movers) {
       // 池与数据池由同一套 onMount/onUnmount 维护，同步是结构保证的
       const e = frame(id)!;
       e.x += e.vx * delta;
@@ -69,8 +67,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
   },
   routes?: BoundaryRoutes,
 ) {
-  const pool = createPool<T>();
-  const enter = pool.enter;
+  const [pool, enter] = createPool<T>();
 
   // 水平边处理：left / right（die 边由 update 提前拦截并报告事件）
   const applyHorizontal = (e: T, maxX: number) => {
@@ -142,7 +139,7 @@ export function createBoundarySystem<T extends BoundedEntity = BoundedEntity>(
     const maxX = config?.width ?? window.innerWidth;
     const maxY = config?.height ?? window.innerHeight;
 
-    for (const id of pool.ids) {
+    for (const id of pool) {
       // 池与数据池同步（结构保证），故用断言；不存在时应当报错而非静默跳过
       const e = frame(id)!;
       if (!isOutOfBounds(e, maxX, maxY)) continue;
@@ -265,12 +262,12 @@ export type CollisionRoutes = {
  */
 export function createCollisionSystem<T extends Collidable = Collidable>(routes?: CollisionRoutes) {
   // 两个池：只有移动×移动、移动×静止会配对（静止×静止不检测）
-  const movers = createPool<T>((s) => s.moving);
-  const statics = createPool<T>((s) => !s.moving);
+  const [movers, enterMovers] = createPool<T>((s) => s.moving);
+  const [statics, enterStatics] = createPool<T>((s) => !s.moving);
 
   const enter = ((id, ctx, state) => {
-    movers.enter(id, ctx, state);
-    statics.enter(id, ctx, state);
+    enterMovers(id, ctx, state);
+    enterStatics(id, ctx, state);
   }) as Enter<T>;
 
   // 单对碰撞处理：bStatic 表示 b 是静止实体（障碍物）
@@ -330,8 +327,8 @@ export function createCollisionSystem<T extends Collidable = Collidable>(routes?
 
   // update: 移动×移动去重配对 + 移动×静止全配对
   const update = (frame: FrameManager<T>) => {
-    const moveIds = Array.from(movers.ids);
-    const staticIds = Array.from(statics.ids);
+    const moveIds = Array.from(movers);
+    const staticIds = Array.from(statics);
 
     for (const [i, idA] of moveIds.entries()) {
       for (const idB of moveIds.slice(i + 1)) {
