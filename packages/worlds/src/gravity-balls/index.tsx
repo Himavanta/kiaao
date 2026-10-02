@@ -1,6 +1,7 @@
 import { createGame, createPool, StyleMemo, type FrameManager } from "engine";
-import { createBoundarySystem, createCollisionSystem, createMovementSystem } from "engine/systems";
 import { Each, use, type Context } from "kiaao";
+
+import { createBoundarySystem, createCollisionSystem, createMovementSystem } from "./systems";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1. 重力系统（自定义系统示例）

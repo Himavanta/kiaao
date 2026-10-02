@@ -5,10 +5,11 @@ import { createRouter } from "kiaao/router";
 // 游戏 demo 路由
 //
 // 只含游戏 demo——不含 example 那套 dashboard / 导航。
-// 每个 demo 自包含（有自己的引擎用法与玩法），彼此不共享逻辑：
-// - engine/          旧 ECS 引擎（bouncing-boxes、gravity-balls 使用）
-// - breakout/        对象池改写版（状态即活对象，帧末统一 flush）
+// 每个 demo 自包含（自己的玩法系统与实体定义），彼此不共享逻辑：
+// - gravity-balls/   重力 + 圆形碰撞（自带 systems.ts）
+// - breakout/        打砖块（状态即活对象，帧末统一 flush）
 // - crowd/           actor 模型实验（闭包状态 + 对象池）
+// 三者共用 packages/engine 提供的机制（帧循环、define、池、事件）。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export const { Router, Link, push, current } = createRouter({
@@ -18,7 +19,6 @@ export const { Router, Link, push, current } = createRouter({
   routes: {
     "": ({ RouterView }) => RouterView,
     worlds: lazy(() => import("./index.tsx")),
-    "bouncing-boxes": lazy(() => import("./bouncing-boxes/index.tsx")),
     "gravity-balls": lazy(() => import("./gravity-balls/index.tsx")),
     breakout: lazy(() => import("./breakout/index.tsx")),
     crowd: lazy(() => import("./crowd/index.tsx")),

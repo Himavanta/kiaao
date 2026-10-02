@@ -6,12 +6,6 @@ import { Link } from "./router";
 
 const demos = [
   {
-    path: "/bouncing-boxes",
-    title: "弹跳盒子",
-    desc: "矩形碰撞 + 静止障碍：彩盒在屏幕内弹跳、互相碰撞，紫色方块为静止障碍物（碰撞反弹、不交换速度）。",
-    tags: ["矩形碰撞", "静止池", "移动池"],
-  },
-  {
     path: "/gravity-balls",
     title: "重力弹球",
     desc: "圆形碰撞 + 动态生命周期：点击空白生成小球（随机重力/大小/颜色），点击小球销毁，小球与中央方块精确圆角碰撞。",

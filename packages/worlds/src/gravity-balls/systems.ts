@@ -1,7 +1,5 @@
+import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
 import { use, type Signal } from "kiaao";
-
-import type { EntityId, Enter, FrameManager } from "./game";
-import { createPool } from "./pool";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 系统字段需求
