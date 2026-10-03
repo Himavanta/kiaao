@@ -14,10 +14,16 @@ import { createPool, type EntityId, type Enter, type FrameManager } from "engine
 
 import { cellAt, type Cell } from "../../world";
 import type { Random } from "../../world/random";
-import type { ActorEntity, Mood } from "../types";
+import type { ActorEntity, Mood, Role } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 import type { NavigationService } from "./navigation";
-import { createStates, type ActorState, type StateContext } from "./states";
+import {
+  createStates,
+  type ActorState,
+  type NpcRole,
+  type RoleStateSet,
+  type StateContext,
+} from "./states";
 
 /**
  * 行为系统字段需求。
@@ -32,11 +38,13 @@ export type Behaving = Pick<
   | "goal"
   | "idleLeft"
   | "followTime"
+  | "post"
   | "witnessed"
   | "fleeFrom"
   | "dead"
   | "x"
   | "y"
+  | "role"
 >;
 
 export type BehaviourSystem = {
@@ -44,10 +52,18 @@ export type BehaviourSystem = {
   /**
    * 初值（D2 方案 B）：行为字段。
    *
-   * `moodLeft` 需要掷定时长，故必须闭包持有 `states`（时长常量在里面）——
-   * 这是把它做成系统方法而非独立导出函数的原因。
+   * 必须收 `role`：**初值按 NPC 类型不同**（客人从 `wander` 开始、保镖从
+   * `patrol` 开始），而这一点只有系统知道（状态集在它的闭包里）。
+   * `moodLeft` 需要掷定时长，同理。
    */
-  spawn: () => Pick<ActorEntity, "mood" | "moodLeft" | "path" | "goal" | "idleLeft" | "followTime">;
+  spawn: (props: {
+    role: Role;
+    /** 巡逻岗位（仅保镖）；客人省略 */
+    post?: Cell | null;
+  }) => Pick<
+    ActorEntity,
+    "mood" | "moodLeft" | "path" | "goal" | "idleLeft" | "followTime" | "post"
+  >;
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
   /**
    * 让某实体进入恐慌态。
@@ -73,17 +89,35 @@ export function createBehaviourSystem(options: {
     return min + random() * (max - min);
   };
 
+  /** 该角色的状态集（玩家不入本池，但类型上仍需兜底） */
+  const setOf = (role: Role): RoleStateSet =>
+    role === "player" ? states.guest : states[role as NpcRole];
+
+  /** 该角色的默认状态 */
+  const entryOf = (role: Role): Mood => setOf(role).entry;
+
+  /** 取某角色的某个状态；不存在时返回 undefined（由调用方兜底） */
+  const stateOf = (role: Role, mood: Mood): ActorState | undefined => setOf(role).states[mood];
+
   // 移动相关字段（path / goal / idleLeft / followTime）由本系统初始化：
   // navigation 现在是**服务**而非系统，它不再有 `enter`。谁驱动移动，
   // 谁就负责给出这些字段的初值——否则状态机会读到 `undefined`。
-  const spawn = () => ({
-    mood: "wander" as Mood,
-    moodLeft: rollDuration(states.wander),
-    path: [],
-    goal: null,
-    idleLeft: 0,
-    followTime: 0,
-  });
+  //
+  // **初值按角色不同**：`mood` 取该角色的默认状态，`post` 是保镖的岗位
+  // （由调用方传入；客人传 null）。
+  const spawn = (props: { role: Role; post?: Cell | null }) => {
+    const entry = entryOf(props.role);
+    const state = stateOf(props.role, entry);
+    return {
+      mood: entry,
+      moodLeft: state ? rollDuration(state) : 0,
+      path: [],
+      goal: null,
+      idleLeft: 0,
+      followTime: 0,
+      post: props.post ?? null,
+    };
+  };
 
   /**
    * 构造状态上下文。
@@ -118,10 +152,13 @@ export function createBehaviourSystem(options: {
         if (target) fn(target);
       },
       transition: (next) => {
-        // 切换：写 mood、掷定新时长、跑目标状态的 enter
-        const nextState = states[next];
+        // 切换：写 mood、掷定新时长、跑目标状态的 enter。
+        // **按本实体的角色查表**——不同 NPC 拥有的状态不同，
+        // 目标状态可能不存在（如让保镖进入 `wander`）。
         const target = frame(id);
         if (!target) return;
+        const nextState = stateOf(target.role, next);
+        if (!nextState) return; // 该角色没有这个状态：忽略切换
         target.mood = next;
         target.moodLeft = rollDuration(nextState);
         nextState.enter?.({ ...ctx, self: target as Readonly<ActorEntity> });
@@ -141,7 +178,8 @@ export function createBehaviourSystem(options: {
     if (self.dead) return;
 
     const ctx = makeContext(frame, id, self);
-    states[self.mood].update(ctx, delta);
+    const state = stateOf(self.role, self.mood);
+    state?.update(ctx, delta);
   };
 
   const update = (frame: FrameManager<ActorEntity>, delta: number) => {

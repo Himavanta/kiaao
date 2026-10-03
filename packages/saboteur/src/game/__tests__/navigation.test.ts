@@ -185,12 +185,14 @@ describe("状态对象 / 单元行为", () => {
    * 状态不依赖 frame / 系统，只依赖上下文——所以可以这样直测。
    */
   function runState(options: {
-    mood: "wander" | "linger" | "panic";
+    mood: "wander" | "linger" | "panic" | "patrol";
+    /** 取哪个角色的状态集（默认客人） */
+    role?: "guest" | "guard";
     self: Partial<ActorEntity>;
     delta?: number;
   }) {
     const states = createStates(createRandom(5));
-    const state = states[options.mood];
+    const state = states[options.role ?? "guest"].states[options.mood]!;
 
     const patches: Array<Partial<ActorEntity>> = [];
     const transitions: string[] = [];
@@ -339,7 +341,7 @@ describe("状态对象 / 单元行为", () => {
     let cleared: Partial<ActorEntity> = {};
     const self = { path: [{ col: 1, row: 1 }], goal: { col: 2, row: 2 }, idleLeft: 5 } as any;
 
-    states.panic.enter?.({
+    states.guest.states.panic!.enter?.({
       self,
       cell: { col: 5, row: 5 },
       patch: (fn: (e: ActorEntity) => void) => {
@@ -362,7 +364,10 @@ describe("行为系统 / 状态机驱动", () => {
     const nav = createNavigationService({ grid: openGrid(), random: createRandom(1) });
     const bhv = createBehaviourSystem({ random: createRandom(1), navigation: nav });
 
-    const { entity } = mountActor({ enters: [bhv.enter], state: makeActorState(bhv.spawn()) });
+    const { entity } = mountActor({
+      enters: [bhv.enter],
+      state: makeActorState(bhv.spawn({ role: "guest" })),
+    });
 
     expect(entity().mood).toBe("wander");
     expect(entity().moodLeft).toBeGreaterThan(0);
@@ -374,7 +379,7 @@ describe("行为系统 / 状态机驱动", () => {
 
     const { entity, frame } = mountActor({
       enters: [bhv.enter],
-      state: makeActorState({ ...bhv.spawn(), dead: true, moodLeft: 5 }),
+      state: makeActorState({ ...bhv.spawn({ role: "guest" }), dead: true, moodLeft: 5 }),
     });
 
     bhv.update(frame, 1);
@@ -398,7 +403,7 @@ describe("行为系统 / 状态机驱动", () => {
         enters: [loco.enter, bhv.enter],
         state: makeActorState({
           ...loco.spawn({ x: 5 * 32, y: 5 * 32, speed: 78, facing: "south" }),
-          ...bhv.spawn(),
+          ...bhv.spawn({ role: "guest" }),
         }),
       }),
     );
@@ -421,14 +426,37 @@ describe("行为系统 / 状态机驱动", () => {
   });
 });
 
-describe("状态机 / 三个状态齐备", () => {
-  test("wander / linger / panic 都已定义且有时长", () => {
-    const states = createStates(createRandom(3));
+describe("状态机 / 各 NPC 类型持有自己的状态集", () => {
+  test("客人有 wander / linger / panic，默认闲游", () => {
+    const sets = createStates(createRandom(3));
 
+    expect(sets.guest.entry).toBe("wander");
     for (const name of ["wander", "linger", "panic"] as const) {
-      expect(states[name].name).toBe(name);
-      expect(states[name].duration.min).toBeGreaterThan(0);
-      expect(states[name].duration.max).toBeGreaterThanOrEqual(states[name].duration.min);
+      const state = sets.guest.states[name];
+      expect(state?.name).toBe(name);
+      expect(state!.duration.min).toBeGreaterThan(0);
+      expect(state!.duration.max).toBeGreaterThanOrEqual(state!.duration.min);
     }
+  });
+
+  test("保镖有 patrol / panic，默认巡逻；**没有** wander / linger", () => {
+    const sets = createStates(createRandom(3));
+
+    expect(sets.guard.entry).toBe("patrol");
+    expect(sets.guard.states.patrol?.name).toBe("patrol");
+    expect(sets.guard.states.panic?.name).toBe("panic");
+
+    // 这是 S2 的核心：不同 NPC 拥有的状态不同
+    expect(sets.guard.states.wander).toBeUndefined();
+    expect(sets.guard.states.linger).toBeUndefined();
+  });
+
+  test("panic 是共享状态，两类型都有（消退后各回自己的默认态）", () => {
+    const sets = createStates(createRandom(3));
+
+    expect(sets.guest.states.panic).toBeDefined();
+    expect(sets.guard.states.panic).toBeDefined();
+    // 归宿不同——panic 不能写死 transition("wander")
+    expect(sets.guest.entry).not.toBe(sets.guard.entry);
   });
 });

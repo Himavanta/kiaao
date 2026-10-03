@@ -16,7 +16,7 @@ import type { EntityId, FrameManager } from "engine";
 
 import type { Cell } from "../../world";
 import type { Random } from "../../world/random";
-import type { ActorEntity, Mood } from "../types";
+import type { ActorEntity, Mood, Role } from "../types";
 
 /** 状态可用的服务。注入而非直接 import，避免状态依赖具体系统 */
 export type ActorServices = {
@@ -29,6 +29,8 @@ export type ActorServices = {
   moveTowardGoal: (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => void;
   /** 随机挑一个可通行格作为目的地（避开当前格） */
   pickRandomGoal: (from: Cell) => Cell | undefined;
+  /** 在某个点附近挑一个可通行格（巡逻用） */
+  pickNearbyGoal: (around: Cell, from: Cell, radius: number) => Cell | undefined;
   /** 挑一个远离威胁的目的地 */
   pickFleeGoal: (from: Cell, threat: Cell) => Cell | undefined;
 };
@@ -72,7 +74,35 @@ export type ActorState = {
 const REST_MIN = 0.8;
 const REST_MAX = 3.5;
 
-export function createStates(random: Random): Record<Mood, ActorState> {
+/** 巡逻岗位的半径（格）：保镖不会离开岗位太远——「守门」的语义 */
+const PATROL_RADIUS = 4;
+
+/** 巡逻到位后的停留时长（秒）：比客人短，体现「在岗」 */
+const PATROL_REST_MIN = 0.3;
+const PATROL_REST_MAX = 1.2;
+
+/**
+ * 一种 NPC 拥有的状态集。
+ *
+ * 用 `Partial` 而非完整 `Record<Mood, …>`：每种 NPC **只拥有一部分状态**
+ * （这正是 S2 的目的）。查表失败要靠 `behaviour` 兜底，不能假定必有。
+ */
+export type RoleStateSet = {
+  /**
+   * 该角色的**默认状态**（初值 + 恐慌消退后的归宿）。
+   *
+   * 显式声明而非「取第一个键」：后者依赖对象字面量的书写顺序，
+   * 重构时极易静默改变行为。`panic` 是共享状态，它不能写死
+   * `transition("wander")`——保镖没有 `wander`，得回到自己的岗位。
+   */
+  entry: Mood;
+  states: Partial<Record<Mood, ActorState>>;
+};
+
+/** 会跑状态机的角色（玩家由输入驱动，没有状态机） */
+export type NpcRole = Exclude<Role, "player">;
+
+export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
   /**
    * 闲游：走向随机目的地，累了就驻足。
    *
@@ -140,12 +170,27 @@ export function createStates(random: Random): Record<Mood, ActorState> {
   };
 
   /**
+   * 某角色的默认状态。
+   *
+   * 声明为函数而非常量：它读的 `sets` 定义在末尾（引用上面所有状态对象），
+   * 而本函数在帧循环里才被调用——那时 `sets` 早已初始化。
+   *
+   * 玩家没有状态集，兜底返回 `"wander"`。理论上不会被调用：
+   * 玩家不注册 `behaviour.enter`，不入本系统的池。
+   */
+  function entryMoodOf(role: Role): Mood {
+    if (role === "player") return "wander";
+    return sets[role].entry;
+  }
+
+  /**
    * 恐慌：持续逃离目击点，直到情绪消退。
    *
    * 这曾是散落三处的那件事，现在整个在这里：
    * - `enter` 清掉既有路径与目标（否则会先走完旧路，看起来像「没反应」）
    * - `update` 每次路径走空就重新挑一个远离威胁的落点，中途不休息
-   * - 期满切回闲游，但 `witnessed` 不变——那是记忆，不是情绪
+   * - 期满回到**本角色的默认状态**（客人→闲游、保镖→回岗），
+   *   但 `witnessed` 不变——那是记忆，不是情绪
    */
   const panic: ActorState = {
     name: "panic",
@@ -167,7 +212,9 @@ export function createStates(random: Random): Record<Mood, ActorState> {
         ctx.patch((e) => {
           e.fleeFrom = null;
         });
-        ctx.transition("wander");
+        // 回到本角色的默认状态——**不能写死 "wander"**：
+        // 保镖没有 wander，`transition` 会因查不到状态而失效
+        ctx.transition(entryMoodOf(self.role));
         return;
       }
       ctx.patch((e) => {
@@ -191,5 +238,67 @@ export function createStates(random: Random): Record<Mood, ActorState> {
     },
   };
 
-  return { wander, linger, panic };
+  /**
+   * 巡逻：在岗位附近来回走。
+   *
+   * 与 `wander` 的差别只有**目标范围**：`wander` 全图随机，`patrol` 限定
+   * 在 `post` 周边。前半段（走向目标）与 wander 逐字相同——这是「参数轴」
+   * 的代价：机制相同、参数不同，代码却要各自写一遍。
+   */
+  const patrol: ActorState = {
+    name: "patrol",
+    duration: { min: 8, max: 8 },
+    update: (ctx, delta) => {
+      const { self, services } = ctx;
+
+      // 岗位缺失时退化为驻足，不硬崩（`post` 由注册时定，理论上不会缺）
+      if (!self.post) return;
+
+      // 巡逻不会自行切换状态：`moodLeft` 归零只是重掷一次计时。
+      // 「守岗」是长期行为，不像 wander 那样到期就换。
+      const left = self.moodLeft - delta;
+      const { min, max } = patrol.duration;
+      ctx.patch((e) => {
+        e.moodLeft = left > 0 ? left : min + random() * (max - min);
+      });
+
+      const arrived = self.path.length === 0 && !self.goal;
+      if (!arrived) {
+        services.moveTowardGoal(ctx.frame, ctx.id, delta);
+        return;
+      }
+
+      // 已到位：稍作停留再挑下一个岗内点。巡逻不歇太久——「守门」是它的语义
+      const rest = self.idleLeft - delta;
+      if (rest > 0) {
+        ctx.patch((e) => {
+          e.idleLeft = rest;
+        });
+        return;
+      }
+
+      const goal = services.pickNearbyGoal(self.post, ctx.cell, PATROL_RADIUS);
+      if (!goal) return;
+      ctx.patch((e) => {
+        e.goal = goal;
+        e.followTime = 0;
+        e.idleLeft = PATROL_REST_MIN + random() * (PATROL_REST_MAX - PATROL_REST_MIN);
+      });
+    },
+  };
+
+  /**
+   * 各 NPC 类型的状态集。定义在末尾——它引用上面所有状态对象。
+   *
+   * 用 `entry` 显式声明默认状态，而非「取第一个键」：后者依赖字面量
+   * 的书写顺序，重构时极易静默改变行为。
+   */
+  const sets: Record<NpcRole, RoleStateSet> = {
+    // 客人：闲游 / 驻足 / 恐慌
+    guest: { entry: "wander", states: { wander, linger, panic } },
+    // 保镖：巡逻 / 恐慌——没有「闲游」也没有「驻足」
+    guard: { entry: "patrol", states: { patrol, panic } },
+  };
+
+  return sets;
 }

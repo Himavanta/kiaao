@@ -9,7 +9,7 @@
 import { StyleMemo } from "engine";
 import { Show, type Context } from "kiaao";
 
-import { TILE } from "../../world";
+import { TILE, type Cell } from "../../world";
 import {
   alarm,
   behaviour,
@@ -72,7 +72,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     ...perception.spawn({ range: ACTOR_TRAITS[role].sightRange }),
     ...interaction.spawn(),
     ...alarm.spawn(),
-    ...behaviour.spawn(),
+    ...behaviour.spawn({ role, post: postFor(col, row, role) }),
     role,
   };
 
@@ -155,9 +155,19 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
 const ACTOR_TRAITS: Record<Role, { speed: number; sightRange?: number }> = {
   player: { speed: 190 },
   guest: { speed: 78 },
-  // 保镖比客人快一点、看得远一点——数值差异，行为相同
+  // 保镖：巡逻 / 恐慌——比客人快一点、看得远一点（S1 的参数轴）
   guard: { speed: 96, sightRange: 9 * TILE },
 };
+
+/**
+ * 巡逻岗位（保镖用）：出生格就是它的岗位。
+ *
+ * 客人返回 null——它们不巡逻。这个字段进实体是必要的：`patrol` 状态的
+ * 每帧逻辑要读它，而状态只能从 `self` 拿到数据（文档 §3.3 的边界）。
+ */
+function postFor(col: number, row: number, role: Role): Cell | null {
+  return role === "guard" ? { col, row } : null;
+}
 
 function speedProps(col: number, row: number, role: Role, facing: Facing) {
   return {

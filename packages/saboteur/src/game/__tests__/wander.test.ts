@@ -11,9 +11,10 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import App from "../../app";
-import { level, stop } from "../instance";
+import { TILE } from "../../world";
+import { alarm, level, stop } from "../instance";
 import { listActors } from "../state";
-import { live } from "./live";
+import { live, setState } from "./live";
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -214,6 +215,100 @@ describe("异质 NPC / 保镖（S1）", () => {
 
     expect(live(guard).speed).not.toBe(live(guest).speed);
     expect(live(guard).sightRange).not.toBe(live(guest).sightRange);
+
+    app.unmount();
+  });
+
+  /**
+   * S2 的核心：不同 NPC 拥有**不同的状态集**。
+   *
+   * 保镖从 `patrol` 开始（没有 wander），客人从 `wander` 开始。
+   * 若初值仍写死 `wander`，保镖会因查不到该状态而整个不跑——
+   * 不报错，只表现为「站着不动」。
+   */
+  test("各 NPC 从自己的默认状态开始（保镖 patrol / 客人 wander）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const [guard] = byRole("guard");
+    const [guest] = byRole("guest");
+
+    expect(live(guard).mood).toBe("patrol");
+    expect(live(guest).mood).toBe("wander");
+
+    app.unmount();
+  });
+
+  test("保镖长期只处于自己的状态集内（不游荡）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guards = byRole("guard");
+    const seen = new Set<string>();
+
+    for (let i = 0; i < 400; i += 1) {
+      driver.tick();
+      for (const g of guards) seen.add(live(g).mood);
+    }
+
+    // 保镖只有 {patrol, panic}；无外部刺激时不应出现 wander / linger
+    expect([...seen]).toEqual(["patrol"]);
+
+    app.unmount();
+  });
+
+  test("保镖留守岗位附近（巡逻不是全图游荡）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guards = byRole("guard");
+    const posts = guards.map((g) => live(g).post!);
+    expect(posts.every((p) => p !== null)).toBe(true);
+
+    driver.tickTimes(900);
+
+    for (const [i, g] of guards.entries()) {
+      const a = live(g);
+      const col = Math.floor((a.x + 10) / TILE);
+      const row = Math.floor((a.y + 10) / TILE);
+      const dist = Math.abs(col - posts[i].col) + Math.abs(row - posts[i].row);
+      // 巡逻半径是 4 格；留一格余量给「正在走过去」的中间态
+      expect(dist).toBeLessThanOrEqual(6);
+    }
+
+    app.unmount();
+  });
+
+  /**
+   * S2 最易错的一步：`panic` 是**共享状态**，但消退后的归宿因 NPC 而异。
+   *
+   * 若写死 `transition("wander")`，保镖会因查不到 `wander` 而静默失效
+   * （`transition` 对不存在的状态是忽略而非报错），表现为恐慌后卡死。
+   * 这条路径只能端到端验证。
+   */
+  test("保镖恐慌消退后回到 patrol（不是 wander）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guard = byRole("guard")[0];
+    const victim = byRole("guest")[0];
+
+    // 把一具尸体放到保镖眼前，逼它目击恐慌
+    const g = live(guard);
+    setState(victim, { x: g.x + 32, y: g.y, dead: true, path: [], goal: null });
+
+    const seen = new Set<string>();
+    // 40 秒（恐慌 30s + 余量）；全程压警报以免终局停住帧循环
+    for (let i = 0; i < 2500; i += 1) {
+      alarm.alarm(0);
+      driver.tick();
+      seen.add(live(guard).mood);
+    }
+
+    expect(seen.has("panic")).toBe(true);
+    expect(live(guard).mood).toBe("patrol");
+    // 关键：全程不得出现 wander——保镖根本没有这个状态
+    expect(seen.has("wander")).toBe(false);
 
     app.unmount();
   });

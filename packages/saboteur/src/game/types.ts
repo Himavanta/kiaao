@@ -71,11 +71,18 @@ export type ActorEntity = {
   /** 【perception 写】当前能看见的实体 id 列表（每轮扫描后更新） */
   visibleIds: EntityId[];
 
-  // ── 【behaviour 写】行为与计时 ──
+  // ── 【behaviour 写】行为与路径 ──
   /** 【behaviour 写】当前行为与计时 */
   mood: Mood;
   /** 【behaviour 写】当前行为的剩余时长（秒） */
   moodLeft: number;
+  /**
+   * 【behaviour 写，注册时定】巡逻岗位（格）。
+   *
+   * 只有保镖用：`patrol` 状态在它附近挑目标。客人该字段为 `null`。
+   * 它属于「参数轴」——同一个 `patrol` 状态，不同的岗位值。
+   */
+  post: Cell | null;
 
   // ── 【alarm 写】目击记忆与逃离参照 ──
   /** 【alarm 写】是否已目击到异常（尸体或恐慌者）；panic 一旦置位不再清除 */
@@ -135,12 +142,14 @@ export function isNpc(role: Role): boolean {
 export type ItemKind = "booze";
 
 /**
- * NPC 行为。mood 决定 navigation 的目标选择策略：
+ * NPC 行为。
  *
- * - `wander` / `linger`：随机游荡与驻足（M3）
- * - `panic`：目击尸体或恐慌者后逃离现场（M6）
+ * **每种 NPC 只拥有其中一部分**（S2）：客人 `{wander, linger, panic}`、
+ * 保镖 `{patrol, panic}`。`mood` 是**数据不是类型**——它只在
+ * `set.states[mood]` 这一处被消费（查表），故写成所有状态的并集，
+ * 不用判别联合把 `ActorEntity` 拆碎（文档 Q2）。
  *
  * 行为不直接指挥移动，而是影响 navigation 挑目的地——这样 locomotion
  * 与意图来源都不知道「状态机」存在，行为切换只改一处。
  */
-export type Mood = "wander" | "linger" | "panic";
+export type Mood = "wander" | "linger" | "panic" | "patrol";

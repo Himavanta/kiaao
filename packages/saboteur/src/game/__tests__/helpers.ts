@@ -36,6 +36,8 @@ export function makeActorState(overrides: Partial<ActorEntity> = {}): ActorEntit
     sightRange: 200,
     sightArc: Math.PI / 6,
     visibleIds: [],
+    // 巡逻岗位（保镖用；客人/玩家为 null）
+    post: null,
     // alarm
     witnessed: false,
     fleeFrom: null,

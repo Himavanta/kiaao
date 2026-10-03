@@ -45,6 +45,13 @@ const FLEE_CANDIDATES = 12;
 export type NavigationService = {
   /** 随机挑一个可通行格作为目的地（避开当前格） */
   pickRandomGoal: (from: Cell) => Cell | undefined;
+  /**
+   * 在某个点附近挑一个可通行格（巡逻用）。
+   *
+   * 与 `pickRandomGoal` 的区别是**限定在岗位周边**——巡逻是「在岗」，
+   * 不是全图游荡。`radius` 为曼哈顿距离上限。
+   */
+  pickNearbyGoal: (around: Cell, from: Cell, radius: number) => Cell | undefined;
   /** 挑一个远离威胁的目的地（排除当前格，否则会「规划到自身」而空转） */
   pickFleeGoal: (from: Cell, threat: Cell) => Cell | undefined;
   /**
@@ -77,6 +84,29 @@ export function createNavigationService(options: {
 
   const pickFleeGoal = (from: Cell, threat: Cell): Cell | undefined =>
     random.pick(furthestCells(walkable, threat, FLEE_CANDIDATES, from));
+
+  /**
+   * 岗位周边的候选集：地图静态，同一岗位的结果可缓存。
+   *
+   * 不缓存也不会错，只是每次巡逻挑点都要扫一遍全图可通行格
+   * （32×24 地图约 600 格）——保镖数量少时无所谓，但仍不值得反复扫。
+   */
+  const nearbyCache = new Map<string, Cell[]>();
+
+  const pickNearbyGoal = (around: Cell, from: Cell, radius: number): Cell | undefined => {
+    const key = `${around.col},${around.row},${radius}`;
+    let candidates = nearbyCache.get(key);
+    if (!candidates) {
+      candidates = walkable.filter(
+        (cell) => Math.abs(cell.col - around.col) + Math.abs(cell.row - around.row) <= radius,
+      );
+      nearbyCache.set(key, candidates);
+    }
+
+    // 排除当前格：把自身格当目标会让 findPath 返回空路径，陷入空转
+    const usable = candidates.filter((cell) => cell.col !== from.col || cell.row !== from.row);
+    return random.pick(usable);
+  };
 
   /** 为当前 `goal` 规划路径；不可达时清空目标，留待下帧重挑 */
   const plan = (
@@ -160,7 +190,7 @@ export function createNavigationService(options: {
     advance(frame, id, entity, delta);
   };
 
-  return { pickRandomGoal, pickFleeGoal, moveTowardGoal };
+  return { pickRandomGoal, pickNearbyGoal, pickFleeGoal, moveTowardGoal };
 }
 
 /**
