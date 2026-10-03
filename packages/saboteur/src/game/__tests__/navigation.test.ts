@@ -394,7 +394,7 @@ describe("行为系统 / 状态机驱动", () => {
     const nav = createNavigationService({ grid, random });
     const bhv = createBehaviourSystem({ random, navigation: nav });
     const loco = createLocomotionSystem(grid);
-    loco.setIntent("guest", (e) => pathIntent(e));
+    loco.setIntent("npc", (e) => pathIntent(e));
 
     // 必须连 locomotion 一起装：behaviour 只决定「去哪」，
     // 真正的位移由 locomotion 消费 `path` 完成
@@ -434,8 +434,10 @@ describe("状态机 / 各 NPC 类型持有自己的状态集", () => {
     for (const name of ["wander", "linger", "panic"] as const) {
       const state = sets.guest.states[name];
       expect(state?.name).toBe(name);
-      expect(state!.duration.min).toBeGreaterThan(0);
-      expect(state!.duration.max).toBeGreaterThanOrEqual(state!.duration.min);
+      // 客人的三个状态都会自行到期切换，故都必须有时长
+      const duration = state!.duration!;
+      expect(duration.min).toBeGreaterThan(0);
+      expect(duration.max).toBeGreaterThanOrEqual(duration.min);
     }
   });
 
@@ -445,6 +447,11 @@ describe("状态机 / 各 NPC 类型持有自己的状态集", () => {
     expect(sets.guard.entry).toBe("patrol");
     expect(sets.guard.states.patrol?.name).toBe("patrol");
     expect(sets.guard.states.panic?.name).toBe("panic");
+
+    // 巡逻是长期行为，不靠计时切换——故**不声明** duration
+    expect(sets.guard.states.patrol?.duration).toBeUndefined();
+    // 恐慌会到期消退，必须有
+    expect(sets.guard.states.panic?.duration).toBeDefined();
 
     // 这是 S2 的核心：不同 NPC 拥有的状态不同
     expect(sets.guard.states.wander).toBeUndefined();

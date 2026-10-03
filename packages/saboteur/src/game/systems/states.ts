@@ -16,7 +16,7 @@ import type { EntityId, FrameManager } from "engine";
 
 import type { Cell } from "../../world";
 import type { Random } from "../../world/random";
-import type { ActorEntity, Mood, Role } from "../types";
+import type { ActorEntity, Mood, NpcRole, Role } from "../types";
 
 /** 状态可用的服务。注入而非直接 import，避免状态依赖具体系统 */
 export type ActorServices = {
@@ -62,8 +62,14 @@ export type StateContext = {
 
 export type ActorState = {
   readonly name: Mood;
-  /** 状态持续时长范围（秒） */
-  readonly duration: { min: number; max: number };
+  /**
+   * 状态持续时长范围（秒）。
+   *
+   * **可选**：只有「会自行到期切换」的状态才需要它。`patrol` 是长期行为
+   * （守岗，不自行换状态），给它一个 `{min:8,max:8}` 的固定区间只会让
+   * 每帧多一次写实体——S3 收口时发现的死重量。
+   */
+  readonly duration?: { min: number; max: number };
   /** 进入状态时的初始化 */
   enter?: (ctx: StateContext) => void;
   /** 每帧推进 */
@@ -98,9 +104,6 @@ export type RoleStateSet = {
   entry: Mood;
   states: Partial<Record<Mood, ActorState>>;
 };
-
-/** 会跑状态机的角色（玩家由输入驱动，没有状态机） */
-export type NpcRole = Exclude<Role, "player">;
 
 export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
   /**
@@ -247,21 +250,15 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
    */
   const patrol: ActorState = {
     name: "patrol",
-    duration: { min: 8, max: 8 },
+    // 不声明 duration：巡逻不会自行到期换状态（长期行为）
     update: (ctx, delta) => {
       const { self, services } = ctx;
 
       // 岗位缺失时退化为驻足，不硬崩（`post` 由注册时定，理论上不会缺）
       if (!self.post) return;
 
-      // 巡逻不会自行切换状态：`moodLeft` 归零只是重掷一次计时。
-      // 「守岗」是长期行为，不像 wander 那样到期就换。
-      const left = self.moodLeft - delta;
-      const { min, max } = patrol.duration;
-      ctx.patch((e) => {
-        e.moodLeft = left > 0 ? left : min + random() * (max - min);
-      });
-
+      // 这里**没有** `moodLeft` 倒计时：巡逻不靠计时切换状态，
+      // 每帧递减它只是白写一次实体（写就要进帧末提交）
       const arrived = self.path.length === 0 && !self.goal;
       if (!arrived) {
         services.moveTowardGoal(ctx.frame, ctx.id, delta);

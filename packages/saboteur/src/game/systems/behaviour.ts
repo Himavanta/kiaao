@@ -14,16 +14,10 @@ import { createPool, type EntityId, type Enter, type FrameManager } from "engine
 
 import { cellAt, type Cell } from "../../world";
 import type { Random } from "../../world/random";
-import type { ActorEntity, Mood, Role } from "../types";
+import { isNpc, type ActorEntity, type Mood, type Role } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 import type { NavigationService } from "./navigation";
-import {
-  createStates,
-  type ActorState,
-  type NpcRole,
-  type RoleStateSet,
-  type StateContext,
-} from "./states";
+import { createStates, type ActorState, type RoleStateSet, type StateContext } from "./states";
 
 /**
  * 行为系统字段需求。
@@ -84,14 +78,18 @@ export function createBehaviourSystem(options: {
   const [pool, enter] = createPool<Behaving>();
   const states = createStates(random);
 
+  /**
+   * 掷定状态时长。无 `duration` 的状态（长期行为，如 `patrol`）返回 0——
+   * 它们不用这个值，赋 0 不会误导（结合「该状态不读 moodLeft」看）。
+   */
   const rollDuration = (state: ActorState): number => {
+    if (!state.duration) return 0;
     const { min, max } = state.duration;
     return min + random() * (max - min);
   };
 
   /** 该角色的状态集（玩家不入本池，但类型上仍需兜底） */
-  const setOf = (role: Role): RoleStateSet =>
-    role === "player" ? states.guest : states[role as NpcRole];
+  const setOf = (role: Role): RoleStateSet => (isNpc(role) ? states[role] : states.guest);
 
   /** 该角色的默认状态 */
   const entryOf = (role: Role): Mood => setOf(role).entry;
@@ -153,12 +151,20 @@ export function createBehaviourSystem(options: {
       },
       transition: (next) => {
         // 切换：写 mood、掷定新时长、跑目标状态的 enter。
-        // **按本实体的角色查表**——不同 NPC 拥有的状态不同，
-        // 目标状态可能不存在（如让保镖进入 `wander`）。
+        // **按本实体的角色查表**——不同 NPC 拥有的状态不同。
+        //
+        // 目标状态在该角色集合里不存在时**静默忽略**（而非报错）。理由：
+        // - 拼错由 TS 挡住（入参是 `Mood` 联合），不靠运行时检查
+        // - 剩下的可能是「跨角色的状态」（如让保镖进 `wander`）——
+        //   它确实无法执行，但也确实不该崩掉整帧
+        //
+        // 代价：**共享状态里不能写死角色专属的目标**。`panic` 的归宿
+        // 用 `entryMoodOf(role)` 而非 `transition("wander")` 就是这个原因。
+        // 那类 bug 不报错、只表现为卡死，靠测试锁（见 wander.test.ts）。
         const target = frame(id);
         if (!target) return;
         const nextState = stateOf(target.role, next);
-        if (!nextState) return; // 该角色没有这个状态：忽略切换
+        if (!nextState) return;
         target.mood = next;
         target.moodLeft = rollDuration(nextState);
         nextState.enter?.({ ...ctx, self: target as Readonly<ActorEntity> });

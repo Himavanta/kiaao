@@ -298,17 +298,28 @@ describe("异质 NPC / 保镖（S1）", () => {
     setState(victim, { x: g.x + 32, y: g.y, dead: true, path: [], goal: null });
 
     const seen = new Set<string>();
+    // 记录状态迁移序列，用于断言「确实从 panic 回过 patrol」
+    const transitions: Array<[string, string]> = [];
+    let prev = live(guard).mood;
+
     // 40 秒（恐慌 30s + 余量）；全程压警报以免终局停住帧循环
     for (let i = 0; i < 2500; i += 1) {
       alarm.alarm(0);
       driver.tick();
-      seen.add(live(guard).mood);
+      const now = live(guard).mood;
+      if (now !== prev) transitions.push([prev, now]);
+      prev = now;
+      seen.add(now);
     }
 
     expect(seen.has("panic")).toBe(true);
-    expect(live(guard).mood).toBe("patrol");
     // 关键：全程不得出现 wander——保镖根本没有这个状态
     expect(seen.has("wander")).toBe(false);
+
+    // 断言「契约」而非「某一帧恰好是什么」：恐慌消退后回到本角色的
+    // 默认状态（patrol）。不能断言「结束时是 patrol」——恐慌会**传播**，
+    // 保镖可能被另一个恐慌者再次传染。
+    expect(transitions).toContainEqual(["panic", "patrol"]);
 
     app.unmount();
   });

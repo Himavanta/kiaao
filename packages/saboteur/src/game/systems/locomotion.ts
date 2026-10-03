@@ -13,7 +13,7 @@
 import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
 
 import { moveRect, type Grid } from "../../world";
-import { facingFromVector, type ActorEntity, type Facing, type Role } from "../types";
+import { facingFromVector, isNpc, type ActorEntity, type Facing } from "../types";
 
 /** 实体外观尺寸（正方形，略小于瓦片以留出视觉间隙） */
 export const ACTOR_SIZE = 20;
@@ -53,6 +53,15 @@ export type LocomotionSpawn = {
   facing: Facing;
 };
 
+/**
+ * 驱动方式：实体每帧的意图从哪来。
+ *
+ * **与 NPC 类型无关**——只有两种：玩家读输入、NPC 读路径。
+ * 这是 S3 收口的发现：原来按 `role` 注册意图来源，于是每加一种 NPC
+ * 就要 `setIntent("guard", …)` 再加一行逐字相同的调用（线性增长的白白重复）。
+ */
+export type DriveMode = "player" | "npc";
+
 export type LocomotionSystem = {
   enter: Enter<Movable>;
   /**
@@ -66,13 +75,8 @@ export type LocomotionSystem = {
   ) => Pick<ActorEntity, "x" | "y" | "speed" | "sneakFactor" | "sneaking" | "facing">;
   /** 帧逻辑：把移动池内实体按意图推进 */
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
-  /**
-   * 按角色注入意图来源：玩家读输入、NPC 读路径。
-   *
-   * 按 `role` 分派而非全局唯一来源——两类角色的意图来源本质不同，
-   * 用单一来源再在内部 if 分支会让组装层多一层间接。
-   */
-  setIntent: (role: Role, source: IntentSource) => void;
+  /** 按驱动方式注入意图来源（而非按角色——见 `DriveMode`） */
+  setIntent: (mode: DriveMode, source: IntentSource) => void;
 };
 
 /** 默认意图：未注册来源的角色原地不动 */
@@ -82,10 +86,11 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
   // 移动池：每帧按意图推进；静止实体不入池，零帧写入
   const [pool, enter] = createPool<Movable>();
 
-  // 意图来源按角色分派；未注册的角色的默认静止，保证系统可独立测试
-  const sources = new Map<Role, IntentSource>();
+  // 意图来源按**驱动方式**分派（不是按角色）；未注册的默认静止，
+  // 保证系统可独立测试
+  const sources = new Map<DriveMode, IntentSource>();
   const readIntent = (entity: Readonly<ActorEntity>): Intent =>
-    (sources.get(entity.role) ?? NO_INTENT)(entity);
+    (sources.get(isNpc(entity.role) ? "npc" : "player") ?? NO_INTENT)(entity);
 
   const spawn = (props: LocomotionSpawn) => ({
     x: props.x,
@@ -137,8 +142,8 @@ export function createLocomotionSystem(grid: Grid): LocomotionSystem {
     enter,
     spawn,
     update,
-    setIntent: (role: Role, source: IntentSource) => {
-      sources.set(role, source);
+    setIntent: (mode: DriveMode, source: IntentSource) => {
+      sources.set(mode, source);
     },
   };
 }

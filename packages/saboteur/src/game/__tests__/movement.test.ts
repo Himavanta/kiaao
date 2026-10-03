@@ -119,7 +119,55 @@ describe("locomotion / 位移", () => {
     expect(entity().x).toBeLessThan(200); // 慢于常速
     expect(entity().sneaking).toBe(true);
   });
+
+  /**
+   * S3 收口：意图来源按**驱动方式**（player / npc）分派，而非按角色。
+   *
+   * 原来为 guest 与 guard 各注册一条逐字相同的来源，于是每加一种 NPC
+   * 都要再加一行——线性增长的白白重复。
+   */
+  test("NPC 共用同一条意图来源：guard 与 guest 都命中", () => {
+    const grid = createGrid(20, 20);
+    const locomotion = createLocomotionSystem(grid);
+    const hitRoles: string[] = [];
+
+    // 只注册一次 "npc"
+    locomotion.setIntent("npc", (e) => {
+      hitRoles.push(e.role);
+      return IDLE;
+    });
+
+    for (const role of ["guest", "guard"] as const) {
+      const actor = mountActor({
+        enters: [locomotion.enter],
+        state: makeActorState({ ...locomotion.spawn(mkSpawn()), role }),
+      });
+      locomotion.update(actor.frame, 0.1);
+    }
+
+    expect(hitRoles).toEqual(["guest", "guard"]);
+  });
+
+  test("未注册驱动方式的 NPC 原地不动（默认静止）", () => {
+    const grid = createGrid(20, 20);
+    const locomotion = createLocomotionSystem(grid);
+
+    const actor = mountActor({
+      enters: [locomotion.enter],
+      state: makeActorState({ ...locomotion.spawn(mkSpawn()), role: "guard" }),
+    });
+
+    locomotion.update(actor.frame, 1);
+
+    expect(actor.entity().x).toBe(100);
+    expect(actor.entity().y).toBe(100);
+  });
 });
+
+/** 出生参数的公共部分（各用例只关心角色派生差异） */
+function mkSpawn() {
+  return { x: 100, y: 100, speed: 100, facing: "south" as const };
+}
 
 describe("locomotion / 朝向", () => {
   function setup() {

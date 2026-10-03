@@ -123,13 +123,19 @@ export type ActorEntity = {
  */
 export type Role = SpawnKind;
 
+/** 会跑状态机的角色（玩家由输入驱动，没有状态机） */
+export type NpcRole = Exclude<Role, "player">;
+
 /**
  * 是否为 NPC（非玩家）。
  *
  * **不要写 `role === "guest"`**——那是把「不是玩家」与「是客人」混为一谈。
  * 只有两种角色时二者等价，加 `guard` 后立刻暴露：保镖既非玩家也不是客人。
+ *
+ * 写成**类型守卫**（而非返回 `boolean`）：调用处能直接收窄出 `NpcRole`，
+ * 不必写 `role as NpcRole` 这种抹掉类型信息的断言。
  */
-export function isNpc(role: Role): boolean {
+export function isNpc(role: Role): role is NpcRole {
   return role !== "player";
 }
 
