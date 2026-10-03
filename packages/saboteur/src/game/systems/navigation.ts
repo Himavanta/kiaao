@@ -57,10 +57,29 @@ export type NavigationService = {
   /**
    * 朝当前 `goal` 走一帧：无路径则先规划，有路径则推进一帧。
    *
-   * 到达时清掉 `goal` 并置零 `followTime`——状态通过观察
-   * `!path.length && !goal` 得知「到了」。
+   * 到达时清掉 `goal` 并置零 `followTime`——状态通过 `hasArrived`
+   * 得知「到了」。
    */
   moveTowardGoal: (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => void;
+
+  // ── 路线写入（`path` / `goal` / `followTime` 的**唯一写者**是本服务）──
+  //
+  // 这三个字段曾经散在 states / navigation / interaction 三处写
+  // （见文档 §八）。收拢后状态机只说「我要去哪」，不算「怎么写」。
+
+  /**
+   * 设定目的地，并重置路线计时。
+   *
+   * 状态选了目标后调它——把「写 `goal` 与重置 `followTime` 必须成对」
+   * 这条约束封在一处（分开写会漏掉其中一个）。
+   */
+  setGoal: (frame: FrameManager<ActorEntity>, id: EntityId, goal: Cell) => void;
+
+  /** 放弃当前路线（清 `path` / `goal` / `followTime`） */
+  clearRoute: (frame: FrameManager<ActorEntity>, id: EntityId) => void;
+
+  /** 是否已到达（无路径且无目标）——`arrived` 的语义属本服务，不属状态 */
+  hasArrived: (entity: Readonly<ActorEntity>) => boolean;
 };
 
 export function createNavigationService(options: {
@@ -190,7 +209,36 @@ export function createNavigationService(options: {
     advance(frame, id, entity, delta);
   };
 
-  return { pickRandomGoal, pickNearbyGoal, pickFleeGoal, moveTowardGoal };
+  /** 设定目的地：`goal` 与 `followTime` 必须成对重置，故封在一起 */
+  const setGoal = (frame: FrameManager<ActorEntity>, id: EntityId, goal: Cell): void => {
+    const target = frame(id);
+    if (!target) return;
+    target.goal = goal;
+    target.followTime = 0;
+  };
+
+  /** 放弃当前路线（恐慌进入时清、死亡时清——两处语义相同） */
+  const clearRoute = (frame: FrameManager<ActorEntity>, id: EntityId): void => {
+    const target = frame(id);
+    if (!target) return;
+    target.path = [];
+    target.goal = null;
+    target.followTime = 0;
+  };
+
+  /** 已到达：无待走路径且无目标。状态据此挑下一个目的地 */
+  const hasArrived = (entity: Readonly<ActorEntity>): boolean =>
+    entity.path.length === 0 && entity.goal === null;
+
+  return {
+    pickRandomGoal,
+    pickNearbyGoal,
+    pickFleeGoal,
+    moveTowardGoal,
+    setGoal,
+    clearRoute,
+    hasArrived,
+  };
 }
 
 /**

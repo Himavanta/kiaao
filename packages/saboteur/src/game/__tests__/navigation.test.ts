@@ -216,6 +216,19 @@ describe("状态对象 / 单元行为", () => {
     /** 记录每次 patch 实际改动的键（对比改动前后） */
     const patchKeys = new Set<string>();
 
+    /**
+     * 记录状态请求的服务调用。
+     *
+     * `path` / `goal` / `followTime` 的写者已收拢到 navigation 服务
+     * （文档 §八的 B 分支），故状态测试不再断言「它写了哪个字段」，
+     * 而是断言「它请服务做了什么」——后者才是状态的职责。
+     */
+    const calls = {
+      setGoal: [] as unknown[],
+      clearRoute: 0,
+      moveTowardGoal: 0,
+    };
+
     const ctx = {
       self,
       cell: { col: 5, row: 5 },
@@ -231,9 +244,20 @@ describe("状态对象 / 单元行为", () => {
         transitions.push(next);
       },
       services: {
-        moveTowardGoal: () => {},
+        moveTowardGoal: () => {
+          calls.moveTowardGoal += 1;
+        },
         pickRandomGoal: () => ({ col: 9, row: 9 }),
+        pickNearbyGoal: () => ({ col: 8, row: 8 }),
         pickFleeGoal: () => ({ col: 18, row: 18 }),
+        setGoal: (_f: unknown, _id: unknown, goal: unknown) => {
+          calls.setGoal.push(goal);
+        },
+        clearRoute: () => {
+          calls.clearRoute += 1;
+        },
+        // 真实语义：`self` 当前无路径即无目标
+        hasArrived: (e: Readonly<ActorEntity>) => e.path.length === 0 && e.goal === null,
       },
     } as unknown as StateContext;
 
@@ -245,7 +269,7 @@ describe("状态对象 / 单元行为", () => {
     const merged: Record<string, unknown> = {};
     for (const k of patchKeys) merged[k] = (last as Record<string, unknown>)[k];
 
-    return { patches, merged, transitions, patchKeys };
+    return { patches, merged, transitions, patchKeys, calls };
   }
 
   test("闲游：未到达时推进移动，不切状态", () => {
@@ -257,11 +281,12 @@ describe("状态对象 / 单元行为", () => {
   });
 
   test("闲游：已到达且休息够了才挑新目标", () => {
-    const { merged } = runState({
+    const { calls } = runState({
       mood: "wander",
       self: { moodLeft: 10, path: [], goal: null, idleLeft: 0 },
     });
-    expect(merged.goal).toEqual({ col: 9, row: 9 });
+    // 状态**不再直接写 goal**——它请服务写（B 分支：写者收拢到 navigation）
+    expect(calls.setGoal).toEqual([{ col: 9, row: 9 }]);
   });
 
   test("闲游：未休息够不挑新目标", () => {
@@ -311,11 +336,11 @@ describe("状态对象 / 单元行为", () => {
   });
 
   test("恐慌：路径走空则挑新的逃跑点（中途不休息）", () => {
-    const { merged, patchKeys } = runState({
+    const { calls, patchKeys } = runState({
       mood: "panic",
       self: { moodLeft: 20, path: [], goal: null, fleeFrom: { col: 1, row: 1 } },
     });
-    expect(merged.goal).toEqual({ col: 18, row: 18 });
+    expect(calls.setGoal).toEqual([{ col: 18, row: 18 }]);
     // 恐慌不设 idleLeft——逃到一处立刻奔向下一处
     expect(patchKeys.has("idleLeft")).toBe(false);
   });
@@ -336,9 +361,10 @@ describe("状态对象 / 单元行为", () => {
     expect(patchKeys.has("goal")).toBe(false);
   });
 
-  test("恐慌：enter 清掉既有路径与目标", () => {
+  test("恐慌：enter 请服务清路线（自己只清 idleLeft）", () => {
     const states = createStates(createRandom(5));
     let cleared: Partial<ActorEntity> = {};
+    let clearRouteCalls = 0;
     const self = { path: [{ col: 1, row: 1 }], goal: { col: 2, row: 2 }, idleLeft: 5 } as any;
 
     states.guest.states.panic!.enter?.({
@@ -350,11 +376,16 @@ describe("状态对象 / 单元行为", () => {
         cleared = { ...cleared, ...draft };
       },
       transition: () => {},
-      services: {} as any,
+      services: {
+        clearRoute: () => {
+          clearRouteCalls += 1;
+        },
+      } as any,
     } as unknown as StateContext);
 
-    expect(cleared.path).toEqual([]);
-    expect(cleared.goal).toBeNull();
+    // 路线交给服务清（`path`/`goal`/`followTime` 归 navigation 写）
+    expect(clearRouteCalls).toBe(1);
+    // `idleLeft` 是本状态自己的计时，自己清
     expect(cleared.idleLeft).toBe(0);
   });
 });

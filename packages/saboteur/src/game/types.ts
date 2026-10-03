@@ -53,13 +53,13 @@ export type ActorEntity = {
   /** 【locomotion 写】当前是否潜行中 */
   sneaking: boolean;
 
-  // ── 【behaviour 写】行为与路径 ──
+  // ── 【navigation 写】路线（path / goal / followTime）──
+  // 三个字段的写者已收拢到 navigation 服务（文档 §八 B 分支）：
+  // 状态只说「我要去哪」，不算「怎么写」。
   /** 【navigation 写】待走的格序列（不含当前格）；空表示已到达或未规划 */
   path: Cell[];
   /** 【navigation 写】当前目标格；null 表示无目的（停留中） */
   goal: Cell | null;
-  /** 【navigation 写】剩余停留时间（秒）；> 0 时不规划新目标 */
-  idleLeft: number;
   /** 【navigation 写】距上次路径推进的时长（秒）；超时即放弃，防卡死 */
   followTime: number;
 
@@ -71,11 +71,13 @@ export type ActorEntity = {
   /** 【perception 写】当前能看见的实体 id 列表（每轮扫描后更新） */
   visibleIds: EntityId[];
 
-  // ── 【behaviour 写】行为与路径 ──
-  /** 【behaviour 写】当前行为与计时 */
+  // ── 【behaviour 写】行为与计时 ──
+  /** 【behaviour 写】当前行为 */
   mood: Mood;
   /** 【behaviour 写】当前行为的剩余时长（秒） */
   moodLeft: number;
+  /** 【behaviour 写】剩余停留时间（秒）；> 0 时不规划新目标 */
+  idleLeft: number;
   /**
    * 【behaviour 写，注册时定】巡逻岗位（格）。
    *

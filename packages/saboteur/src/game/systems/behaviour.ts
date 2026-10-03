@@ -206,8 +206,8 @@ export function createBehaviourSystem(options: {
     // `PANIC_DURATION` 已移入 `states.ts` 的 `panic.duration`——
     // 时长归状态本身所有，外部不再需要知道它。
 
-    // witnessed 是记忆，永久保留——它属于 alarm 的语义
-    self.witnessed = true;
+    // **不写 `witnessed`**：那是「记忆」，属于 alarm 的语义（它在
+    // `report` 里写）。本方法只被 alarm 调用，两边都写就是重复。
     self.fleeFrom = threat;
 
     // 走正规切换路径：写 mood、掷定时长、跑 panic.enter()

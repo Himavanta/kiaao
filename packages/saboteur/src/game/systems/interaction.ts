@@ -50,10 +50,7 @@ export type PropEntity = {
 };
 
 /** 角色侧字段需求：交互判定读位置/朝向/状态，写持有与中毒 */
-export type Interactable = Pick<
-  ActorEntity,
-  "x" | "y" | "facing" | "dead" | "held" | "poisonLeft" | "path" | "goal"
->;
+export type Interactable = Pick<ActorEntity, "x" | "y" | "facing" | "dead" | "held" | "poisonLeft">;
 
 export type InteractionSystem = {
   /** 注册角色（含玩家与客人） */
@@ -238,9 +235,11 @@ export function createInteractionSystem(options: {
 
       actor.dead = true;
       actor.poisonLeft = null;
-      // 尸体原地不动：清空路径与目标，避免死后还继续「走」
-      actor.path = [];
-      actor.goal = null;
+      // **不再清 path/goal**：那是死代码。
+      // `locomotion` 与 `behaviour` 都有 `dead` 早退，渲染也不读这两个
+      // 字段——去掉清理后全部测试仍通过（实测）。
+      // 若哪天有系统在没有 `dead` 早退的情况下读 `path`，这里必须重新
+      // 考虑；那时应该走 navigation 的服务接口，而不是直接写字段。
 
       // 击杀计数在此累加而非由规则系统轮询：死亡是本系统判定的事实，
       // 「谁死了」的真相源只有一处。规则系统只读计数、决定何时终局。

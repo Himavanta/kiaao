@@ -17,23 +17,16 @@ import type { EntityId, FrameManager } from "engine";
 import type { Cell } from "../../world";
 import type { Random } from "../../world/random";
 import type { ActorEntity, Mood, NpcRole, Role } from "../types";
+import type { NavigationService } from "./navigation";
 
-/** 状态可用的服务。注入而非直接 import，避免状态依赖具体系统 */
-export type ActorServices = {
-  /**
-   * 朝当前 `goal` 走一帧：无路径则先规划，有路径则推进。
-   *
-   * 「是否已到达」由状态自行观察 `!path.length && !goal` 得出——
-   * 推进逻辑不必回报，状态也不必猜。
-   */
-  moveTowardGoal: (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => void;
-  /** 随机挑一个可通行格作为目的地（避开当前格） */
-  pickRandomGoal: (from: Cell) => Cell | undefined;
-  /** 在某个点附近挑一个可通行格（巡逻用） */
-  pickNearbyGoal: (around: Cell, from: Cell, radius: number) => Cell | undefined;
-  /** 挑一个远离威胁的目的地 */
-  pickFleeGoal: (from: Cell, threat: Cell) => Cell | undefined;
-};
+/**
+ * 状态可用的服务。注入而非直接 import，避免状态依赖具体系统。
+ *
+ * **直接用 `NavigationService` 的类型**，不手抄一份成员列表。原先手抄过
+ * 一次，加了 `setGoal` / `clearRoute` / `hasArrived` 之后就漏了——重复
+ * 声明的类型不会自动跟随（与 §7.5 记的 `Role`/`SpawnKind` 同一个病）。
+ */
+export type ActorServices = NavigationService;
 
 /** 当前帧的运行时上下文，由状态机每帧构造一次 */
 export type StateContext = {
@@ -118,7 +111,7 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
     duration: { min: 6, max: 18 },
     update: (ctx, delta) => {
       const { self, services } = ctx;
-      const arrived = self.path.length === 0 && !self.goal;
+      const arrived = services.hasArrived(self);
 
       // 半路不换状态——那会让 NPC 停在空地中央，看起来像卡住
       const left = self.moodLeft - delta;
@@ -148,9 +141,10 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
 
       const goal = services.pickRandomGoal(ctx.cell);
       if (!goal) return;
+      // 目的地交给服务写（`goal` + `followTime` 必须成对重置），
+      // 本状态只负责「休息多久」这个属于它自己的计时
+      services.setGoal(ctx.frame, ctx.id, goal);
       ctx.patch((e) => {
-        e.goal = goal;
-        e.followTime = 0;
         e.idleLeft = REST_MIN + random() * (REST_MAX - REST_MIN);
       });
     },
@@ -199,11 +193,11 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
     name: "panic",
     duration: { min: 30, max: 30 },
     enter: (ctx) => {
+      // 清路线（服务负责 `path`/`goal`/`followTime`），`idleLeft` 是本
+      // 状态自己的计时，自己清
+      ctx.services.clearRoute(ctx.frame, ctx.id);
       ctx.patch((e) => {
-        e.path = [];
-        e.goal = null;
         e.idleLeft = 0;
-        e.followTime = 0;
       });
     },
     update: (ctx, delta) => {
@@ -226,7 +220,7 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
 
       // 路径走空且无目标：挑下一个远离威胁的落点。
       // 恐慌期间不休息——逃到一处立刻奔向下一处。
-      if (self.path.length > 0 || self.goal) {
+      if (!services.hasArrived(self)) {
         services.moveTowardGoal(ctx.frame, ctx.id, delta);
         return;
       }
@@ -234,10 +228,7 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
       if (!self.fleeFrom) return;
       const goal = services.pickFleeGoal(ctx.cell, self.fleeFrom);
       if (!goal) return;
-      ctx.patch((e) => {
-        e.goal = goal;
-        e.followTime = 0;
-      });
+      services.setGoal(ctx.frame, ctx.id, goal);
     },
   };
 
@@ -259,8 +250,7 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
 
       // 这里**没有** `moodLeft` 倒计时：巡逻不靠计时切换状态，
       // 每帧递减它只是白写一次实体（写就要进帧末提交）
-      const arrived = self.path.length === 0 && !self.goal;
-      if (!arrived) {
+      if (!services.hasArrived(self)) {
         services.moveTowardGoal(ctx.frame, ctx.id, delta);
         return;
       }
@@ -276,9 +266,8 @@ export function createStates(random: Random): Record<NpcRole, RoleStateSet> {
 
       const goal = services.pickNearbyGoal(self.post, ctx.cell, PATROL_RADIUS);
       if (!goal) return;
+      services.setGoal(ctx.frame, ctx.id, goal);
       ctx.patch((e) => {
-        e.goal = goal;
-        e.followTime = 0;
         e.idleLeft = PATROL_REST_MIN + random() * (PATROL_REST_MAX - PATROL_REST_MIN);
       });
     },
