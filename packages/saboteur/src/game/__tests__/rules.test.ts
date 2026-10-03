@@ -11,8 +11,8 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
-import { alarm, frameSystem, level, resetGameState, rules, stop } from "../instance";
-import { gameState, listActors } from "../state";
+import { alarm, frameSystem, level, rules, stop } from "../instance";
+import { gameState, listActors, resetGameState } from "../state";
 import { createDriver } from "./helpers";
 import { setState } from "./live";
 

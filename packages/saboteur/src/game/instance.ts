@@ -49,8 +49,14 @@ export const frameSystem = createFrameSystem();
 // 它是全局状态而非实体数据——没有位置，不参与帧循环。
 export const entityCount = use(0);
 
-// 视野提示开关：Tab 切换（规划文档 4.7）
-export { resetGameState, showVision } from "./state";
+// 注意：**不转发 `state.ts` 的符号**。
+//
+// 以前这里有一行 `export { resetGameState, showVision } from "./state"`，
+// 于是同一个东西有两个入口（`instance` 与 `state`），调用方两边都在用：
+// `resetGameState` 走 instance、`showVision` 走 state。
+//
+// 边界应当是：**全局状态归 `state.ts`，系统与游戏实例归本文件**。
+// 需要状态就从 `./state` 导入，不要绕经组装层。
 
 // ── 系统实例（按依赖顺序创建）──────────────────────────
 

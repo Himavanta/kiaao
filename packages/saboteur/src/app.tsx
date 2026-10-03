@@ -13,16 +13,8 @@
 import { Each, Show, type Context, type Signal } from "kiaao";
 
 import { computeViewport } from "./game/config";
-import {
-  entityCount,
-  frameSystem,
-  input,
-  level,
-  runId,
-  showVision,
-  start,
-  stop,
-} from "./game/instance";
+import { entityCount, frameSystem, input, level, runId, start, stop } from "./game/instance";
+import { showVision } from "./game/state";
 import type { Facing, ItemKind, Role } from "./game/types";
 import { Actor } from "./game/views/actor";
 import { usePlayerCamera } from "./game/views/camera";
