@@ -12,6 +12,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import App from "../../app";
 import { level, stop } from "../instance";
+import { listActors } from "../state";
+import { live } from "./live";
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -149,6 +151,69 @@ describe("M3 端到端 / NPC 游荡", () => {
     expect(zValues.length).toBeGreaterThan(0);
     // 不同 y 的角色应有不同层级
     expect(new Set(zValues).size).toBeGreaterThan(1);
+
+    app.unmount();
+  });
+});
+
+describe("异质 NPC / 保镖（S1）", () => {
+  let driver: ReturnType<typeof createDriver>;
+
+  beforeEach(() => {
+    driver = createDriver();
+    document.body.innerHTML = '<div id="app"></div>';
+  });
+
+  afterEach(() => {
+    stop();
+    driver.restore();
+  });
+
+  const byRole = (role: string) => listActors().filter((e) => e().role === role);
+
+  test("关卡里有保镖，且与客人区分开", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    expect(byRole("guard").length).toBeGreaterThan(0);
+    expect(byRole("guest").length).toBeGreaterThan(0);
+
+    app.unmount();
+  });
+
+  /**
+   * 回归：新增类型时最容易漏的是「出生了但不工作」——
+   * `actor.tsx` 只给 guest 注册 `behaviour.enter`、`instance.ts` 只为
+   * player/guest 注册意图来源，于是 guard 站着不动。
+   * 这类断链不报错，只表现为「NPC 不动」，必须端到端验证。
+   */
+  test("保镖真的在动（不只是被出生）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guards = byRole("guard");
+    const start = guards.map((g) => ({ x: live(g).x, y: live(g).y }));
+
+    driver.tickTimes(400);
+
+    const moved = guards.filter((g, i) => {
+      const s = start[i];
+      return Math.hypot(live(g).x - s.x, live(g).y - s.y) > 5;
+    });
+    expect(moved.length).toBeGreaterThan(0);
+
+    app.unmount();
+  });
+
+  test("保镖与客人数值不同（参数轴，同一套系统）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const [guard] = byRole("guard");
+    const [guest] = byRole("guest");
+
+    expect(live(guard).speed).not.toBe(live(guest).speed);
+    expect(live(guard).sightRange).not.toBe(live(guest).sightRange);
 
     app.unmount();
   });

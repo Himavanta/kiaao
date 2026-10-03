@@ -64,8 +64,10 @@ export function parseLevel(level: LevelDef): ParsedLevel {
 
       const spawn = spawnForSymbol(char);
       if (spawn) {
-        if (char === "P") playerSpawn = { col, row, facing: spawn.facing };
-        else npcSpawns.push({ col, row, facing: spawn.facing });
+        // 分派靠 kind，不再靠字符——符号表已经给出语义
+        const point = { col, row, facing: spawn.facing, kind: spawn.kind };
+        if (spawn.kind === "player") playerSpawn = point;
+        else npcSpawns.push(point);
         // 出生点位于地板上——createGrid 已初始化为 Floor，无需写入
         continue;
       }

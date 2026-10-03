@@ -93,7 +93,7 @@ describe("关卡解析", () => {
   test("提取玩家出生点，且该格为地板", () => {
     const { grid, playerSpawn } = parseLevel(simple);
 
-    expect(playerSpawn).toEqual({ col: 2, row: 1, facing: undefined });
+    expect(playerSpawn).toEqual({ col: 2, row: 1, facing: undefined, kind: "player" });
     // 出生点符号不落地为实心格——否则玩家会卡在墙里
     expect(isBlocked(grid, 2, 1)).toBe(false);
   });
@@ -104,10 +104,22 @@ describe("关卡解析", () => {
     );
 
     expect(npcSpawns).toEqual([
-      { col: 1, row: 1, facing: "north" },
-      { col: 2, row: 1, facing: "south" },
-      { col: 3, row: 1, facing: "west" },
-      { col: 4, row: 1, facing: "east" },
+      { col: 1, row: 1, facing: "north", kind: "guest" },
+      { col: 2, row: 1, facing: "south", kind: "guest" },
+      { col: 3, row: 1, facing: "west", kind: "guest" },
+      { col: 4, row: 1, facing: "east", kind: "guest" },
+    ]);
+  });
+
+  test("不同类型符号解析出不同 kind（`G` = 保镖）", () => {
+    const { playerSpawn, npcSpawns } = parseLevel(
+      lv({ name: "t", rows: ["#####", "#PGN#", "#####"] }),
+    );
+
+    expect(playerSpawn?.kind).toBe("player");
+    expect(npcSpawns).toEqual([
+      { col: 2, row: 1, facing: undefined, kind: "guard" },
+      { col: 3, row: 1, facing: undefined, kind: "guest" },
     ]);
   });
 

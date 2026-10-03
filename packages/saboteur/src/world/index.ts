@@ -41,6 +41,8 @@ export {
   type LevelDef,
   type Objective,
   type SpawnFacing,
+  type SpawnKind,
   type SpawnPoint,
+  type SpawnSpec,
 } from "./levels/types";
 export { manor } from "./levels/manor";

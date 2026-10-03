@@ -81,22 +81,28 @@ function useSpawns(
 
   const actors = use(run, () => {
     const r = run();
-    const player = playerSpawn ?? { col: 1, row: 1, facing: "south" as const };
+    const player = playerSpawn ?? {
+      col: 1,
+      row: 1,
+      facing: "south" as const,
+      kind: "player" as const,
+    };
 
     return [
       {
         run: r,
         col: player.col,
         row: player.row,
-        facing: player.facing ?? "south",
-        role: "player" as const,
+        facing: (player.facing ?? "south") as Facing,
+        role: player.kind,
       },
       ...npcSpawns.map((s) => ({
         run: r,
         col: s.col,
         row: s.row,
         facing: (s.facing ?? "south") as Facing,
-        role: "guest" as const,
+        // 类型来自地图符号（`SpawnKind`），不再写死 guest
+        role: s.kind,
       })),
     ].filter((s) => s.col >= 0 && s.row >= 0 && s.col < grid.cols && s.row < grid.rows);
   });

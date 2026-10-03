@@ -42,14 +42,35 @@ const PROP_SYMBOLS = new Map<string, PropKind>([["o", "booze"]]);
 
 export type PropKind = "booze";
 
-/** 出生点符号 → 朝向；`P` / `N` 无朝向，箭头表示初始朝向 */
-const SPAWN_SYMBOLS = new Map<string, SpawnFacing | undefined>([
-  ["P", undefined],
-  ["N", undefined],
-  ["^", "north"],
-  ["v", "south"],
-  ["<", "west"],
-  [">", "east"],
+/**
+ * 出生点的类型。
+ *
+ * 与 `SpawnFacing` / `PropKind` 同形：此处声明**宽松的联合**，
+ * `world/` 不依赖 `game/`，两侧取值由人工保持一致（§7.5 记了这个重复）。
+ */
+export type SpawnKind = "player" | "guest" | "guard";
+
+/** 出生点符号的解析结果：类型 + 可选朝向 */
+export type SpawnSpec = {
+  kind: SpawnKind;
+  facing?: SpawnFacing;
+};
+
+/**
+ * 出生点符号 → 类型与朝向。
+ *
+ * **注意符号表把两个维度压在同一个字符上**：`^v<>` 隐含「客人 + 朝向」。
+ * 于是只有客人能指定朝向——这是编码的局限，加第二种 NPC 时暴露出来
+ * （见文档 §7.1 注）。若将来多种类型都需要朝向，需要换一种编码方式。
+ */
+const SPAWN_SYMBOLS = new Map<string, SpawnSpec>([
+  ["P", { kind: "player" }],
+  ["N", { kind: "guest" }],
+  ["^", { kind: "guest", facing: "north" }],
+  ["v", { kind: "guest", facing: "south" }],
+  ["<", { kind: "guest", facing: "west" }],
+  [">", { kind: "guest", facing: "east" }],
+  ["G", { kind: "guard" }],
 ]);
 
 /** 查静态几何符号；非瓦片符号返回 undefined */
@@ -62,9 +83,9 @@ export function propForSymbol(char: string): PropKind | undefined {
   return PROP_SYMBOLS.get(char);
 }
 
-/** 查出生点符号；非出生点符号返回 null（区分「无朝向的出生点」与「不是出生点」） */
-export function spawnForSymbol(char: string): { facing?: SpawnFacing } | null {
-  return SPAWN_SYMBOLS.has(char) ? { facing: SPAWN_SYMBOLS.get(char) } : null;
+/** 查出生点符号；非出生点符号返回 null */
+export function spawnForSymbol(char: string): SpawnSpec | null {
+  return SPAWN_SYMBOLS.get(char) ?? null;
 }
 
 /**
@@ -81,6 +102,8 @@ export type SpawnPoint = {
   row: number;
   /** 朝向；未在图中指定时为 undefined（由游戏层决定默认值） */
   facing?: SpawnFacing;
+  /** 类型（player / guest / guard…）——由符号决定，见 `SpawnKind` */
+  kind: SpawnKind;
 };
 
 /**

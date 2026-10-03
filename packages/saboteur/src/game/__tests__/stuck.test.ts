@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 import App from "../../app";
 import { alarm, level, stop } from "../instance";
 import { gameState, listActors } from "../state";
-import { setState } from "./live";
+import { live, setState } from "./live";
 
 function createDriver(stepMs = 16) {
   const queue = new Map<number, (t: number) => void>();
@@ -209,8 +209,11 @@ describe("僵死回归 / 长期运行", () => {
     // 有路径、有目标，或正在正常驻足。若三者皆无，就是僵死。
     // 注意：恐慌置位的那一帧会清空 path/goal/idle（让 navigation 重规划），
     // 所以只能断言稳定态，不能断言瞬态。
+    //
+    // 另：读**活对象**而非渲染快照（`guest()`）——`dead` 的写入要到帧末
+    // 才提交给信号，用快照会把死者当成活人（使一个死者因「无工作」而失败）。
     for (const guest of guestsOf()) {
-      const a = guest();
+      const a = live(guest);
       if (a.dead) continue;
 
       const hasWork = a.path.length > 0 || a.goal !== null || a.idleLeft > 0;

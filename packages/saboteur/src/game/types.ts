@@ -15,7 +15,7 @@
 
 import type { EntityId } from "engine";
 
-import type { Cell } from "../world";
+import type { Cell, SpawnKind } from "../world";
 
 /** 朝向：4 向，等于最后一次移动方向 */
 export type Facing = "north" | "east" | "south" | "west";
@@ -107,8 +107,24 @@ export type ActorEntity = {
   role: Role;
 };
 
-/** 角色类型：玩家 / 客人（NPC）/ 后续的目标人物与警察 */
-export type Role = "player" | "guest";
+/**
+ * 角色类型。
+ *
+ * **直接取自 `world` 层的出生点类型**（`game` → `world` 是允许的单向依赖）。
+ * 两边各写一份的做法（原来的 `Role` / `ItemKind`）靠注释约定同步，
+ * 加一个类型要改两处、忘一处不报错——本文档 §7.5 记了这个病。
+ */
+export type Role = SpawnKind;
+
+/**
+ * 是否为 NPC（非玩家）。
+ *
+ * **不要写 `role === "guest"`**——那是把「不是玩家」与「是客人」混为一谈。
+ * 只有两种角色时二者等价，加 `guard` 后立刻暴露：保镖既非玩家也不是客人。
+ */
+export function isNpc(role: Role): boolean {
+  return role !== "player";
+}
 
 /**
  * 可携带 / 可拾取的道具类型。

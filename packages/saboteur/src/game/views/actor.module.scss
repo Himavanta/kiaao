@@ -24,6 +24,13 @@
   background: linear-gradient(180deg, #8fa5c4, #5f7a9c);
 }
 
+// 保镖：偏紫，与客人（蓝）一眼可分。S1 阶段行为相同，只有数值与颜色不同。
+.guard {
+  @extend %actor;
+
+  background: linear-gradient(180deg, #b18ccc, #7a5a99);
+}
+
 // 尸体：压暗 + 偏冷色，与活人一眼可辨（M6 的目击判读依赖这个区分）。
 // 旋转由 StyleMemo 写（`rotate`），此处只管配色。
 .corpse {

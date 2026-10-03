@@ -71,12 +71,16 @@ export const interaction = createInteractionSystem({
 
 // 意图来源按角色分派（组装层路由，不做 if 分支）：
 // - 玩家：读输入信号
-// - 客人：沿 navigation 给出的路径行走
+// - NPC（客人 / 保镖）：沿 navigation 给出的路径行走
+//
+// S1 阶段保镖与客人行为相同（仅数值不同），故共用同一个来源。
+// 待 S2 引入保镖专属状态集后，这里会出现真正的分岔。
 locomotion.setIntent("player", () => {
   const { dx, dy } = readDirection(input.pressed());
   return { dx, dy, sneaking: input.sneaking() };
 });
 locomotion.setIntent("guest", (entity) => pathIntent(entity));
+locomotion.setIntent("guard", (entity) => pathIntent(entity));
 
 // ── 游戏实例（模块级，autostart: false——运行窗口由组件控制）──
 

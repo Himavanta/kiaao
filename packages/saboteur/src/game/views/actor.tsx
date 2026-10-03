@@ -22,6 +22,7 @@ import {
 import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { ActorEntity, Facing, Role } from "../types";
+import { isNpc } from "../types";
 
 import style from "./actor.module.scss";
 
@@ -48,11 +49,12 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 客人注册导航与行为系统（玩家不入池——它的意图来自输入）
   // 两类角色都注册 locomotion / perception / interaction：
   // 交互字段承载 held / dead / poisonLeft——玩家需要（持有与下药），
-  // 客人同样需要（被下药、变尸体）。只有导航与行为是客人专属。
+  // 客人同样需要（被下药、变尸体）。只有导航与行为是 NPC 专属。
   const common = [locomotion.enter, perception.enter, interaction.enter, alarm.enter({ role })];
 
-  // 客人多一个行为状态机（玩家由输入驱动，不跑状态机）
-  const enters = role === "guest" ? [...common, behaviour.enter] : common;
+  // NPC 多一个行为状态机（玩家由输入驱动，不跑状态机）。
+  // 判据是「是否为 NPC」而非「是否为客人」——加 guard 后二者不再等价。
+  const enters = isNpc(role) ? [...common, behaviour.enter] : common;
 
   // 数据归组件：state 写全各系统需要的字段。
   // 初值由各系统的 spawn 纯函数产出（D2 方案 B）——「初值怎么算」
@@ -67,7 +69,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 就无法赋给 `EntitySignal<ActorEntity>`（注册表需要它）。
   const state: ActorEntity = {
     ...locomotion.spawn(speedProps(col, row, role, facing)),
-    ...perception.spawn(),
+    ...perception.spawn({ range: ACTOR_TRAITS[role].sightRange }),
     ...interaction.spawn(),
     ...alarm.spawn(),
     ...behaviour.spawn(),
@@ -106,7 +108,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // `class` 传信号才响应：死亡切换尸体样式依赖这一点
   const bodyClass = useContext(entity, () => {
     if (entity().dead) return style.corpse;
-    return role === "player" ? style.player : style.guest;
+    return style[role];
   });
 
   // 中毒标记：让玩家看到药效正在起作用。
@@ -144,12 +146,24 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   );
 }
 
-/** 出生位置与速度：玩家略快于客人 */
+/**
+ * 出生参数：位置、速度、视距。
+ *
+ * **按角色查表**（S1 的全部差别就在这张表）——这正是「参数轴」的落地形态：
+ * 同一个动作系统读不同的数，不需要任何新机制（文档 §二）。
+ */
+const ACTOR_TRAITS: Record<Role, { speed: number; sightRange?: number }> = {
+  player: { speed: 190 },
+  guest: { speed: 78 },
+  // 保镖比客人快一点、看得远一点——数值差异，行为相同
+  guard: { speed: 96, sightRange: 9 * TILE },
+};
+
 function speedProps(col: number, row: number, role: Role, facing: Facing) {
   return {
     x: col * TILE + (TILE - ACTOR_SIZE) / 2,
     y: row * TILE + (TILE - ACTOR_SIZE) / 2,
-    speed: role === "player" ? 190 : 78,
+    speed: ACTOR_TRAITS[role].speed,
     facing,
   };
 }
