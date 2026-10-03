@@ -8,48 +8,13 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createApp } from "kiaao";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { alarm, frameSystem, level, resetGameState, rules, stop } from "../instance";
 import { gameState, listActors } from "../state";
+import { createDriver } from "./helpers";
 import { setState } from "./live";
-
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
-  return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    tickTimes(n: number) {
-      for (let i = 0; i < n; i += 1) this.tick();
-    },
-    get pending() {
-      return queue.size;
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
-    },
-  };
-}
 
 const guestsOf = () => listActors().filter((e) => e().role === "guest");
 

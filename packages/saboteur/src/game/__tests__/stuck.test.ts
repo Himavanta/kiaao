@@ -14,35 +14,25 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createApp } from "kiaao";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { alarm, level, stop } from "../instance";
 import { gameState, listActors } from "../state";
+import { createDriver } from "./helpers";
 import { live, setState } from "./live";
 
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+/**
+ * 驱动器 = 共享帧驱动 + 本文件的两个领域方法。
+ *
+ * `run` / `runThrough` 只服务本文件（僵死检测、跨终局推进），
+ * 故不进 `helpers.ts`——那里只放共同的驱动能力。
+ */
+function createStuckDriver(stepMs = 16) {
+  const base = createDriver(stepMs);
 
   return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
+    ...base,
     /**
      * 推进 frames 帧，返回「所有客人位置完全不变」的最长连续帧数。
      *
@@ -56,7 +46,7 @@ function createDriver(stepMs = 16) {
       let worst = 0;
 
       for (let i = 0; i < frames; i += 1) {
-        this.tick();
+        base.tick();
 
         if (gameState.phase() !== "playing") break;
 
@@ -76,12 +66,7 @@ function createDriver(stepMs = 16) {
 
     /** 推进 frames 帧，无视终局（用于需要跨过终局的场景） */
     runThrough(frames: number): void {
-      for (let i = 0; i < frames; i += 1) this.tick();
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
+      for (let i = 0; i < frames; i += 1) base.tick();
     },
   };
 }
@@ -89,10 +74,10 @@ function createDriver(stepMs = 16) {
 const guestsOf = () => listActors().filter((e) => e().role === "guest");
 
 describe("僵死回归 / 长期运行", () => {
-  let driver: ReturnType<typeof createDriver>;
+  let driver: ReturnType<typeof createStuckDriver>;
 
   beforeEach(() => {
-    driver = createDriver();
+    driver = createStuckDriver();
     document.body.innerHTML = '<div id="app"></div>';
     alarm.reset();
   });

@@ -8,12 +8,13 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createApp } from "kiaao";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { alarm, level, resetGameState, stop } from "../instance";
 import { gameState, listActors } from "../state";
 import { POISON_DELAY } from "../systems/interaction";
+import { createDriver } from "./helpers";
 import { setState } from "./live";
 
 /**
@@ -26,39 +27,6 @@ function resetAll() {
   alarm.reset();
   resetGameState(level.objective.timeLimit);
   gameState.kills(0);
-}
-
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
-  return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    tickTimes(n: number) {
-      for (let i = 0; i < n; i += 1) this.tick();
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
-    },
-  };
 }
 
 function press(code: string) {

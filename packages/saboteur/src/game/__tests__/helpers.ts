@@ -12,6 +12,7 @@
 
 import { createGame, type Enter, type FrameManager } from "engine";
 import { use, type Context } from "kiaao";
+import { vi } from "vite-plus/test";
 
 import type { ActorEntity } from "../types";
 
@@ -124,4 +125,57 @@ export function countWrites(state: ActorEntity, id: symbol) {
   const frame: FrameManager<ActorEntity> = (target) =>
     target === id ? (proxy as ActorEntity) : undefined;
   return { frame, writes: () => writes };
+}
+
+/**
+ * 帧驱动器：接管 requestAnimationFrame / performance.now，手动推进帧。
+ *
+ * 抽出前的状态：七个测试文件各写一份 `createDriver`，其中三份与
+ * `wander.test.ts` 的**逐字相同**（约 180 行重复）。
+ *
+ * 分工：本函数只提供**共同的驱动能力**（`tick` / `tickTimes` / `restore`
+ * / `pending`）。各文件自己的领域方法（如 `stuck` 的 `run`、`alarm` 的
+ * `perceive`）应包在外面，不要塞进来——它们只服务于单个用例文件。
+ *
+ * **必须显式调 `restore()`**（通常在 `afterEach`）：它负责恢复被 mock 的
+ * 全局函数。漏掉会污染后续用例——`random` 是模块级单例，帧数差异会改变
+ * 随机序列（S3 那次脆弱断言就是这样暴露的）。
+ */
+export function createDriver(stepMs = 16) {
+  const queue = new Map<number, (t: number) => void>();
+  let nextId = 1;
+  let clock = 0;
+
+  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
+    const id = nextId++;
+    queue.set(id, cb);
+    return id;
+  });
+  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
+    queue.delete(id);
+  });
+  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+
+  return {
+    /** 推进一帧：时钟前进 stepMs，执行当前已排队的全部回调 */
+    tick() {
+      clock += stepMs;
+      const pending = [...queue.values()];
+      queue.clear();
+      for (const cb of pending) cb(clock);
+    },
+    /** 推进 n 帧 */
+    tickTimes(n: number) {
+      for (let i = 0; i < n; i += 1) this.tick();
+    },
+    /** 待排队的回调数（验 stop 是否真的停住）——属性而非方法 */
+    get pending() {
+      return queue.size;
+    },
+    restore() {
+      raf.mockRestore();
+      caf.mockRestore();
+      now.mockRestore();
+    },
+  };
 }

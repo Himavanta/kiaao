@@ -15,46 +15,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import App from "../../app";
 import { entityCount, level, frameSystem, stop } from "../instance";
-
-/**
- * 手动驱动的 raf：逐帧推进且不递归。
- * cancelAnimationFrame 真正从队列移除——否则无法验证「stop 后不再有帧」。
- */
-function createRafDriver() {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-
-  return {
-    /** 推进一帧：取当前队列快照执行（执行中新增的留到下一帧） */
-    tick() {
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(performance.now());
-    },
-    get pending() {
-      return queue.size;
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-    },
-  };
-}
+import { createDriver } from "./helpers";
 
 describe("端到端 / 生命周期", () => {
-  let driver: ReturnType<typeof createRafDriver>;
+  let driver: ReturnType<typeof createDriver>;
 
   beforeEach(() => {
-    driver = createRafDriver();
+    driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
   });
 
@@ -83,10 +50,10 @@ describe("端到端 / 生命周期", () => {
 });
 
 describe("端到端 / 关卡渲染", () => {
-  let driver: ReturnType<typeof createRafDriver>;
+  let driver: ReturnType<typeof createDriver>;
 
   beforeEach(() => {
-    driver = createRafDriver();
+    driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
   });
 

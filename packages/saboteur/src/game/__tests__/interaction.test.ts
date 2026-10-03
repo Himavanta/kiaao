@@ -8,56 +8,12 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createApp } from "kiaao";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { level, stop } from "../instance";
 import { playerEntity } from "../state";
-
-/**
- * 手动驱动的 raf 队列 + 可控时钟。
- *
- * 时钟必须可控：同步 tick 时 `performance.now()` 只推进几微秒，
- * 于是 `delta ≈ 0`、实体几乎不动——基于时间的断言（如「走到墙边」）
- * 会因走不完距离而失败。固定步长随时间可让用例确定且快速。
- */
-function createRafDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
-  return {
-    /** 推进一帧：时钟前进一个步长后执行当前队列 */
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    /** 推进多帧 */
-    tickTimes(count: number) {
-      for (let i = 0; i < count; i += 1) this.tick();
-    },
-    get clock() {
-      return clock;
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
-    },
-  };
-}
+import { createDriver } from "./helpers";
 
 function press(code: string) {
   window.dispatchEvent(new KeyboardEvent("keydown", { code }));
@@ -67,10 +23,10 @@ function release(code: string) {
 }
 
 describe("M2 端到端 / 输入驱动移动", () => {
-  let driver: ReturnType<typeof createRafDriver>;
+  let driver: ReturnType<typeof createDriver>;
 
   beforeEach(() => {
-    driver = createRafDriver();
+    driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
   });
 
@@ -208,10 +164,10 @@ describe("M2 端到端 / 输入驱动移动", () => {
 });
 
 describe("M2 端到端 / 渲染", () => {
-  let driver: ReturnType<typeof createRafDriver>;
+  let driver: ReturnType<typeof createDriver>;
 
   beforeEach(() => {
-    driver = createRafDriver();
+    driver = createDriver();
     document.body.innerHTML = '<div id="app"></div>';
   });
 

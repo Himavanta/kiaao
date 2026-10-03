@@ -16,40 +16,7 @@ import { listActors, showVision } from "../state";
 import { createPerceptionSystem } from "../systems/perception";
 import type { ActorEntity } from "../types";
 import { computeCones } from "../views/vision";
-import { makeActorState, mountActor } from "./helpers";
-
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
-  return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    tickTimes(n: number) {
-      for (let i = 0; i < n; i += 1) this.tick();
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
-    },
-  };
-}
+import { makeActorState, mountActor, createDriver } from "./helpers";
 
 describe("M4 / 视锥计算", () => {
   test("每个角色都有一个视锥多边形", () => {

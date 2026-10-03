@@ -13,44 +13,15 @@
 import { createApp } from "kiaao";
 import { setAdapter } from "kiaao/adapter";
 import { browserAdapter } from "kiaao/dom";
-import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { stop } from "../instance";
 import { listActors } from "../state";
+import { createDriver } from "./helpers";
 import { live, setState } from "./live";
 
 setAdapter(browserAdapter);
-
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
-  return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
-    },
-  };
-}
 
 let driver: ReturnType<typeof createDriver>;
 

@@ -8,48 +8,29 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createApp } from "kiaao";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { alarm, level, stop } from "../instance";
 import { listActors } from "../state";
 import { ALARM_PER_WITNESS } from "../systems/alarm";
 import type { ActorEntity } from "../types";
+import { createDriver } from "./helpers";
 import { setState } from "./live";
 
-function createDriver(stepMs = 16) {
-  const queue = new Map<number, (t: number) => void>();
-  let nextId = 1;
-  let clock = 0;
-
-  const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb: any) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  const caf = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id: any) => {
-    queue.delete(id);
-  });
-  const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
-
+/**
+ * 驱动器 = 共享帧驱动 + `perceive`。
+ *
+ * `perceive` 只服务本文件（推足够帧让感知跑过至少一轮），故不进
+ * `helpers.ts`——那里只放共同的驱动能力。
+ */
+function createAlarmDriver(stepMs = 16) {
+  const base = createDriver(stepMs);
   return {
-    tick() {
-      clock += stepMs;
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(clock);
-    },
-    tickTimes(n: number) {
-      for (let i = 0; i < n; i += 1) this.tick();
-    },
+    ...base,
     /** 推进足够多帧让感知跑过至少一轮（感知间隔 6 帧） */
     perceive() {
-      this.tickTimes(8);
-    },
-    restore() {
-      raf.mockRestore();
-      caf.mockRestore();
-      now.mockRestore();
+      base.tickTimes(8);
     },
   };
 }
@@ -130,7 +111,7 @@ function isolate(keep: Array<ReturnType<typeof playerOf>>) {
 function holdIsolation(
   keep: Array<ReturnType<typeof playerOf>>,
   frames: number,
-  driver: ReturnType<typeof createDriver>,
+  driver: ReturnType<typeof createAlarmDriver>,
   each?: () => void,
 ) {
   for (let i = 0; i < frames; i += 1) {
@@ -141,10 +122,10 @@ function holdIsolation(
 }
 
 describe("M6 / 目击与恐慌", () => {
-  let driver: ReturnType<typeof createDriver>;
+  let driver: ReturnType<typeof createAlarmDriver>;
 
   beforeEach(() => {
-    driver = createDriver();
+    driver = createAlarmDriver();
     document.body.innerHTML = '<div id="app"></div>';
     alarm.reset();
   });
@@ -251,10 +232,10 @@ describe("M6 / 目击与恐慌", () => {
 });
 
 describe("M6 / 传播链", () => {
-  let driver: ReturnType<typeof createDriver>;
+  let driver: ReturnType<typeof createAlarmDriver>;
 
   beforeEach(() => {
-    driver = createDriver();
+    driver = createAlarmDriver();
     document.body.innerHTML = '<div id="app"></div>';
     alarm.reset();
   });
@@ -327,10 +308,10 @@ describe("M6 / 传播链", () => {
 });
 
 describe("M6 / 玩家不参与恐慌链", () => {
-  let driver: ReturnType<typeof createDriver>;
+  let driver: ReturnType<typeof createAlarmDriver>;
 
   beforeEach(() => {
-    driver = createDriver();
+    driver = createAlarmDriver();
     document.body.innerHTML = '<div id="app"></div>';
     alarm.reset();
   });
@@ -382,10 +363,10 @@ describe("M6 / 玩家不参与恐慌链", () => {
 });
 
 describe("M6 / 恐慌者逃离", () => {
-  let driver: ReturnType<typeof createDriver>;
+  let driver: ReturnType<typeof createAlarmDriver>;
 
   beforeEach(() => {
-    driver = createDriver();
+    driver = createAlarmDriver();
     document.body.innerHTML = '<div id="app"></div>';
     alarm.reset();
   });
