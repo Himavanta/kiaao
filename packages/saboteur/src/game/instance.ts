@@ -13,6 +13,7 @@ import { use } from "kiaao";
 import { createRandom, manor, parseLevel } from "../world";
 import { resetGameState } from "./state";
 import { playerEntity } from "./state";
+import { createActorSystem } from "./systems/actor";
 import { createAlarmSystem } from "./systems/alarm";
 import { createBehaviourSystem } from "./systems/behaviour";
 import { createFrameSystem } from "./systems/frame";
@@ -44,6 +45,9 @@ export const input = createInputSystem();
 // ── 帧统计（开发期可见帧率与实体数）────────────────────
 
 export const frameSystem = createFrameSystem();
+
+// 实体方法调用器（实验）：只负责喊「到你了」，做什么由实体自己定义
+export const actor = createActorSystem();
 
 // 实体计数：挂载时加一、卸载时减一，供调试面板订阅。
 // 它是全局状态而非实体数据——没有位置，不参与帧循环。
@@ -106,6 +110,8 @@ export const game = createGame<ActorEntity>(
     // 状态通过 navigation 服务算路径。因此 navigation 不在帧流水线里。
     behaviour.update,
     locomotion.update,
+    // 实体自己的每帧钩子：放在移动之后（它读的是本帧最终位置）
+    actor.update,
     perception.update,
     alarm.update,
     // rules 放最后：它读本轮结束时的击杀数与警报值判终局，

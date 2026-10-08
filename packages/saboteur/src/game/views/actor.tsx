@@ -11,6 +11,7 @@ import { Show, type Context } from "kiaao";
 
 import { TILE, type Cell } from "../../world";
 import {
+  actor,
   alarm,
   behaviour,
   define,
@@ -19,6 +20,7 @@ import {
   locomotion,
   perception,
 } from "../instance";
+import { createGuardState } from "../npcs/guard";
 import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { ActorEntity, Facing, Role } from "../types";
@@ -67,7 +69,7 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // **必须注解为 `ActorEntity`**：`Signal` 在 TS 里是不变的，
   // 若让 `state` 保持字面量类型，`define` 返回的 `EntitySignal<字面量>`
   // 就无法赋给 `EntitySignal<ActorEntity>`（注册表需要它）。
-  const state: ActorEntity = {
+  const base: ActorEntity = {
     ...locomotion.spawn(speedProps(col, row, role, facing)),
     ...perception.spawn({ range: ACTOR_TRAITS[role].sightRange }),
     ...interaction.spawn(),
@@ -76,7 +78,13 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
     role,
   };
 
-  const entity = define(ctx, ...enters)(state);
+  // ── 实验：只属于保镖的私有数据与方法 ──
+  // 走「交叉类型 + 闭包捕获 state」：不改 ActorEntity（它是所有角色的
+  // 共享类型，加保镖专用字段会让它重新膨胀）。
+  const state = role === "guard" ? createGuardState(base) : base;
+  const entersWithHooks = role === "guard" ? [...enters, actor.enter] : enters;
+
+  const entity = define(ctx, ...entersWithHooks)(state);
 
   // 全局注册表：玩家供相机跟随，全部角色供视锥调试层遍历。
   // 卸载时反注册，避免调试层指向已销毁的信号。
