@@ -80,6 +80,8 @@
 
 **建议**：用 lint 规则（`no-restricted-imports`）固化这条边界，让违规在检查阶段就暴露，而不是靠约定与自觉。
 
+> **实测现状（2026-10-08）**：仓库里**并没有**这个 lint 配置——`world/index.ts` 原先写着「这条边界由 lint 规则固化」，那是**假的**。该注释已改正。目前只能靠人工遵守（§13 仍列此待办）。
+
 ---
 
 ## 三、目录结构
@@ -104,16 +106,18 @@ packages/saboteur/src/
 │   ├── interaction.ts          # 面朝格、背后/正面判定（点积）
 │   ├── random.ts               # 可复现的伪随机（固定种子）
 │   └── levels/
-│       ├── types.ts            # Tile、符号表、LevelDef、Objective
+│       ├── types.ts            # Tile、瓦片符号表、LevelDef、Objective
+│       ├── parse.ts            # ASCII → Grid + 符号标记（SymbolMark）
 │       ├── parse.ts            # ASCII → Grid + 出生点 + 道具
 │       └── manor.ts            # 关卡数据（含目标与时限）
 ├── game/                       # 玩法层
 │   ├── config.ts               # 视口规则、采样间隔
+│   ├── level.ts                # 符号标记 → 角色/道具（游戏层词汇表，§8.9）
 │   ├── types.ts                # ActorEntity（注册注解类型，见 5.2）
 │   ├── state.ts                # 游戏状态与全局注册表（Phase / 计数 / 视图开关）
 │   ├── instance.ts             # 模块级单例：系统 + 实例 + 重开
 │   ├── npcs/                   # 每只 NPC 的「户口本」（§8.8）
-│   │   ├── types.ts            # 契约：NpcDef（traits / states / decorate / post）
+│   │   ├── types.ts            # 契约：NpcDef（symbols / traits / states / decorate / post）
 │   │   ├── player.ts           # 只有数值（不跑状态机，由输入驱动）
 │   │   ├── guest.ts            # 闲游 / 驻足 + 数值
 │   │   ├── guard.ts            # 巡逻 + 数值 + 私有记忆 + 岗位（完整样本）
@@ -1133,7 +1137,8 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 
 ### 12.4 给接手者的几点提醒
 
-- **`world/` 不得导入 `kiaao`**。这是本项目最重要的架构约束（§2.2），它让寻路、视线、碰撞全部可脱离渲染单测。当前靠人工遵守，若要长期维护建议用 lint 规则固化。
+- **`world/` 不得导入 `kiaao`，且不得认识任何游戏概念**。这是本项目最重要的架构约束（§2.2），它让寻路、视线、碰撞全部可脱离渲染单测。**实测：仓库里并没有固化它的 lint 配置**（`world/index.ts` 曾误称有）；目前靠人工遵守。地图符号的解读属 `game/`（§8.9）。
+- **新增一只 NPC**：建 `game/npcs/<role>.ts`（户口本），在 `index.ts` 的 `actorDefs` 登记。**不必碰任何系统、也不必碰 `world/`**——装配层按能力推导要注册哪些系统，符号表从户口本汇总（§8.8 / §8.9）。漏写会在 `Record<Role, NpcDef>` 处报错。
 - **`class` 必须传信号才响应**。写普通三元或数组拼接会在渲染时求值一次后固定——这是本项目中反复踩到的坑（§11 的 M7 一节）。
 - **`gameState` 是模块级单例**。测试里跨用例共享，需在 `beforeEach` 复位。
 - **长时程用例要排除终局**。警报满值约 6~8 秒就会停帧循环，之后静止是正确行为。
