@@ -95,6 +95,10 @@ function guestStates(random: Random): RoleStateSet {
 
 /** 客人的户口本 */
 export const guest: NpcDef = {
+  // `N` 无朝向（用默认），`^v<>` 兼作朝向指定——地图符号把两个维度
+  // 压在同一字符上（异质 NPC 设计文档 §7.1 注）。只有客人能指定朝向，
+  // 这是编码的局限；若多种类型都需要朝向，得换一种编码。
+  symbols: { N: undefined, "^": "north", v: "south", "<": "west", ">": "east" },
   traits: { speed: 78 },
   states: guestStates,
 };

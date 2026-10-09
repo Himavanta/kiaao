@@ -77,7 +77,7 @@ function useSpawns(
       col: 1,
       row: 1,
       facing: "south" as const,
-      kind: "player" as const,
+      role: "player" as const,
     };
 
     return [
@@ -86,15 +86,15 @@ function useSpawns(
         col: player.col,
         row: player.row,
         facing: (player.facing ?? "south") as Facing,
-        role: player.kind,
+        role: player.role,
       },
       ...npcSpawns.map((s) => ({
         run: r,
         col: s.col,
         row: s.row,
         facing: (s.facing ?? "south") as Facing,
-        // 类型来自地图符号（`SpawnKind`），不再写死 guest
-        role: s.kind,
+        // 角色来自地图符号，由各 NPC 户口本声明（`npcs/*.ts` 的 `symbols`）
+        role: s.role,
       })),
     ].filter((s) => s.col >= 0 && s.row >= 0 && s.col < grid.cols && s.row < grid.rows);
   });

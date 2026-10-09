@@ -16,7 +16,7 @@
 import type { Cell } from "../../world";
 import type { Random } from "../../world/random";
 import type { RoleStateSet } from "../systems/state-types";
-import type { ActorEntity, Role } from "../types";
+import type { ActorEntity, Facing, Role } from "../types";
 
 /**
  * 出生参数：这一只 NPC 的「数值」。
@@ -42,6 +42,18 @@ export type NpcTraits = {
  * 规则写在装配层（`views/actor.tsx`），本层只声明能力。
  */
 export type NpcDef = {
+  /**
+   * 地图出生符号 → 初始朝向（`undefined` 表示用默认朝向）。
+   *
+   * **符号表归户口本所有**：`G` 是保镖的符号，这件事与「保镖是什么」
+   * 是同一件事。原先住在 `world/levels/types.ts`，逼得 `world` 认识
+   * `"guard"`、`game` 反向依赖它（`Role = SpawnKind`）。
+   *
+   * 游戏层把它们汇总成符号表——加一只 NPC 只需在自己的文件里多写一行，
+   * 不必碰 `world/`，也不必有第二张表。
+   */
+  symbols: Record<string, Facing | undefined>;
+
   /** 数值：速度、视距 */
   traits: NpcTraits;
 

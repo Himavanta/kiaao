@@ -15,7 +15,7 @@
 
 import type { EntityId } from "engine";
 
-import type { Cell, SpawnKind } from "../world";
+import type { Cell } from "../world";
 
 /** 朝向：4 向，等于最后一次移动方向 */
 export type Facing = "north" | "east" | "south" | "west";
@@ -119,11 +119,11 @@ export type ActorEntity = {
 /**
  * 角色类型。
  *
- * **直接取自 `world` 层的出生点类型**（`game` → `world` 是允许的单向依赖）。
- * 两边各写一份的做法（原来的 `Role` / `ItemKind`）靠注释约定同步，
- * 加一个类型要改两处、忘一处不报错——本文档 §7.5 记了这个病。
+ * **定义在 `game` 层**（原先写成 `Role = SpawnKind`，反向依赖 `world`）。
+ * 角色名是游戏概念，不是几何概念——`world` 不该认识 `"guard"`。
+ * 地图符号与它的对应关系由各 NPC 户口本声明（`npcs/*.ts` 的 `symbols`）。
  */
-export type Role = SpawnKind;
+export type Role = "player" | "guest" | "guard";
 
 /** 会跑状态机的角色（玩家由输入驱动，没有状态机） */
 export type NpcRole = Exclude<Role, "player">;
@@ -144,8 +144,9 @@ export function isNpc(role: Role): role is NpcRole {
 /**
  * 可携带 / 可拾取的道具类型。
  *
- * 与 `world/levels/types.ts` 的 `PropKind` 取值一致，但**不是同一个类型**：
- * `world/` 不依赖 `game/`（分层单向），两边各自声明，由组装层保证对应。
+ * **定义在 `game` 层**。原先 `world/levels/types.ts` 有一份逐字相同的
+ * `PropKind`，两处靠注释约定同步、忘一处不报错（设计文档 §7.5 记了
+ * 这个病）。符号表已移到 `game/level.ts`——`world` 不再认识道具。
  */
 export type ItemKind = "booze";
 

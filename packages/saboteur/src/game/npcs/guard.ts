@@ -134,8 +134,10 @@ function createGuardState(base: ActorEntity): GuardEntity {
   return state;
 }
 
-/** 保镖的户口本：数值、状态、私有记忆、岗位——全在一处 */
+/** 保镖的户口本：符号、数值、状态、私有记忆、岗位——全在一处 */
 export const guard: NpcDef = {
+  // 地图上的 `G`
+  symbols: { G: undefined },
   traits: { speed: 96, sightRange: GUARD_SIGHT_TILES * TILE },
   states: makeGuardStates,
   decorate: createGuardState,

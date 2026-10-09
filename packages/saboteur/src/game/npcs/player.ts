@@ -13,7 +13,8 @@
 
 import type { NpcDef } from "./types";
 
-/** 玩家的户口本：只有数值，没有状态机与岗位 */
+/** 玩家的户口本：只有符号与数值，没有状态机与岗位 */
 export const player: NpcDef = {
+  symbols: { P: undefined },
   traits: { speed: 190 },
 };

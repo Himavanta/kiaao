@@ -9,7 +9,7 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import { createGrid, inBounds, isBlocked, isOpaque, setTile, tileAt } from "../grid";
-import { parseLevel, validateLevel } from "../levels/parse";
+import { parseMap } from "../levels/parse";
 import { Tile, type LevelDef } from "../levels/types";
 
 /** 测试用关卡：补上 objective（大多数用例不关心它） */
@@ -75,14 +75,9 @@ describe("网格 / 通行性与视线分离", () => {
   });
 });
 
-describe("关卡解析", () => {
-  const simple = lv({
-    name: "测试关卡",
-    rows: ["#####", "#.P.#", "#...#", "#####"],
-  });
-
+describe("地图解析 / 只解读几何", () => {
   test("静态符号解析为对应瓦片", () => {
-    const { grid } = parseLevel(lv({ name: "t", rows: ["#tT.", "#..."] }));
+    const { grid } = parseMap(lv({ name: "t", rows: ["#tT.", "#..."] }));
 
     expect(tileAt(grid, 0, 0)).toBe(Tile.Wall);
     expect(tileAt(grid, 1, 0)).toBe(Tile.LowFurniture);
@@ -90,65 +85,30 @@ describe("关卡解析", () => {
     expect(tileAt(grid, 3, 0)).toBe(Tile.Floor);
   });
 
-  test("提取玩家出生点，且该格为地板", () => {
-    const { grid, playerSpawn } = parseLevel(simple);
+  test("非瓦片符号原样交出，不解读它是谁", () => {
+    const { marks } = parseMap(lv({ name: "t", rows: ["#PG?."] }));
 
-    expect(playerSpawn).toEqual({ col: 2, row: 1, facing: undefined, kind: "player" });
-    // 出生点符号不落地为实心格——否则玩家会卡在墙里
+    // 本层不认识角色与道具——只知道「这里有个非瓦片符号」
+    expect(marks).toEqual([
+      { symbol: "P", col: 1, row: 0 },
+      { symbol: "G", col: 2, row: 0 },
+      { symbol: "?", col: 3, row: 0 },
+    ]);
+  });
+
+  test("出生点符号不落地为实心格（否则实体会卡在墙里）", () => {
+    const { grid } = parseMap(lv({ name: "t", rows: ["#####", "#.P.#", "#...#"] }));
     expect(isBlocked(grid, 2, 1)).toBe(false);
   });
 
-  test("提取 NPC 出生点与朝向", () => {
-    const { npcSpawns } = parseLevel(
-      lv({ name: "t", rows: ["#####", "#^v<>#", "#....#", "#####"] }),
-    );
-
-    expect(npcSpawns).toEqual([
-      { col: 1, row: 1, facing: "north", kind: "guest" },
-      { col: 2, row: 1, facing: "south", kind: "guest" },
-      { col: 3, row: 1, facing: "west", kind: "guest" },
-      { col: 4, row: 1, facing: "east", kind: "guest" },
-    ]);
-  });
-
-  test("不同类型符号解析出不同 kind（`G` = 保镖）", () => {
-    const { playerSpawn, npcSpawns } = parseLevel(
-      lv({ name: "t", rows: ["#####", "#PGN#", "#####"] }),
-    );
-
-    expect(playerSpawn?.kind).toBe("player");
-    expect(npcSpawns).toEqual([
-      { col: 2, row: 1, facing: undefined, kind: "guard" },
-      { col: 3, row: 1, facing: undefined, kind: "guest" },
-    ]);
-  });
-
   test("行长度不一致时按最长行补地板，不抛错", () => {
-    const { grid } = parseLevel(lv({ name: "t", rows: ["####", "#.", "####"] }));
+    const { grid } = parseMap(lv({ name: "t", rows: ["####", "#.", "####"] }));
     expect(grid.cols).toBe(4);
     expect(tileAt(grid, 3, 1)).toBe(Tile.Floor);
   });
 
-  test("未知符号被报告，且不落地为墙", () => {
-    const { grid, unknownSymbols } = parseLevel(lv({ name: "t", rows: ["#?."] }));
-
-    expect(unknownSymbols).toEqual(["?"]);
+  test("空格与未知符号都不落地为墙", () => {
+    const { grid } = parseMap(lv({ name: "t", rows: ["#?."] }));
     expect(isBlocked(grid, 1, 0)).toBe(false);
-  });
-});
-
-describe("关卡校验", () => {
-  test("合法关卡无问题", () => {
-    expect(validateLevel(lv({ name: "t", rows: ["###", "#P#", "###"] }))).toEqual([]);
-  });
-
-  test("缺少玩家出生点被报告", () => {
-    const errors = validateLevel(lv({ name: "t", rows: ["###", "#.#", "###"] }));
-    expect(errors.some((e) => e.includes("P"))).toBe(true);
-  });
-
-  test("行长度不一致被报告", () => {
-    const errors = validateLevel(lv({ name: "t", rows: ["####", "#P#"] }));
-    expect(errors.some((e) => e.includes("长度"))).toBe(true);
   });
 });

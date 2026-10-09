@@ -10,7 +10,8 @@
 import { createGame } from "engine";
 import { use } from "kiaao";
 
-import { createRandom, manor, parseLevel } from "../world";
+import { createRandom, manor } from "../world";
+import { parseLevel } from "./level";
 import { createStates } from "./npcs";
 import { resetGameState } from "./state";
 import { playerEntity } from "./state";

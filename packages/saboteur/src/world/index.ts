@@ -1,8 +1,11 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 世界层入口：几何、网格、碰撞、寻路、视线、关卡数据
+// 世界层入口：几何、网格、碰撞、寻路、视线、关卡地图
 //
 // 纯逻辑，零响应式——不导入 kiaao，不触碰 DOM，可在任意环境单测
-// （规划文档 2.2）。这条边界由 lint 规则固化。
+// （规划文档 2.2）。
+//
+// **只认识几何**：本层不知道任何角色或道具的名字。地图解析把非瓦片
+// 符号原样交出（`SymbolMark`），由 `game/` 用自己的词汇表解读。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export { moveRect, rectBlocked } from "./collision";
@@ -35,14 +38,6 @@ export {
   type ConeOptions,
   type SightOptions,
 } from "./vision";
-export { parseLevel, validateLevel, type ParsedLevel } from "./levels/parse";
-export {
-  Tile,
-  type LevelDef,
-  type Objective,
-  type SpawnFacing,
-  type SpawnKind,
-  type SpawnPoint,
-  type SpawnSpec,
-} from "./levels/types";
+export { parseMap, type ParsedMap, type SymbolMark } from "./levels/parse";
+export { Tile, tileForSymbol, type LevelDef, type Objective } from "./levels/types";
 export { manor } from "./levels/manor";

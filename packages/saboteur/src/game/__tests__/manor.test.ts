@@ -4,14 +4,16 @@
 // 地图网格错位、区域不通、出生点落在墙里——这些都不会抛异常，
 // 只会在跑起来后表现为「AI 卡住」「走不到某处」，很难定位。
 // 此处的用例把这类问题挡在关卡编辑阶段。
+//
+// **住在 `game/` 而非 `world/`**：这些用例要用游戏层的词汇表
+// （`parseLevel` 把符号解读为角色），而 `world` 只解读几何。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { describe, expect, test } from "vite-plus/test";
 
-import { isBlocked, type Grid } from "../grid";
-import { manor } from "../levels/manor";
-import { parseLevel, validateLevel } from "../levels/parse";
-import { Tile } from "../levels/types";
+import { isBlocked, Tile, type Grid } from "../../world";
+import { manor } from "../../world";
+import { parseLevel, validateLevel } from "../level";
 
 /** 四邻域方向 */
 const NEIGHBORS: Array<[number, number]> = [
