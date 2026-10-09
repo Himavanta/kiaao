@@ -14,10 +14,10 @@ import { createPool, type EntityId, type Enter, type FrameManager } from "engine
 
 import { cellAt, type Cell } from "../../world";
 import type { Random } from "../../world/random";
-import { isNpc, type ActorEntity, type Mood, type Role } from "../types";
+import { isNpc, type ActorEntity, type Mood, type NpcRole, type Role } from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 import type { NavigationService } from "./navigation";
-import { createStates, type ActorState, type RoleStateSet, type StateContext } from "./states";
+import type { ActorState, RoleStateSet, StateContext } from "./state-types";
 
 /**
  * 行为系统字段需求。
@@ -73,10 +73,19 @@ export type BehaviourSystem = {
 export function createBehaviourSystem(options: {
   random: Random;
   navigation: NavigationService;
+  /**
+   * 各 NPC 类型的状态集。
+   *
+   * **注入而非自己组装**：本系统是机制（「驱动某角色拥有的状态集」），
+   * 它不该知道哪只 NPC 有哪个状态——那是 `npcs/` 户口本的知识。
+   *
+   * 类型是**完备**的 `Record<NpcRole, …>`：能进本系统的必然有状态机
+   * （玩家不入池，「无状态机」在 `npcs/` 层就被排除了）。
+   */
+  states: Record<NpcRole, RoleStateSet>;
 }): BehaviourSystem {
-  const { random, navigation } = options;
+  const { random, navigation, states } = options;
   const [pool, enter] = createPool<Behaving>();
-  const states = createStates(random);
 
   /**
    * 掷定状态时长。无 `duration` 的状态（长期行为，如 `patrol`）返回 0——
@@ -89,7 +98,7 @@ export function createBehaviourSystem(options: {
   };
 
   /** 该角色的状态集（玩家不入本池，但类型上仍需兜底） */
-  const setOf = (role: Role): RoleStateSet => (isNpc(role) ? states[role] : states.guest);
+  const setOf = (role: Role): RoleStateSet => (isNpc(role) ? states[role] : states.guest)!;
 
   /** 该角色的默认状态 */
   const entryOf = (role: Role): Mood => setOf(role).entry;
@@ -145,6 +154,8 @@ export function createBehaviourSystem(options: {
       id,
       self,
       cell,
+      // 本角色的默认态——`panic` 消退后据此回家（不能写死 wander）
+      entryMood: entryOf(self.role),
       patch: (fn) => {
         const target = frame(id);
         if (target) fn(target);

@@ -1,26 +1,93 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 保镖：一份「只属于这个 NPC」的私有数据与方法（实验）
+// 保镖：巡逻 / 私有记忆 / 数值 / 岗位——一只 NPC 的全部知识
 //
-// 这个文件是为了**验证一件事**：state 上能否承载「只属于某类 NPC 的
-// 跨帧数据 + 行为」，而不需要动任何系统。
+// 这是「户口本」的第二个样本（第一个是 `guest.ts`）。读这一个文件，
+// 应当能知道保镖是什么，而不必翻 7 个文件。
 //
-// 内容：保镖记住自己见过谁。这是**它自己的知识**——
-// - 数据来自 `visibleIds`（perception 写的），但那只是「此刻看得见谁」，
-//   看一眼就忘了；本模块把它变成「见过谁」的持久记忆。
-// - 读写全在自己身上，不看别人 ⇒ 落在文档「方法只能拥有没有系统认领的
-//   字段」的范围内（§3.3）。
+// 收进来的四处（原先散在别的文件）：
+//   - 数值（速度、视距）——原 `views/actor.tsx` 的 `ACTOR_TRAITS` 表
+//   - 状态集 `{patrol, panic}`——原 `systems/states.ts` 的 `sets` 表
+//   - 岗位（出生格）——原 `views/actor.tsx` 的 `postFor`
+//   - 私有记忆 `seen`——本文件原有
 //
-// **代价（未解决）**：`seen` 是嵌套容器（`Map`），而引擎的能力文档
-// §3.3 记过「原地改嵌套只靠每帧全量提交兜底」。本方法依赖那个现状——
-// 若将来做选择性提交，`seen.set()` 的改动可能不再被检测到。
-//
-// **方法不需要 `frame` 参数**——它闭包捕获 `state` 本身
-// （S2 迁移后的活对象语义）。这是本实验最关心的点。
+// **巡逻为什么是「保镖独有」**：客人的 `wander` 全图随机，`patrol` 的
+// 差别只有**目标范围**（限定在岗位周边）。机制相同、参数不同——这正是
+// 文档 §二「参数轴」的形态。两段代码前半部分（走向目标）逐字相同，
+// 这是参数轴的代价，S3 时已记录。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import type { EntityId } from "engine";
 
+import { TILE, type Cell } from "../../world";
+import type { Random } from "../../world/random";
+import type { ActorState, RoleStateSet } from "../systems/state-types";
 import type { ActorEntity } from "../types";
+import { panic } from "./panic";
+import type { NpcDef } from "./types";
+
+/** 巡逻岗位的半径（格）：保镖不会离开岗位太远——「守门」的语义 */
+const PATROL_RADIUS = 4;
+
+/** 巡逻到位后的停留时长（秒）：比客人短，体现「在岗」 */
+const PATROL_REST_MIN = 0.3;
+const PATROL_REST_MAX = 1.2;
+
+/** 视距（格）：比客人远，体现「专业」 */
+const GUARD_SIGHT_TILES = 9;
+
+/**
+ * 巡逻：在岗位附近来回走。
+ *
+ * 与 `wander` 的差别只有**目标范围**——`pickNearbyGoal(post, …)` 取代
+ * `pickRandomGoal()`，其余（到达判定、休息计时）逐字相同。
+ *
+ * **不声明 `duration`**：巡逻不靠计时切换状态（长期行为）。给它一个固定
+ * 区间只会让每帧多一次写实体——S3 收口时发现的死重量。
+ *
+ * 写成工厂（而非模块常量）是为了闭包捕获 `random`——状态的 `update`
+ * 只收 `(ctx, delta)`，随机源得从创建时绑进来。与 `guest.ts` 的
+ * `makeWander` 同一手法。
+ */
+function makePatrol(random: Random): ActorState {
+  return {
+    name: "patrol",
+    update: (ctx, delta) => {
+      const { self, services } = ctx;
+
+      // 岗位缺失时退化为驻足，不硬崩（`post` 由注册时定，理论上不会缺）
+      if (!self.post) return;
+
+      if (!services.hasArrived(self)) {
+        services.moveTowardGoal(ctx.frame, ctx.id, delta);
+        return;
+      }
+
+      // 已到位：稍作停留再挑下一个岗内点。巡逻不歇太久——「守门」是它的语义
+      const rest = self.idleLeft - delta;
+      if (rest > 0) {
+        ctx.patch((e) => {
+          e.idleLeft = rest;
+        });
+        return;
+      }
+
+      const goal = services.pickNearbyGoal(self.post, ctx.cell, PATROL_RADIUS);
+      if (!goal) return;
+      services.setGoal(ctx.frame, ctx.id, goal);
+      ctx.patch((e) => {
+        e.idleLeft = PATROL_REST_MIN + random() * (PATROL_REST_MAX - PATROL_REST_MIN);
+      });
+    },
+  };
+}
+
+/** 保镖：巡逻 / 恐慌；默认巡逻。**没有** wander / linger——它在岗 */
+function makeGuardStates(random: Random): RoleStateSet {
+  return {
+    entry: "patrol",
+    states: { patrol: makePatrol(random), panic },
+  };
+}
 
 /**
  * 保镖实体的扩展类型：共享字段 + 它私有的字段与方法。
@@ -40,14 +107,14 @@ export type GuardEntity = ActorEntity & {
 /**
  * 把一份基础 state 升格为保镖实体。
  *
- * **形态即验证点**：方法闭包捕获 `state`（不是 `this`、不需要 `frame`）。
- * 这与 S2 迁移后的活对象语义一致——`state` 是长期存在的同一个对象，
- * 系统通过 `frame(id)` 拿到的就是它。
+ * **方法闭包捕获 `state`**（不是 `this`）：`define` 会把 state 浅拷贝给
+ * 渲染信号，用 `this` 的写法在某些调用路径下会指向那个拷贝（文档 §8.2）。
  *
- * 用 `this` 的写法在某些调用路径下会指向浅拷贝（`define` 会把 state 拷给
- * 渲染信号），故本文件一律用闭包（与文档 §8.2 的约定一致）。
+ * **代价（未解决）**：`seen` 是嵌套容器（`Map`），依赖引擎「每帧全量
+ * 提交」兜底（能力文档 §3.3 的耦合陷阱）。若将来做选择性提交，
+ * `seen.set()` 可能不再被检测到。
  */
-export function createGuardState(base: ActorEntity): GuardEntity {
+function createGuardState(base: ActorEntity): GuardEntity {
   const state = { ...base } as GuardEntity;
 
   let frameCount = 0;
@@ -66,3 +133,12 @@ export function createGuardState(base: ActorEntity): GuardEntity {
 
   return state;
 }
+
+/** 保镖的户口本：数值、状态、私有记忆、岗位——全在一处 */
+export const guard: NpcDef = {
+  traits: { speed: 96, sightRange: GUARD_SIGHT_TILES * TILE },
+  states: makeGuardStates,
+  decorate: createGuardState,
+  // 出生格就是它的岗位
+  post: (col, row): Cell => ({ col, row }),
+};

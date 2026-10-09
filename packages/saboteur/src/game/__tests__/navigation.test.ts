@@ -12,11 +12,12 @@ import { browserAdapter } from "kiaao/dom";
 import { describe, expect, test } from "vite-plus/test";
 
 import { createGrid, createRandom, setTile, Tile, type Cell } from "../../world";
+import { createStates } from "../npcs";
 import { createBehaviourSystem } from "../systems/behaviour";
 import { createLocomotionSystem } from "../systems/locomotion";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import { createNavigationService, pathIntent } from "../systems/navigation";
-import { createStates, type StateContext } from "../systems/states";
+import type { StateContext } from "../systems/state-types";
 import type { ActorEntity } from "../types";
 import { makeActorState, mountActor } from "./helpers";
 
@@ -191,8 +192,9 @@ describe("状态对象 / 单元行为", () => {
     self: Partial<ActorEntity>;
     delta?: number;
   }) {
-    const states = createStates(createRandom(5));
-    const state = states[options.role ?? "guest"].states[options.mood]!;
+    const role = options.role ?? "guest";
+    const sets = createStates(createRandom(5));
+    const state = sets[role].states[options.mood]!;
 
     const patches: Array<Partial<ActorEntity>> = [];
     const transitions: string[] = [];
@@ -232,6 +234,8 @@ describe("状态对象 / 单元行为", () => {
     const ctx = {
       self,
       cell: { col: 5, row: 5 },
+      // 本角色的默认态：`panic` 消退后据此回家（不能写死 wander）
+      entryMood: sets[role].entry,
       patch: (fn: (e: ActorEntity) => void) => {
         const draft = { ...self } as ActorEntity;
         fn(draft);
@@ -393,7 +397,11 @@ describe("状态对象 / 单元行为", () => {
 describe("行为系统 / 状态机驱动", () => {
   test("初始为闲游", () => {
     const nav = createNavigationService({ grid: openGrid(), random: createRandom(1) });
-    const bhv = createBehaviourSystem({ random: createRandom(1), navigation: nav });
+    const bhv = createBehaviourSystem({
+      random: createRandom(1),
+      navigation: nav,
+      states: createStates(createRandom(1)),
+    });
 
     const { entity } = mountActor({
       enters: [bhv.enter],
@@ -406,7 +414,11 @@ describe("行为系统 / 状态机驱动", () => {
 
   test("死者不被驱动（尸体不入状态机）", () => {
     const nav = createNavigationService({ grid: openGrid(), random: createRandom(1) });
-    const bhv = createBehaviourSystem({ random: createRandom(1), navigation: nav });
+    const bhv = createBehaviourSystem({
+      random: createRandom(1),
+      navigation: nav,
+      states: createStates(createRandom(1)),
+    });
 
     const { entity, frame } = mountActor({
       enters: [bhv.enter],
@@ -423,7 +435,7 @@ describe("行为系统 / 状态机驱动", () => {
     const grid = createGrid(30, 30);
     const random = createRandom(9);
     const nav = createNavigationService({ grid, random });
-    const bhv = createBehaviourSystem({ random, navigation: nav });
+    const bhv = createBehaviourSystem({ random, navigation: nav, states: createStates(random) });
     const loco = createLocomotionSystem(grid);
     loco.setIntent("npc", (e) => pathIntent(e));
 

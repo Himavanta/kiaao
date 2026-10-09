@@ -11,6 +11,7 @@ import { createGame } from "engine";
 import { use } from "kiaao";
 
 import { createRandom, manor, parseLevel } from "../world";
+import { createStates } from "./npcs";
 import { resetGameState } from "./state";
 import { playerEntity } from "./state";
 import { createActorSystem } from "./systems/actor";
@@ -67,8 +68,13 @@ export const entityCount = use(0);
 export const locomotion = createLocomotionSystem(level.grid);
 // navigation 是**服务**（不读 mood、不知道自己被谁调用）
 export const navigation = createNavigationService({ grid: level.grid, random });
-// behaviour 是**状态机驱动**：具体行为在 states.ts 的状态对象里
-export const behaviour = createBehaviourSystem({ random, navigation });
+// behaviour 是**状态机驱动**：具体行为在各 NPC 的户口本里
+// （`npcs/*.ts`），由组装层汇总后注入——它本层不认识任何具体 NPC
+export const behaviour = createBehaviourSystem({
+  random,
+  navigation,
+  states: createStates(random),
+});
 export const perception = createPerceptionSystem({ grid: level.grid });
 // alarm 只报告事实，恐慌切换由 behaviour 执行（注入回调，避免循环依赖）
 export const alarm = createAlarmSystem({ onPanic: behaviour.panic });

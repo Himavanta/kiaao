@@ -9,7 +9,7 @@
 import { StyleMemo } from "engine";
 import { Show, type Context } from "kiaao";
 
-import { TILE, type Cell } from "../../world";
+import { TILE } from "../../world";
 import {
   actor,
   alarm,
@@ -20,11 +20,11 @@ import {
   locomotion,
   perception,
 } from "../instance";
-import { createGuardState } from "../npcs/guard";
+import { actorDefs } from "../npcs";
+import type { NpcDef } from "../npcs/types";
 import { playerEntity, registerActor } from "../state";
 import { ACTOR_SIZE } from "../systems/locomotion";
 import type { ActorEntity, Facing, Role } from "../types";
-import { isNpc } from "../types";
 
 import style from "./actor.module.scss";
 
@@ -48,15 +48,23 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   onMount(() => entityCount(entityCount() + 1));
   onUnmount(() => entityCount(entityCount() - 1));
 
-  // 客人注册导航与行为系统（玩家不入池——它的意图来自输入）
-  // 两类角色都注册 locomotion / perception / interaction：
-  // 交互字段承载 held / dead / poisonLeft——玩家需要（持有与下药），
-  // 客人同样需要（被下药、变尸体）。只有导航与行为是 NPC 专属。
+  // 公共系统：所有角色都注册。
+  // locomotion / perception / interaction 承载位置、视锥、持有与中毒——
+  // 玩家与 NPC 都需要（玩家要持有与下药，客人要被下药、变尸体）。
+  // `alarm.enter` 内部按 role 判定是否入恐慌池（玩家不入）。
   const common = [locomotion.enter, perception.enter, interaction.enter, alarm.enter({ role })];
 
-  // NPC 多一个行为状态机（玩家由输入驱动，不跑状态机）。
-  // 判据是「是否为 NPC」而非「是否为客人」——加 guard 后二者不再等价。
-  const enters = isNpc(role) ? [...common, behaviour.enter] : common;
+  // 本角色的户口本（数值 / 状态 / 私有数据 / 岗位都在里面）
+  const def: NpcDef = actorDefs[role];
+
+  // 能力 → 系统的推导：
+  // - 有状态集 ⇒ 跑状态机（玩家没有，故不入 behaviour 池）
+  // - 有 decorate ⇒ 有私有方法，需要每帧「喊一声」（`actor.update`）
+  const enters = [
+    ...common,
+    ...(def.states ? [behaviour.enter] : []),
+    ...(def.decorate ? [actor.enter] : []),
+  ];
 
   // 数据归组件：state 写全各系统需要的字段。
   // 初值由各系统的 spawn 纯函数产出（D2 方案 B）——「初值怎么算」
@@ -70,21 +78,18 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 若让 `state` 保持字面量类型，`define` 返回的 `EntitySignal<字面量>`
   // 就无法赋给 `EntitySignal<ActorEntity>`（注册表需要它）。
   const base: ActorEntity = {
-    ...locomotion.spawn(speedProps(col, row, role, facing)),
-    ...perception.spawn({ range: ACTOR_TRAITS[role].sightRange }),
+    ...locomotion.spawn(speedProps(col, row, def.traits.speed, facing)),
+    ...perception.spawn({ range: def.traits.sightRange }),
     ...interaction.spawn(),
     ...alarm.spawn(),
-    ...behaviour.spawn({ role, post: postFor(col, row, role) }),
+    ...behaviour.spawn({ role, post: def.post?.(col, row) ?? null }),
     role,
   };
 
-  // ── 实验：只属于保镖的私有数据与方法 ──
-  // 走「交叉类型 + 闭包捕获 state」：不改 ActorEntity（它是所有角色的
-  // 共享类型，加保镖专用字段会让它重新膨胀）。
-  const state = role === "guard" ? createGuardState(base) : base;
-  const entersWithHooks = role === "guard" ? [...enters, actor.enter] : enters;
+  // 升格：户口本可选地挂上本角色私有的字段与方法（如保镖的 `seen`）
+  const state = def.decorate ? def.decorate(base) : base;
 
-  const entity = define(ctx, ...entersWithHooks)(state);
+  const entity = define(ctx, ...enters)(state);
 
   // 全局注册表：玩家供相机跟随，全部角色供视锥调试层遍历。
   // 卸载时反注册，避免调试层指向已销毁的信号。
@@ -155,33 +160,16 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
 }
 
 /**
- * 出生参数：位置、速度、视距。
+ * 出生参数：位置、速度、朝向。
  *
- * **按角色查表**（S1 的全部差别就在这张表）——这正是「参数轴」的落地形态：
- * 同一个动作系统读不同的数，不需要任何新机制（文档 §二）。
+ * **数值来自户口本**（`def.traits.speed`）——不再是视图层的 `ACTOR_TRAITS`
+ * 表。数值属于「一只 NPC 是什么」，与「怎么装配」无关。
  */
-const ACTOR_TRAITS: Record<Role, { speed: number; sightRange?: number }> = {
-  player: { speed: 190 },
-  guest: { speed: 78 },
-  // 保镖：巡逻 / 恐慌——比客人快一点、看得远一点（S1 的参数轴）
-  guard: { speed: 96, sightRange: 9 * TILE },
-};
-
-/**
- * 巡逻岗位（保镖用）：出生格就是它的岗位。
- *
- * 客人返回 null——它们不巡逻。这个字段进实体是必要的：`patrol` 状态的
- * 每帧逻辑要读它，而状态只能从 `self` 拿到数据（文档 §3.3 的边界）。
- */
-function postFor(col: number, row: number, role: Role): Cell | null {
-  return role === "guard" ? { col, row } : null;
-}
-
-function speedProps(col: number, row: number, role: Role, facing: Facing) {
+function speedProps(col: number, row: number, speed: number, facing: Facing) {
   return {
     x: col * TILE + (TILE - ACTOR_SIZE) / 2,
     y: row * TILE + (TILE - ACTOR_SIZE) / 2,
-    speed: ACTOR_TRAITS[role].speed,
+    speed,
     facing,
   };
 }
