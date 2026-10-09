@@ -112,11 +112,20 @@ packages/saboteur/src/
 │   ├── types.ts                # ActorEntity（注册注解类型，见 5.2）
 │   ├── state.ts                # 游戏状态与全局注册表（Phase / 计数 / 视图开关）
 │   ├── instance.ts             # 模块级单例：系统 + 实例 + 重开
+│   ├── npcs/                   # 每只 NPC 的「户口本」（§8.8）
+│   │   ├── types.ts            # 契约：NpcDef（traits / states / decorate / post）
+│   │   ├── player.ts           # 只有数值（不跑状态机，由输入驱动）
+│   │   ├── guest.ts            # 闲游 / 驻足 + 数值
+│   │   ├── guard.ts            # 巡逻 + 数值 + 私有记忆 + 岗位（完整样本）
+│   │   ├── panic.ts            # 恐慌：**唯一被多个 NPC 共享**的状态
+│   │   └── index.ts            # 索引 + `createStates` 聚合（供 injection）
 │   ├── systems/
+│   │   ├── state-types.ts      # 状态契约（ActorState / StateContext / RoleStateSet）
 │   │   ├── input.ts            # 键盘源系统（意图信号 + Tab 回调）
 │   │   ├── locomotion.ts       # 位置积分 + 碰撞 + 朝向写入
 │   │   ├── navigation.ts       # 目标选择 + A* 重算 + 路径推进 + 看门狗
-│   │   ├── behaviour.ts        # NPC 状态机（闲游 / 驻足 / 恐慌）
+│   │   ├── behaviour.ts        # NPC 状态机驱动（状态集由外部**注入**）
+│   │   ├── actor.ts            # 实体方法调用器（每帧喊一声 `onFrame`）
 │   │   ├── perception.ts       # 视线判定（定频 ~10Hz）
 │   │   ├── alarm.ts            # 目击 → 恐慌 → 传播 → 报警
 │   │   ├── interaction.ts      # 拾取 / 下药 / 中毒 / 死亡
@@ -144,6 +153,8 @@ packages/saboteur/src/
 - 初版设想的 `ui/hud.tsx` 取消：HUD 也是 `game/views/` 下的一个视图，单列一层没有意义。
 - `game/systems/` 新增 `rules.ts`（胜负与时限）与 `frame.ts`（帧统计），这是流水线两端的必需品。
 - **`engine/` 整层已删除**（2026-10-02）：改用 `packages/engine`。系统的 `enter` 不再提供数据，改为各自声明 `Enter<Need>` 并导出 `spawn()` 纯函数。
+- **新增 `game/npcs/`**（2026-10-08）：一只 NPC 的知识按单位收拢（数值 / 状态 / 私有数据 / 岗位）。`systems/states.ts` 已删除，状态契约抽到 `systems/state-types.ts`，装配层不再写角色分支。详见异质 NPC 设计文档 §8.8。
+- **新增 `game/systems/actor.ts`**（2026-10-08）：实体方法调用器——只负责「喊一声到你了」，具体做什么由实体自己的 `onFrame` 定义。与 locomotion / perception 同形（池 + `enter` + `update`），零新机制。
 - **`views/__tests__/` 保留**：`paint.test.ts` 测的是纯计算，不受引擎迁移影响。
 
 ---
@@ -1067,15 +1078,16 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 | `SIGHT_HALF_ARC`            | 30°（张角 60°）                       | `game/systems/perception.ts`  | 视锥宽度                                    |
 | `PERCEPTION_INTERVAL`       | 6 帧（~10Hz）                         | `game/systems/perception.ts`  | 感知频率                                    |
 | `ALARM_PER_WITNESS`         | 12                                    | `game/systems/alarm.ts`       | 每次目击的警报增量（满值 100，即约 9 人次） |
-| `PANIC_DURATION`            | 30s（`panic.duration`）               | `game/systems/states.ts`      | 恐慌持续时长（时长归状态对象所有）          |
+| `PANIC_DURATION`            | 30s（`panic.duration`）               | `game/npcs/panic.ts`          | 恐慌持续时长（时长归状态对象所有）          |
 | `POISON_DELAY`              | 4.5s                                  | `game/systems/interaction.ts` | 下药后到毒发的时间                          |
 | `ACTOR_SIZE`                | 20px                                  | `game/systems/locomotion.ts`  | 角色碰撞尺寸                                |
-| 玩家速度                    | 190 px/s                              | `game/views/actor.tsx`        |                                             |
-| 客人速度                    | 78 px/s                               | `game/views/actor.tsx`        |                                             |
+| 玩家速度                    | 190 px/s                              | `game/npcs/player.ts`         | 户口本 `traits.speed`                       |
+| 客人速度                    | 78 px/s                               | `game/npcs/guest.ts`          | 同上                                        |
+| 保镖速度 / 视距             | 96 px/s / 9 格                        | `game/npcs/guard.ts`          | 同上；保镖的数值只在户口本一处              |
 | 潜行系数                    | 0.45                                  | `game/systems/locomotion.ts`  | 潜行时的速度倍率                            |
 | `ARRIVE_RADIUS`             | 4px                                   | `game/systems/navigation.ts`  | 到达路径点的判定半径                        |
 | `STUCK_TIMEOUT`             | 4s                                    | `game/systems/navigation.ts`  | 无推进多久后放弃当前路径                    |
-| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s（`REST_MIN` / `REST_MAX`） | `game/systems/states.ts`      | 到达后的驻足时长（状态对象内部）            |
+| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s（`REST_MIN` / `REST_MAX`） | `game/npcs/guest.ts`          | 到达后的驻足时长（状态对象内部）            |
 | `FLEE_CANDIDATES`           | 12                                    | `game/systems/navigation.ts`  | 逃跑候选点数（取最远的前 N 个再随机选一）   |
 | `MAX_VIEW_W` / `MAX_VIEW_H` | 1280 / 800                            | `game/config.ts`              | 视口上限（超出则启用相机卷轴）              |
 | `POISON_DELAY` 等常量       | —                                     | `game/systems/*.ts`           | 大多为文件内模块常量，改一处即生效          |
