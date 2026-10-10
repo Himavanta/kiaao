@@ -16,7 +16,7 @@
 // 这是参数轴的代价，S3 时已记录。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId } from "engine";
+import type { ActorContext, EntityId } from "engine";
 
 import { TILE, type Cell } from "../../world";
 import type { Random } from "../../world/random";
@@ -96,8 +96,13 @@ export type GuardEntity = ActorEntity & {
   seen: Map<EntityId, number>;
   /** 【保镖私有】见过某人吗 */
   hasSeen: (id: EntityId) => boolean;
-  /** 【保镖私有】每帧钩子：把「此刻可见」并入「曾经见过」 */
-  onFrame: () => void;
+  /**
+   * 【保镖私有】每帧钩子：把「此刻可见」并入「曾经见过」。
+   *
+   * 签名与引擎的 `HasFrameHook` 一致（收 `ActorContext`），但本方法**用不到**
+   * ——它只读自己已有的 `visibleIds`。少参函数可赋给多参签名，故引擎照常调用。
+   */
+  onFrame: (ctx: ActorContext<ActorEntity>) => void;
 };
 
 /**

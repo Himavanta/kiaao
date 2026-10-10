@@ -7,7 +7,7 @@
 // 一局重置走声明式：替换实体目录信号，见规划文档 4.6。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { createGame } from "engine";
+import { createActorSystem, createGame } from "engine";
 import { use } from "kiaao";
 
 import { createRandom, manor } from "../world";
@@ -15,7 +15,6 @@ import { parseLevel } from "./level";
 import { createStates } from "./npcs";
 import { resetGameState } from "./state";
 import { playerEntity } from "./state";
-import { createActorSystem } from "./systems/actor";
 import { createAlarmSystem } from "./systems/alarm";
 import { createBehaviourSystem } from "./systems/behaviour";
 import { createFrameSystem } from "./systems/frame";
