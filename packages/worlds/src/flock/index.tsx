@@ -16,6 +16,7 @@
 // 痕迹（别的鸟不读它、也不该读）。痕迹就是「私有记忆」的可见证据。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { StyleMemo } from "engine";
 import { Each, use, type Context } from "kiaao";
 
 import { WORLD } from "./bird";
@@ -75,6 +76,10 @@ function Bird({ x, y, color }: Spawn, ctx: Context) {
 
   return (
     <>
+      {/*
+        折线用普通 SVG 属性（不是 style）——`points` 是属性，不经过
+        StyleMemo 那一套。它订阅的是 `trailPoints` 派生信号。
+      */}
       <svg class="pointer-events-none absolute inset-0" width={WORLD.w} height={WORLD.h}>
         <polyline
           points={trailPoints}
@@ -84,9 +89,16 @@ function Bird({ x, y, color }: Spawn, ctx: Context) {
           opacity="0.45"
         />
       </svg>
-      <div
-        class="absolute rounded-full"
-        style={{
+      {/*
+        方块的位置用 **StyleMemo**，不是普通 `style={…}` 对象。
+        区别是实质性的：`StyleMemo` 会**逐属性解包信号**，而 `style`
+        对象不会——传信号进去会把函数本身当成字符串写进 CSS
+        （实测：`translate: function(...ar`），位置全部失效、方块堆在原点。
+        静态属性（宽高、margin）写在这里也一样生效。
+      */}
+      <StyleMemo
+        value={{
+          position: "absolute",
           width: "12px",
           height: "12px",
           marginLeft: "-6px",
@@ -94,7 +106,9 @@ function Bird({ x, y, color }: Spawn, ctx: Context) {
           background: color,
           translate,
         }}
-      />
+      >
+        <div />
+      </StyleMemo>
     </>
   );
 }

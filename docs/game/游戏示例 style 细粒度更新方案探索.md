@@ -72,6 +72,28 @@ CSSOM 规范中 `HTMLElement.style` 定义为 `[PutForwards=cssText]`，赋值�
 
 `use(entity, () => styleObject)` 中读取 `entity()` 收集的是实体信号级依赖，实体信号任何字段变化都会触发派生重算。派生重算后返回新对象（引用不等），下游无条件收到通知。
 
+### 2.4 陷阱（实测踩过）：`style` 对象**不解包信号**
+
+这条不是设计，是**实际踩到的坑**（2026-10-08，worlds/flock 首次提交）：
+
+```tsx
+// ❌ 静态属性生效，但 translate 是**函数本身**
+<div style={{ width: "12px", translate: translateSignal }} />
+
+// ✅ StyleMemo 逐属性解包信号
+<StyleMemo value={{ width: "12px", translate: translateSignal }}>
+  <div />
+</StyleMemo>
+```
+
+**表现**：浏览器把信号函数 stringify 成 `translate: function(...ar`（实测读回的 attribute）——**静默失效**，不报错、不告警。
+
+**为什么难发现**：同一屏里可能一部分元素走属性通道（如 SVG 的 `points`）、一部分走样式通道，于是「**线照画、方块全堆在原点**」——看起来像逻辑错了，其实是**样式通道用错了**。
+
+**后果**：15 个方块全部堆在 `(0,0)`（表现为屏幕左上角一小块重叠），而靠 `points` 属性渲染的 15 条折线正常——于是屏幕上「只有线」。
+
+**与 §2.1 的关系**：`setProp` 的 style 分支做的是 `Object.assign(el.style, value)`——它只搬运键值，**没有解包内嵌信号**那一步。解包是指令（§3.5）自己做的。两者名字里都有 "style"，但能力不同。
+
 ## 三、方案探索历程
 
 ### 3.1 方案 A：绑定层解包内嵌信号（core 通用机制）
@@ -188,7 +210,7 @@ entity 每帧更新（整对象提交）
 
 1. **memo 语义的实现落点**：derivation 重算后与缓存值比较，相同不通知下游——需要确认 `DerivationState` 中缓存写入与通知的时序。
 2. **副作用派生的下游**：嵌套在副作用派生（返回 undefined）上的下游永远收不到通知——在"副作用派生不产生值"的语义下属于错误用法，无需特别处理，但值得在文档中说明。
-3. **StyleMemo 与 style 绑定并存的责任边界**：是否需要运行时检测（指令写入的键与 style 绑定冲突时警告）。
+3. **StyleMemo 与 style 绑定并存的责任边界**：是否需要运行时检测（指令写入的键与 style 绑定冲突时警告）。**已有一个实测踩坑（见 §2.4）**——`style` 对象不解包信号，是这类错误的典型表现。
 4. **PositionDirect 示例**：作为专用指令的对照实现，验证指令形态的复用性。
 
 ## 六、结论
