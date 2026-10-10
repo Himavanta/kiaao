@@ -250,6 +250,7 @@ flush: () => {
 ## 附二、与其它文档的关系
 
 - `docs/game/Kiaao ECS 框架设计文档.md`——**本文修正它两处**：§6「无越界不写」（§3.2 已失效）、§5.4「嵌套必须整体替换」（§3.3 被掩盖）
+- `docs/game/Kiaao 游戏引擎：范式定位与 Actor 系统.md`——**范式层**：讲清本引擎「不是教科书 ECS」的准确定位，以及两种范式如何分工（`createPool` / `createActorSystem`）。本文提供其 §二 判据的实测依据
 - `packages/saboteur/docs/saboteur 异质 NPC 设计：OOP 系统、实体身份与跨实体交互.md`——施加压力的场景。那里的机制设想建立在本卷的能力与边界上
 - `docs/game/游戏示例 style 细粒度更新方案探索.md`——§5.2 的方向与之同源
 - `packages/saboteur/docs/saboteur 引擎迁移：切换到 engine 包.md`——活对象模型（§2.3）的来源；§3.2 记录的「无越界不写失效」正是那次迁移的代价

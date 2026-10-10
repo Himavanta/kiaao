@@ -4,14 +4,22 @@ kiaao 游戏引擎：帧循环 + 实体 + 系统。
 
 提供「游戏循环」这一层的机制，**不含具体玩法**——移动、边界、碰撞等系统由各项目自行实现。
 
-## 三个层次
+## 五个入口
 
 | 文件            | 内容                                                                | 面向     |
 | :-------------- | :------------------------------------------------------------------ | :------- |
 | `game.ts`       | `createGame`、`define`、`FrameManager`、`Enter` / `EntityId` 等类型 | 框架核心 |
-| `pool.ts`       | `createPool`——实体池与登记函数封为一体                              | 系统作者 |
+| `pool.ts`       | `createPool`——实体池与登记函数封为一体（**数据归系统**）            | 系统作者 |
+| `actor.ts`      | `createActorSystem`——每帧调用实体自己的方法（**数据归实体**）       | 系统作者 |
 | `events.ts`     | `createEvent`——事件队列与发射/消费封为一体                          | 系统作者 |
 | `directives.ts` | `StyleMemo`——style 属性级细粒度更新                                 | 表现层   |
+
+**两种范式各有一个入口，对称得刚好**：`createPool` 与 `createActorSystem` 都是「池 + `enter` + `update`」，差别只有一处：
+
+- `createPool` 的 `update` **知道**要对实体做什么（`x += vx * dt`）
+- `createActorSystem` 的 `update` **不知道**，它只喊一声「到你了」，做什么由实体的方法定义
+
+何时用哪个、边界在哪，见 `docs/game/Kiaao 游戏引擎：范式定位与 Actor 系统.md`。
 
 ## 核心概念
 
