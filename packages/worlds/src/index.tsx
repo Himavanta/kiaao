@@ -23,6 +23,12 @@ const demos = [
     desc: "对照实验：状态存在组件闭包、池里放带方法的对象。点击方块制造尸体，视野内的 NPC 会恐慌逃跑并传染给更远的人。",
     tags: ["actor 模型", "闭包状态", "恐慌传播", "实验"],
   },
+  {
+    path: "/flock",
+    title: "两种范式并排（flock）",
+    desc: "引擎两个入口的对照：移动与边界反弹是 createPool（一份代码服务所有实体）；想往哪飞与自己的痕迹是 createActorSystem（只有这只个体有）。痕迹只属于它自己——私有记忆的可见证据。",
+    tags: ["createPool", "createActorSystem", "范式对照"],
+  },
 ];
 
 export default function Worlds() {
