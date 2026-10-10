@@ -28,10 +28,8 @@ export const panic: ActorState = {
   enter: (ctx) => {
     // 清路线（服务负责 `path`/`goal`/`followTime`），`idleLeft` 是本
     // 状态自己的计时，自己清
-    ctx.services.clearRoute(ctx.frame, ctx.id);
-    ctx.patch((e) => {
-      e.idleLeft = 0;
-    });
+    ctx.services.clearRoute(ctx.self);
+    ctx.self.idleLeft = 0;
   },
   update: (ctx, delta) => {
     const { self, services } = ctx;
@@ -39,29 +37,25 @@ export const panic: ActorState = {
 
     if (left <= 0) {
       // 情绪结束：清掉逃离参照点，但 witnessed 保留
-      ctx.patch((e) => {
-        e.fleeFrom = null;
-      });
+      self.fleeFrom = null;
       // 回到**本角色的默认状态**——不能写死 "wander"：
       // 保镖没有 wander，`transition` 会因查不到状态而失效。
       // 从上下文取（而非读「各角色的状态集」表），避免共享状态反向依赖它。
       ctx.transition(ctx.entryMood);
       return;
     }
-    ctx.patch((e) => {
-      e.moodLeft = left;
-    });
+    self.moodLeft = left;
 
     // 路径走空且无目标：挑下一个远离威胁的落点。
     // 恐慌期间不休息——逃到一处立刻奔向下一处。
     if (!services.hasArrived(self)) {
-      services.moveTowardGoal(ctx.frame, ctx.id, delta);
+      services.moveTowardGoal(self, delta);
       return;
     }
 
     if (!self.fleeFrom) return;
     const goal = services.pickFleeGoal(ctx.cell, self.fleeFrom);
     if (!goal) return;
-    services.setGoal(ctx.frame, ctx.id, goal);
+    services.setGoal(self, goal);
   },
 };

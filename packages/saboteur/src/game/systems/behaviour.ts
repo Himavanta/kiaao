@@ -2,12 +2,13 @@
 // 行为系统：驱动状态对象
 //
 // 本模块只做三件事，不含任何具体行为：
-//   1. 每帧构造状态上下文（实体快照 + 服务 + 写回通道）
+//   1. 每帧构造状态上下文（活对象 + 当前格 + 服务 + 切换通道）
 //   2. 把控制权交给当前状态对象
 //   3. 执行状态请求的切换（写 mood、掷定时长、跑目标状态的 enter）
 //
-// 具体行为（闲游 / 驻足 / 恐慌）全在 `states.ts` 的三个对象里。
-// 这样「恐慌」不再散落在 alarm / navigation / behaviour 三处。
+// 具体行为（闲游 / 驻足 / 巡逻 / 恐慌）全在各 NPC 的户口本里
+// （`npcs/*.ts` 的状态对象）。这样「恐慌」不再散落在
+// alarm / navigation / behaviour 三处。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { createPool, type EntityId, type Enter, type FrameManager } from "engine";
@@ -129,37 +130,23 @@ export function createBehaviourSystem(options: {
   /**
    * 构造状态上下文。
    *
-   * 每帧构造一次：`self` 是活对象引用（状态读它即读当前值），
-   * `patch` 是写回通道（改的就是同一对象）。
-   *
-   * 与旧引擎的区别：旧版 `self` 是快照，`patch` 后不回读；现在两者是同一
-   * 对象。已核对三个状态（wander / linger / panic）均无「写完某字段又回读」
-   * 的用法，故行为一致。
+   * 每帧构造一次。`self` 是活对象引用，状态**直接读写它**——
+   * 不再有 `patch` 写回通道（那是写时拷贝时代的遗留，见 `state-types.ts`）。
    *
    * `transition` 在一次 `update` 内被多次调用时，最后一次生效
    * （因为它们按顺序执行，后一次覆盖前一次写的 `mood` / `moodLeft`）。
    */
-  const makeContext = (
-    frame: FrameManager<ActorEntity>,
-    id: EntityId,
-    self: Readonly<ActorEntity>,
-  ): StateContext => {
+  const makeContext = (self: ActorEntity): StateContext => {
     const cell = cellAt(self.x + ACTOR_SIZE / 2, self.y + ACTOR_SIZE / 2) ?? {
       col: 0,
       row: 0,
     };
 
     const ctx: StateContext = {
-      frame,
-      id,
       self,
       cell,
       // 本角色的默认态——`panic` 消退后据此回家（不能写死 wander）
       entryMood: entryOf(self.role),
-      patch: (fn) => {
-        const target = frame(id);
-        if (target) fn(target);
-      },
       transition: (next) => {
         // 切换：写 mood、掷定新时长、跑目标状态的 enter。
         // **按本实体的角色查表**——不同 NPC 拥有的状态不同。
@@ -172,13 +159,11 @@ export function createBehaviourSystem(options: {
         // 代价：**共享状态里不能写死角色专属的目标**。`panic` 的归宿
         // 用 `entryMoodOf(role)` 而非 `transition("wander")` 就是这个原因。
         // 那类 bug 不报错、只表现为卡死，靠测试锁（见 wander.test.ts）。
-        const target = frame(id);
-        if (!target) return;
-        const nextState = stateOf(target.role, next);
+        const nextState = stateOf(self.role, next);
         if (!nextState) return;
-        target.mood = next;
-        target.moodLeft = rollDuration(nextState);
-        nextState.enter?.({ ...ctx, self: target as Readonly<ActorEntity> });
+        self.mood = next;
+        self.moodLeft = rollDuration(nextState);
+        nextState.enter?.(ctx);
       },
       services: navigation,
     };
@@ -194,9 +179,8 @@ export function createBehaviourSystem(options: {
     // 死者不再有行为：尸体不入状态机
     if (self.dead) return;
 
-    const ctx = makeContext(frame, id, self);
     const state = stateOf(self.role, self.mood);
-    state?.update(ctx, delta);
+    state?.update(makeContext(self), delta);
   };
 
   const update = (frame: FrameManager<ActorEntity>, delta: number) => {
@@ -214,15 +198,12 @@ export function createBehaviourSystem(options: {
     const self = frame(id);
     if (!self || self.dead || self.mood === "panic") return;
 
-    // `PANIC_DURATION` 已移入 `states.ts` 的 `panic.duration`——
-    // 时长归状态本身所有，外部不再需要知道它。
-
     // **不写 `witnessed`**：那是「记忆」，属于 alarm 的语义（它在
     // `report` 里写）。本方法只被 alarm 调用，两边都写就是重复。
     self.fleeFrom = threat;
 
     // 走正规切换路径：写 mood、掷定时长、跑 panic.enter()
-    makeContext(frame, id, self).transition("panic");
+    makeContext(self).transition("panic");
   };
 
   return { enter, spawn, update, panic };

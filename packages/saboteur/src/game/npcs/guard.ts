@@ -58,25 +58,21 @@ function makePatrol(random: Random): ActorState {
       if (!self.post) return;
 
       if (!services.hasArrived(self)) {
-        services.moveTowardGoal(ctx.frame, ctx.id, delta);
+        services.moveTowardGoal(self, delta);
         return;
       }
 
       // 已到位：稍作停留再挑下一个岗内点。巡逻不歇太久——「守门」是它的语义
       const rest = self.idleLeft - delta;
       if (rest > 0) {
-        ctx.patch((e) => {
-          e.idleLeft = rest;
-        });
+        self.idleLeft = rest;
         return;
       }
 
       const goal = services.pickNearbyGoal(self.post, ctx.cell, PATROL_RADIUS);
       if (!goal) return;
-      services.setGoal(ctx.frame, ctx.id, goal);
-      ctx.patch((e) => {
-        e.idleLeft = PATROL_REST_MIN + random() * (PATROL_REST_MAX - PATROL_REST_MIN);
-      });
+      services.setGoal(self, goal);
+      self.idleLeft = PATROL_REST_MIN + random() * (PATROL_REST_MAX - PATROL_REST_MIN);
     },
   };
 }

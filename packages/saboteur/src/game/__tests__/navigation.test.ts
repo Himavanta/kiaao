@@ -86,10 +86,10 @@ describe("导航服务 / 走一帧", () => {
   }
 
   test("无路径时规划：产生路径且终点即目标", () => {
-    const { nav, entity, frame, id } = setup();
+    const { nav, entity, state } = setup();
     entity({ goal: { col: 15, row: 15 } });
 
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
 
     expect(entity().path.length).toBeGreaterThan(0);
     expect(entity().path[entity().path.length - 1]).toEqual({ col: 15, row: 15 });
@@ -110,17 +110,17 @@ describe("导航服务 / 走一帧", () => {
         moodLeft: 100,
       }),
     });
-    const { entity, frame } = actor;
-    nav.moveTowardGoal(frame, actor.id, 1 / 60);
+    const { entity } = actor;
+    nav.moveTowardGoal(entity(), 1 / 60);
 
     expect(entity().goal).toBeNull();
     expect(entity().path).toEqual([]);
   });
 
   test("到达路径点即弹出", () => {
-    const { nav, entity, frame, id } = setup();
+    const { nav, entity, state } = setup();
     entity({ goal: { col: 15, row: 15 } });
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
 
     const before = entity().path.length;
     expect(before).toBeGreaterThan(0);
@@ -132,16 +132,16 @@ describe("导航服务 / 走一帧", () => {
       y: first.row * 32 + (32 - ACTOR_SIZE) / 2,
     });
 
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
 
     expect(entity().path.length).toBe(before - 1);
   });
 
   test("走完最后一点即清空目标（状态据此得知「到了」）", () => {
-    const { nav, entity, frame, id } = setup();
+    const { nav, entity, state } = setup();
     // 目标就是相邻格：路径只有一步
     entity({ goal: { col: 6, row: 5 } });
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
 
     const last = entity().path[entity().path.length - 1];
     entity({
@@ -149,21 +149,21 @@ describe("导航服务 / 走一帧", () => {
       y: last.row * 32 + (32 - ACTOR_SIZE) / 2,
     });
 
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
 
     expect(entity().path).toEqual([]);
     expect(entity().goal).toBeNull();
   });
 
   test("看门狗：长时间无推进则放弃路径", () => {
-    const { nav, entity, frame, id } = setup();
+    const { nav, entity, state } = setup();
     entity({ goal: { col: 15, row: 15 } });
-    nav.moveTowardGoal(frame, id, 1 / 60);
+    nav.moveTowardGoal(state, 1 / 60);
     expect(entity().path.length).toBeGreaterThan(0);
 
     // 不动，推进 5 秒
     for (let i = 0; i < 300; i += 1) {
-      nav.moveTowardGoal(frame, id, 1 / 60);
+      nav.moveTowardGoal(state, 1 / 60);
     }
 
     expect(entity().path).toEqual([]);
@@ -171,10 +171,10 @@ describe("导航服务 / 走一帧", () => {
   });
 
   test("未知死者的位置不推进（x/y 未写出的瞬间）", () => {
-    const { nav, entity, frame, id } = setup();
+    const { nav, entity, state } = setup();
     entity({ x: Number.NaN, goal: { col: 15, row: 15 } });
 
-    expect(() => nav.moveTowardGoal(frame, id, 1 / 60)).not.toThrow();
+    expect(() => nav.moveTowardGoal(state, 1 / 60)).not.toThrow();
     expect(entity().path).toEqual([]);
   });
 });
@@ -196,10 +196,9 @@ describe("状态对象 / 单元行为", () => {
     const sets = createStates(createRandom(5));
     const state = sets[role].states[options.mood]!;
 
-    const patches: Array<Partial<ActorEntity>> = [];
     const transitions: string[] = [];
 
-    const self = {
+    const base = {
       x: 5 * 32,
       y: 5 * 32,
       path: [],
@@ -213,10 +212,23 @@ describe("状态对象 / 单元行为", () => {
       witnessed: false,
       role: "guest",
       ...options.self,
-    } as unknown as Readonly<ActorEntity>;
+    } as unknown as ActorEntity;
 
-    /** 记录每次 patch 实际改动的键（对比改动前后） */
+    /**
+     * 记录状态**真正写了哪些键**。
+     *
+     * 旧版靠 `patch` 拿一份 draft 再逐键对比；现在状态直接写 `self`，
+     * 所以用一个代理把赋值拦下来——更直接，也和真实写入路径一致。
+     * （这两个数组本身就是行为：状态的职责是「改自己的字段」，
+     * 断言「它改了什么」比断言「它调了什么」更贴近契约。）
+     */
     const patchKeys = new Set<string>();
+    const self = new Proxy(base, {
+      set(target, key, value) {
+        patchKeys.add(String(key));
+        return Reflect.set(target, key, value);
+      },
+    });
 
     /**
      * 记录状态请求的服务调用。
@@ -236,14 +248,6 @@ describe("状态对象 / 单元行为", () => {
       cell: { col: 5, row: 5 },
       // 本角色的默认态：`panic` 消退后据此回家（不能写死 wander）
       entryMood: sets[role].entry,
-      patch: (fn: (e: ActorEntity) => void) => {
-        const draft = { ...self } as ActorEntity;
-        fn(draft);
-        patches.push(draft);
-        for (const k of Object.keys(draft)) {
-          if (draft[k as keyof ActorEntity] !== self[k as keyof ActorEntity]) patchKeys.add(k);
-        }
-      },
       transition: (next: string) => {
         transitions.push(next);
       },
@@ -254,7 +258,7 @@ describe("状态对象 / 单元行为", () => {
         pickRandomGoal: () => ({ col: 9, row: 9 }),
         pickNearbyGoal: () => ({ col: 8, row: 8 }),
         pickFleeGoal: () => ({ col: 18, row: 18 }),
-        setGoal: (_f: unknown, _id: unknown, goal: unknown) => {
+        setGoal: (_e: unknown, goal: unknown) => {
           calls.setGoal.push(goal);
         },
         clearRoute: () => {
@@ -267,13 +271,12 @@ describe("状态对象 / 单元行为", () => {
 
     state.update(ctx, options.delta ?? 1 / 60);
 
-    // merged 只含被 patch 真正写过的键——否则「没写」与「写成 null」
+    // merged 只含被真正写过的键——否则「没写」与「写成 null」
     // 无法区分，断言会失去意义
-    const last = patches[patches.length - 1] ?? ({} as Partial<ActorEntity>);
     const merged: Record<string, unknown> = {};
-    for (const k of patchKeys) merged[k] = (last as Record<string, unknown>)[k];
+    for (const k of patchKeys) merged[k] = (base as Record<string, unknown>)[k];
 
-    return { patches, merged, transitions, patchKeys, calls };
+    return { merged, transitions, patchKeys, calls };
   }
 
   test("闲游：未到达时推进移动，不切状态", () => {
@@ -367,18 +370,12 @@ describe("状态对象 / 单元行为", () => {
 
   test("恐慌：enter 请服务清路线（自己只清 idleLeft）", () => {
     const states = createStates(createRandom(5));
-    let cleared: Partial<ActorEntity> = {};
     let clearRouteCalls = 0;
     const self = { path: [{ col: 1, row: 1 }], goal: { col: 2, row: 2 }, idleLeft: 5 } as any;
 
     states.guest.states.panic!.enter?.({
       self,
       cell: { col: 5, row: 5 },
-      patch: (fn: (e: ActorEntity) => void) => {
-        const draft = { ...self };
-        fn(draft);
-        cleared = { ...cleared, ...draft };
-      },
       transition: () => {},
       services: {
         clearRoute: () => {
@@ -389,8 +386,8 @@ describe("状态对象 / 单元行为", () => {
 
     // 路线交给服务清（`path`/`goal`/`followTime` 归 navigation 写）
     expect(clearRouteCalls).toBe(1);
-    // `idleLeft` 是本状态自己的计时，自己清
-    expect(cleared.idleLeft).toBe(0);
+    // `idleLeft` 是本状态自己的计时，自己清（现在直接写 `self`）
+    expect(self.idleLeft).toBe(0);
   });
 });
 

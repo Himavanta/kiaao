@@ -38,22 +38,18 @@ function makeWander(random: Random): ActorState {
         return;
       }
       if (left !== self.moodLeft) {
-        ctx.patch((e) => {
-          e.moodLeft = left;
-        });
+        self.moodLeft = left;
       }
 
       if (!arrived) {
-        services.moveTowardGoal(ctx.frame, ctx.id, delta);
+        services.moveTowardGoal(self, delta);
         return;
       }
 
       // 已到达：小憩计时，到点后挑下一个目的地
       const rest = self.idleLeft - delta;
       if (rest > 0) {
-        ctx.patch((e) => {
-          e.idleLeft = rest;
-        });
+        self.idleLeft = rest;
         return;
       }
 
@@ -61,10 +57,8 @@ function makeWander(random: Random): ActorState {
       if (!goal) return;
       // 目的地交给服务写（`goal` + `followTime` 必须成对重置），
       // 本状态只负责「休息多久」这个属于它自己的计时
-      services.setGoal(ctx.frame, ctx.id, goal);
-      ctx.patch((e) => {
-        e.idleLeft = REST_MIN + random() * (REST_MAX - REST_MIN);
-      });
+      services.setGoal(self, goal);
+      self.idleLeft = REST_MIN + random() * (REST_MAX - REST_MIN);
     },
   };
 }
@@ -74,14 +68,13 @@ const linger: ActorState = {
   name: "linger",
   duration: { min: 2, max: 6 },
   update: (ctx, delta) => {
-    const left = ctx.self.moodLeft - delta;
+    const { self } = ctx;
+    const left = self.moodLeft - delta;
     if (left <= 0) {
       ctx.transition("wander");
       return;
     }
-    ctx.patch((e) => {
-      e.moodLeft = left;
-    });
+    self.moodLeft = left;
   },
 };
 

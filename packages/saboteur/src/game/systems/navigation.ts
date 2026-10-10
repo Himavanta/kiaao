@@ -3,7 +3,7 @@
 //
 // 这个模块**不知道状态机存在**——它只提供两个动作：给一个目标格，
 // 它算出路径；给一条路径，它推进一帧。谁在什么时候调用它，由状态
-// （`states.ts`）决定。
+// （`npcs/*.ts`）决定。
 //
 // 上一版这里读 `entity.mood` 来决定「挑随机目标还是逃跑目标」——
 // 那是把状态的决策混进了服务里。现在分派只发生在一处（状态对象内），
@@ -12,8 +12,6 @@
 // **看门狗**：被墙挡住或挤在角落时，NPC 可能永远走不到下一个路径点，
 // 于是路径永不弹出、NPC 卡死。超过阈值无推进即放弃当前路径。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-import type { EntityId, FrameManager } from "engine";
 
 import {
   cellAt,
@@ -59,8 +57,11 @@ export type NavigationService = {
    *
    * 到达时清掉 `goal` 并置零 `followTime`——状态通过 `hasArrived`
    * 得知「到了」。
+   *
+   * **收实体而非 `(frame, id)`**：调用方手里本来就有活对象（`ctx.self`），
+   * 再让它自己查一次是多余的一跳（且迫使它多持有 `frame` / `id`）。
    */
-  moveTowardGoal: (frame: FrameManager<ActorEntity>, id: EntityId, delta: number) => void;
+  moveTowardGoal: (entity: ActorEntity, delta: number) => void;
 
   // ── 路线写入（`path` / `goal` / `followTime` 的**唯一写者**是本服务）──
   //
@@ -73,10 +74,10 @@ export type NavigationService = {
    * 状态选了目标后调它——把「写 `goal` 与重置 `followTime` 必须成对」
    * 这条约束封在一处（分开写会漏掉其中一个）。
    */
-  setGoal: (frame: FrameManager<ActorEntity>, id: EntityId, goal: Cell) => void;
+  setGoal: (entity: ActorEntity, goal: Cell) => void;
 
   /** 放弃当前路线（清 `path` / `goal` / `followTime`） */
-  clearRoute: (frame: FrameManager<ActorEntity>, id: EntityId) => void;
+  clearRoute: (entity: ActorEntity) => void;
 
   /** 是否已到达（无路径且无目标）——`arrived` 的语义属本服务，不属状态 */
   hasArrived: (entity: Readonly<ActorEntity>) => boolean;
@@ -128,11 +129,7 @@ export function createNavigationService(options: {
   };
 
   /** 为当前 `goal` 规划路径；不可达时清空目标，留待下帧重挑 */
-  const plan = (
-    frame: FrameManager<ActorEntity>,
-    id: EntityId,
-    entity: Readonly<ActorEntity>,
-  ): void => {
+  const plan = (entity: ActorEntity): void => {
     const goal = entity.goal;
     if (!goal) return;
 
@@ -146,11 +143,9 @@ export function createNavigationService(options: {
     // 注意不能写 `path ? ...`：空数组是 truthy，会把这种情况当成成功。
     const usable = path !== null && path.length > 0;
 
-    const target = frame(id);
-    if (!target) return;
-    target.path = usable ? [...path] : [];
-    target.goal = usable ? goal : null;
-    target.followTime = 0;
+    entity.path = usable ? [...path] : [];
+    entity.goal = usable ? goal : null;
+    entity.followTime = 0;
   };
 
   /**
@@ -158,12 +153,7 @@ export function createNavigationService(options: {
    *
    * 计时语义是「距上次推进」：被挡住或挤住时无进展，累计到阈值即放弃。
    */
-  const advance = (
-    frame: FrameManager<ActorEntity>,
-    id: EntityId,
-    entity: Readonly<ActorEntity>,
-    delta: number,
-  ): void => {
+  const advance = (entity: ActorEntity, delta: number): void => {
     const [next] = entity.path;
     if (!next) return;
 
@@ -174,56 +164,45 @@ export function createNavigationService(options: {
 
     const stuckTime = entity.followTime + delta;
     if (!arrived && stuckTime > STUCK_TIMEOUT) {
-      const target = frame(id);
-      if (!target) return;
-      target.path = [];
-      target.goal = null;
-      target.followTime = 0;
+      entity.path = [];
+      entity.goal = null;
+      entity.followTime = 0;
       return;
     }
 
-    const target = frame(id);
-    if (!target) return;
     if (!arrived) {
-      target.followTime = stuckTime;
+      entity.followTime = stuckTime;
       return;
     }
     // 到达：弹出首点。走完最后一点时清掉目标——状态据此得知「到了」
-    target.path = target.path.slice(1);
-    target.followTime = 0;
-    if (target.path.length === 0) target.goal = null;
+    entity.path = entity.path.slice(1);
+    entity.followTime = 0;
+    if (entity.path.length === 0) entity.goal = null;
   };
 
-  const moveTowardGoal = (frame: FrameManager<ActorEntity>, id: EntityId, delta: number): void => {
-    const entity = frame(id);
-    if (!entity) return;
-
+  const moveTowardGoal = (entity: ActorEntity, delta: number): void => {
     // 无有效位置时不推进（x/y 未写出的瞬间）
     if (!Number.isFinite(entity.x) || !Number.isFinite(entity.y)) return;
 
     if (entity.path.length === 0) {
-      plan(frame, id, entity);
+      plan(entity);
       return;
     }
 
-    advance(frame, id, entity, delta);
+    advance(entity, delta);
   };
 
   /** 设定目的地：`goal` 与 `followTime` 必须成对重置，故封在一起 */
-  const setGoal = (frame: FrameManager<ActorEntity>, id: EntityId, goal: Cell): void => {
-    const target = frame(id);
-    if (!target) return;
-    target.goal = goal;
-    target.followTime = 0;
+  const setGoal = (entity: ActorEntity, goal: Cell): void => {
+    entity.goal = goal;
+    entity.followTime = 0;
   };
 
   /** 放弃当前路线（恐慌进入时清、死亡时清——两处语义相同） */
-  const clearRoute = (frame: FrameManager<ActorEntity>, id: EntityId): void => {
-    const target = frame(id);
-    if (!target) return;
-    target.path = [];
-    target.goal = null;
-    target.followTime = 0;
+  const clearRoute = (entity: ActorEntity): void => {
+    entity.path = [];
+    entity.goal = null;
+    entity.followTime = 0;
   };
 
   /** 已到达：无待走路径且无目标。状态据此挑下一个目的地 */

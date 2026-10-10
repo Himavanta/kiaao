@@ -9,8 +9,6 @@
 // （`npcs/` 目录），共用的状态（`panic`）由状态表组合。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import type { EntityId, FrameManager } from "engine";
-
 import type { Cell } from "../../world";
 import type { ActorEntity, Mood } from "../types";
 import type { NavigationService } from "./navigation";
@@ -26,19 +24,21 @@ export type ActorServices = NavigationService;
 
 /** 当前帧的运行时上下文，由状态机每帧构造一次 */
 export type StateContext = {
-  readonly frame: FrameManager<ActorEntity>;
-  readonly id: EntityId;
   /**
-   * 实体数据的**活对象引用**（不是快照）。
+   * 实体数据的**活对象**（不是快照）。
    *
-   * 与旧引擎的区别：旧版 `self` 是写时拷贝的快照，`patch` 后不回读；
-   * 现在 `self` 与 `patch` 作用于同一对象，写入立即可见。
+   * 可直接读写：它与帧末提交给渲染信号的是同一个对象。
    *
-   * **约定不变**：状态若需在同一个 `update` 里用到「旧值」，应就近存进
-   * 局部变量（`const left = self.moodLeft - delta` 就是这种写法），
-   * 而不是写完再回读。
+   * **曾经是 `Readonly` + `patch` 写回通道**——那是旧引擎（写时拷贝）的
+   * 遗留：那时 `self` 是快照，改它不生效，必须走 `patch`。引擎改成活对象
+   * 后两者已是同一个引用，「读用 self、写用 patch」只剩语法负担。
+   * 删掉后，读与写是同一套语法。
+   *
+   * **约定不变**：若需在同一个 `update` 里用到「旧值」，应就近存进局部
+   * 变量（`const left = self.moodLeft - delta` 就是这种写法），而不是写
+   * 完再回读。
    */
-  readonly self: Readonly<ActorEntity>;
+  self: ActorEntity;
   /** 当前所在格 */
   readonly cell: Cell;
   /**
@@ -50,11 +50,9 @@ export type StateContext = {
    * 从上下文取，避免共享状态反过来依赖「各角色的状态集」这张表。
    */
   readonly entryMood: Mood;
-  /** 写回实体 */
-  patch: (fn: (e: ActorEntity) => void) => void;
   /** 切换到另一个状态（写 mood、掷定新时长、执行目标状态的 enter） */
   transition: (next: Mood) => void;
-  /** 服务：寻路与移动（由 navigation 提供） */
+  /** 服务：目标选择与寻路推进（由 navigation 提供） */
   services: ActorServices;
 };
 
