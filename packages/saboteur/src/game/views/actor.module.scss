@@ -41,31 +41,38 @@
   opacity: 0.85;
 }
 
-// 中毒标记：头顶的小圆点。
-.poisonMark {
+// ── 状态标记 ──────────────────────────────────────────
+//
+// 位置：**分别占左上 / 右上两个角**，压在身体边缘外一点。
+//
+// 原先两个点与朝向箭头都挤在「头顶正中」（都是 `top: -5px; left: 50%`），
+// 三者叠在一起——实玩反馈「红点和箭头的位置有问题」。箭头现在是绕身体
+// 旋转的（见下），若点仍留在正中，四个朝向里总有一个会与它撞上。
+// 分到两个上角后：与箭头**永不相撞**，中毒与恐慌也各占一处、各一色。
+%statusDot {
   position: absolute;
-  top: -5px;
-  left: 50%;
+  top: -4px;
   width: 5px;
   height: 5px;
-  background: #7ddc8a;
   border-radius: 50%;
-  box-shadow: 0 0 4px #7ddc8a;
-  transform: translateX(-50%);
 }
 
-// 恐慌标记：头顶的橙红感叹点。与中毒标记同位置、不同色——
-// 两者可能同时存在（中毒者也可能目击过别人）。
+// 中毒：左上角，绿色
+.poisonMark {
+  @extend %statusDot;
+
+  left: -4px;
+  background: #7ddc8a;
+  box-shadow: 0 0 4px #7ddc8a;
+}
+
+// 恐慌：右上角，橙红。与中毒可以同时存在（中毒者也可能目击过别人）
 .panicMark {
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  width: 5px;
-  height: 5px;
+  @extend %statusDot;
+
+  right: -4px;
   background: #e0653a;
-  border-radius: 50%;
   box-shadow: 0 0 4px #e0653a;
-  transform: translateX(-50%) translateX(6px);
 }
 
 // ── 朝向指示 ──────────────────────────────────────────
@@ -74,22 +81,31 @@
 // `scale: -1 1`（朝西镜像）在屏幕上**完全看不出来**——镜面对称形状等于
 // 没变。实玩反馈「每个单位都不显示朝向」，根因就在这里。
 //
-// 改为一个真实的方位箭头：贴在身体**上前方**，转到朝向角度。
-// 箭头的形状本身不对称（三角），因此四个方向都能一眼分辨。
+// 做法分两层：
+// - `.facing` 是与身体**同尺寸**的旋转层（`inset: 0`）。旋转轴因此是
+//   身体中心，箭头会**绕到朝向那一侧**——朝东时贴在右缘、朝南时贴在下缘，
+//   而不是停在头顶原地打转。
+// - `.facingArrow` 画在该层**上缘**（正北 = 0°），`translateX(-50%)` 居中。
+//   三角形顶点朝上，随层旋转指向四方。
 //
-// `transform` 由 StyleMemo **整体写出**（`translateX(-50%) rotate(Ndeg)`），
-// 不拆成「CSS 里的 transform + 独立 rotate 属性」——那两者的复合顺序
-// 容易反直觉（独立属性先于 transform 应用）。
+// 旋转值由 StyleMemo 写在 `.facing` 上，**只写 `rotate`**；居中位移留在
+// `.facingArrow` 自己的 `transform` 里。两者在不同元素上，不会有
+// 「独立属性 vs transform」的复合顺序问题。
 .facing {
+  position: absolute;
+  inset: 0;
+}
+
+.facingArrow {
   position: absolute;
   top: -7px;
   left: 50%;
   width: 0;
   height: 0;
-  // 向上的三角：底边在下、顶点在上
+  // 向上的三角：底边在下、顶点在上（默认朝北，即 rotate 0deg）
   border-right: 4px solid transparent;
   border-bottom: 5px solid #fff;
   border-left: 4px solid transparent;
-  // 只用 filter 描边；transform 由 StyleMemo 整体写（见下），此处不碰
-  filter: drop-shadow(0 0 2px rgb(0 0 0 / 70%));
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 80%));
+  transform: translateX(-50%);
 }

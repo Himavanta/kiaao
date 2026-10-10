@@ -7,6 +7,9 @@
 // 只有端到端能发现。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
+
 import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
@@ -264,6 +267,11 @@ describe("M2 端到端 / 渲染", () => {
       );
     expect(markers().length).toBe(listActors().length);
 
+    // 旋转层与箭头是**两个不同元素**：旋转层负责转，箭头负责居中
+    const arrow = document.querySelector("#app span[class*='facing'] span") as HTMLElement;
+    expect(arrow).not.toBeNull();
+    expect(arrow.className).not.toBe((arrow.parentElement as HTMLElement).className);
+
     // 尸体不带朝向箭头：它已被 rotate 90deg 放倒，箭头会落在错的位置
     const guest = listActors().find((e) => e().role === "guest")!;
     setState(guest, { dead: true });
@@ -271,5 +279,70 @@ describe("M2 端到端 / 渲染", () => {
     expect(markers().length).toBe(listActors().length - 1);
 
     app.unmount();
+  });
+});
+
+/**
+ * 静态校验：**`style.X` 引用的类必须在 SCSS 里有对应规则**。
+ *
+ * ## 为什么需要这条
+ *
+ * 曾出过这个 bug：`actor.tsx` 引用 `style.facingArrow`，但
+ * `actor.module.scss` 里**没有** `.facingArrow` 规则（一次编辑事故：
+ * 中途 `git checkout` 回退了样式，TSX 的引用没跟着改）。后果是那个
+ * `<span>` 拿不到任何样式——0×0、不可见。
+ *
+ * ## 为什么不写成运行时断言（关键教训）
+ *
+ * **运行时测不出来**。Vitest 默认不处理 CSS：CSS Modules 被替换成一个
+ * **Proxy**，访问任何属性都凭空生成一个类名：
+ *
+ * ```
+ * style.facingArrow              → "_facingArrow_03dee2"   // 规则不存在，照样有值
+ * style.definitelyNotARealClass  → "_definitelyNotARealClass_03dee2"  // 瞎编的也有
+ * ```
+ *
+ * 而**生产构建**下不存在的类返回 `undefined`，class 变成字面量
+ * `"undefined"`——静默失效。所以「断言 className 不是 undefined」这类
+ * 测试**永远通过**，给出的是假的安全感（已实测反证：删掉规则后测试仍绿）。
+ *
+ * 因此改为**读源文件**做静态比对——直接检查那条被违反的不变式。
+ */
+describe("静态校验 / CSS Module 引用的类必须存在", () => {
+  // 直接读源文件：`?raw` 会被 CSS 插件拦下（返回 CSS-module 对象），
+  // 所以用 node:fs。reference 是因为本包 tsconfig 的 `types` 只有
+  // `vite-plus/client`，不含 node。
+  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+  const actorScss = read("../views/actor.module.scss");
+  const actorTsx = read("../views/actor.tsx");
+
+  /** 从 SCSS 源里取出所有类名规则（`.foo` / `%foo` 占位符也算） */
+  function declaredClasses(scss: string): Set<string> {
+    const names = new Set<string>();
+    // 行首的 `.name {` 或 `%name {`
+    for (const m of scss.matchAll(/^[.%]([A-Za-z][\w-]*)\s*(?=[,{:])/gm)) {
+      if (m[1]) names.add(m[1]);
+    }
+    return names;
+  }
+
+  test("actor.tsx 引用的每个 style.X 都在 actor.module.scss 里有规则", () => {
+    const declared = declaredClasses(actorScss);
+    const referenced = [...actorTsx.matchAll(/style\.([A-Za-z][\w]*)/g)]
+
+      .map((m) => m[1])
+      .filter((n): n is string => n !== undefined);
+
+    expect(referenced.length).toBeGreaterThan(0);
+    for (const name of new Set(referenced)) {
+      expect(declared.has(name)).toBe(true);
+    }
+  });
+
+  test("校验本身有效：瞎编的类名会被判为不存在", () => {
+    expect(declaredClasses(actorScss).has("definitelyNotARealClass")).toBe(false);
+    // 而真实存在的类必须被认出（否则「全都通过」可能只是解析器坏了）
+    expect(declaredClasses(actorScss).has("facingArrow")).toBe(true);
+    expect(declaredClasses(actorScss).has("poisonMark")).toBe(true);
   });
 });
