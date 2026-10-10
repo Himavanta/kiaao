@@ -1074,27 +1074,28 @@ NPC 站在目标格里时，`findPath` 返回 `[]`（起终点重合），代码
 
 ### 12.1 全部可调参数
 
-| 参数                        | 当前值                                | 位置                          | 影响                                        |
-| --------------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------- |
-| `killGoal`                  | 2                                     | `world/levels/manor.ts`       | 通关所需击杀数                              |
-| `timeLimit`                 | 150s                                  | `world/levels/manor.ts`       | 单局时限                                    |
-| `SIGHT_RANGE`               | 7 格                                  | `game/systems/perception.ts`  | NPC 视距                                    |
-| `SIGHT_HALF_ARC`            | 30°（张角 60°）                       | `game/systems/perception.ts`  | 视锥宽度                                    |
-| `PERCEPTION_INTERVAL`       | 6 帧（~10Hz）                         | `game/systems/perception.ts`  | 感知频率                                    |
-| `ALARM_PER_WITNESS`         | 12                                    | `game/systems/alarm.ts`       | 每次目击的警报增量（满值 100，即约 9 人次） |
-| `PANIC_DURATION`            | 30s（`panic.duration`）               | `game/npcs/panic.ts`          | 恐慌持续时长（时长归状态对象所有）          |
-| `POISON_DELAY`              | 4.5s                                  | `game/systems/interaction.ts` | 下药后到毒发的时间                          |
-| `ACTOR_SIZE`                | 20px                                  | `game/systems/locomotion.ts`  | 角色碰撞尺寸                                |
-| 玩家速度                    | 190 px/s                              | `game/npcs/player.ts`         | 户口本 `traits.speed`                       |
-| 客人速度                    | 78 px/s                               | `game/npcs/guest.ts`          | 同上                                        |
-| 保镖速度 / 视距             | 96 px/s / 9 格                        | `game/npcs/guard.ts`          | 同上；保镖的数值只在户口本一处              |
-| 潜行系数                    | 0.45                                  | `game/systems/locomotion.ts`  | 潜行时的速度倍率                            |
-| `ARRIVE_RADIUS`             | 4px                                   | `game/systems/navigation.ts`  | 到达路径点的判定半径                        |
-| `STUCK_TIMEOUT`             | 4s                                    | `game/systems/navigation.ts`  | 无推进多久后放弃当前路径                    |
-| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s（`REST_MIN` / `REST_MAX`） | `game/npcs/guest.ts`          | 到达后的驻足时长（状态对象内部）            |
-| `FLEE_CANDIDATES`           | 12                                    | `game/systems/navigation.ts`  | 逃跑候选点数（取最远的前 N 个再随机选一）   |
-| `MAX_VIEW_W` / `MAX_VIEW_H` | 1280 / 800                            | `game/config.ts`              | 视口上限（超出则启用相机卷轴）              |
-| `POISON_DELAY` 等常量       | —                                     | `game/systems/*.ts`           | 大多为文件内模块常量，改一处即生效          |
+| 参数                        | 当前值                                | 位置                          | 影响                                              |
+| --------------------------- | ------------------------------------- | ----------------------------- | ------------------------------------------------- |
+| `killGoal`                  | 2                                     | `world/levels/manor.ts`       | 通关所需击杀数                                    |
+| `timeLimit`                 | 150s                                  | `world/levels/manor.ts`       | 单局时限                                          |
+| `SIGHT_RANGE`               | 7 格                                  | `game/systems/perception.ts`  | NPC 视距                                          |
+| `SIGHT_HALF_ARC`            | 30°（张角 60°）                       | `game/systems/perception.ts`  | 视锥宽度                                          |
+| `PERCEPTION_INTERVAL`       | 6 帧（~10Hz）                         | `game/systems/perception.ts`  | 感知频率                                          |
+| `ALARM_PER_WITNESS`         | 12                                    | `game/systems/alarm.ts`       | 每次目击的警报增量（满值 100，即约 9 人次）       |
+| `PANIC_DURATION`            | 30s（`panic.duration`）               | `game/npcs/panic.ts`          | 恐慌持续时长（时长归状态对象所有）                |
+| `POISON_DELAY`              | 4.5s                                  | `game/systems/interaction.ts` | 下药后到毒发的时间                                |
+| `ACTOR_SIZE`                | 20px                                  | `game/systems/locomotion.ts`  | 角色碰撞尺寸                                      |
+| 玩家速度                    | 190 px/s                              | `game/npcs/player.ts`         | 户口本 `traits.speed`                             |
+| 客人速度                    | 78 px/s                               | `game/npcs/guest.ts`          | 同上                                              |
+| 保镖速度 / 视距             | 96 px/s / 9 格                        | `game/npcs/guard.ts`          | 同上；保镖的数值只在户口本一处                    |
+| 保镖查看时长                | 6–10s                                 | `game/npcs/guard.ts`          | `INVESTIGATE_MIN` / `MAX`；看到尸体后去查看的时长 |
+| 潜行系数                    | 0.45                                  | `game/systems/locomotion.ts`  | 潜行时的速度倍率                                  |
+| `ARRIVE_RADIUS`             | 4px                                   | `game/systems/navigation.ts`  | 到达路径点的判定半径                              |
+| `STUCK_TIMEOUT`             | 4s                                    | `game/systems/navigation.ts`  | 无推进多久后放弃当前路径                          |
+| `IDLE_MIN` / `IDLE_MAX`     | 0.8 / 3.5s（`REST_MIN` / `REST_MAX`） | `game/npcs/guest.ts`          | 到达后的驻足时长（状态对象内部）                  |
+| `FLEE_CANDIDATES`           | 12                                    | `game/systems/navigation.ts`  | 逃跑候选点数（取最远的前 N 个再随机选一）         |
+| `MAX_VIEW_W` / `MAX_VIEW_H` | 1280 / 800                            | `game/config.ts`              | 视口上限（超出则启用相机卷轴）                    |
+| `POISON_DELAY` 等常量       | —                                     | `game/systems/*.ts`           | 大多为文件内模块常量，改一处即生效                |
 
 ### 12.2 难度现状与倾向
 

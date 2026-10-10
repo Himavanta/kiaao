@@ -22,9 +22,12 @@ import { browserAdapter } from "kiaao/dom";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
+import { TILE } from "../../world";
 import { alarm, stop } from "../instance";
 import type { GuardEntity } from "../npcs/guard";
 import { listActors } from "../state";
+import { ACTOR_SIZE } from "../systems/locomotion";
+import type { ActorEntity } from "../types";
 import { createDriver } from "./helpers";
 import { live, setState } from "./live";
 
@@ -44,6 +47,12 @@ describe("实验 / 实体私有数据与方法", () => {
   });
 
   const byRole = (role: string) => listActors().filter((e) => e().role === role);
+
+  /** 实体中心所在的格——保镖记录位置时用的就是它 */
+  const cellOf = (e: ActorEntity) => ({
+    col: Math.floor((e.x + ACTOR_SIZE / 2) / TILE),
+    row: Math.floor((e.y + ACTOR_SIZE / 2) / TILE),
+  });
 
   test("保镖身上有私有字段与方法，客人 / 玩家没有", () => {
     const app = createApp(App);
@@ -130,9 +139,11 @@ describe("实验 / 实体私有数据与方法", () => {
     }
 
     const after = live(guard) as GuardEntity;
-    const firstSeenAt = after.seen.get(victim.id);
+    const firstSighting = after.seen.get(victim.id);
     expect(after.hasSeen(victim.id)).toBe(true);
-    expect(firstSeenAt).toBeGreaterThan(0);
+    expect(firstSighting?.firstSeenAt).toBeGreaterThan(0);
+    // 最后一次见到时记住了位置——查看靠它，而不是异常源的实时坐标
+    expect(firstSighting?.lastSeenAt).toEqual(cellOf(live(victim)));
 
     // 让客人走远（离开视野），跑一段——记忆不该消失
     setState(victim, { x: 1 * 32, y: 1 * 32, path: [], goal: null, idleLeft: 1e6 });
@@ -144,7 +155,7 @@ describe("实验 / 实体私有数据与方法", () => {
     const later = live(guard) as GuardEntity;
     expect(later.hasSeen(victim.id)).toBe(true);
     // 首次见到的时刻不被后续覆盖
-    expect(later.seen.get(victim.id)).toBe(firstSeenAt);
+    expect(later.seen.get(victim.id)?.firstSeenAt).toBe(firstSighting?.firstSeenAt);
 
     app.unmount();
   });

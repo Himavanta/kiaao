@@ -137,10 +137,19 @@ describe("僵死回归 / 长期运行", () => {
     // 先放好尸体（它是目击的对象），再让 witness 正对它
     setState(corpse, { x: 7 * 32, y: 10 * 32, dead: true, path: [], goal: null });
 
-    for (let i = 0; i < 40 && !witness().witnessed; i += 1) {
-      for (const g of guestsOf()) {
-        if (keep.includes(g)) continue;
-        setState(g, {
+    /**
+     * 把除 witness / corpse 之外的角色全部钉到远角。
+     *
+     * **必须包含保镖**（原版只隔离了客人，而两个保镖自由巡逻——它们
+     * 看到恐慌的 witness 也会跟着逃，反过来又传染给 witness。实测：
+     * 旧写法下结束时 witness 仍在 panic，moodLeft 只剩 7.7s——说明它刚
+     * 被重新传染过，而非「计时不到期」）。本用例的标题已经说明意图是
+     * 「无人传播」，所以隔离要彻底。
+     */
+    const isolate = () => {
+      for (const actor of listActors()) {
+        if (keep.includes(actor)) continue;
+        setState(actor, {
           x: 38,
           y: 38,
           facing: "north",
@@ -149,6 +158,10 @@ describe("僵死回归 / 长期运行", () => {
           idleLeft: 1e6,
         });
       }
+    };
+
+    for (let i = 0; i < 40 && !witness().witnessed; i += 1) {
+      isolate();
       setState(witness, {
         x: 5 * 32,
         y: 10 * 32,
@@ -163,9 +176,10 @@ describe("僵死回归 / 长期运行", () => {
     expect(witness().witnessed).toBe(true);
     expect(witness().mood).toBe("panic");
 
-    // 松开手，跑满剩余时间（把警报压住以免游戏提前结束）
+    // 全程维持隔离：本用例要测的是「计时到期」，不是传播链
     for (let i = 0; i < runFrames; i += 1) {
       alarm.alarm(0);
+      isolate();
       driver.tick();
     }
 

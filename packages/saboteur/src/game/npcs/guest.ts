@@ -78,11 +78,13 @@ const linger: ActorState = {
   },
 };
 
-/** 宠物：闲游 / 驻足 / 恐慌；默认闲游 */
+/** 客人：闲游 / 驻足 / 恐慌；默认闲游 */
 function guestStates(random: Random): RoleStateSet {
   return {
     entry: "wander",
     states: { wander: makeWander(random), linger, panic },
+    // 客人看见什么都逃：它不是安保，没有「去查看」的职责
+    reaction: () => "panic",
   };
 }
 

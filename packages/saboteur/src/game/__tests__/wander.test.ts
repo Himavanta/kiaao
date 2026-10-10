@@ -261,9 +261,21 @@ describe("异质 NPC / 保镖（S1）", () => {
     const guard = byRole("guard")[0];
     const victim = byRole("guest")[0];
 
-    // 把一具尸体放到保镖眼前，逼它目击恐慌
-    const g = live(guard);
-    setState(victim, { x: g.x + 32, y: g.y, dead: true, path: [], goal: null });
+    // 让保镖恐慌需要「异常源是**恐慌的人**」：尸体现在会让保镖去查看
+    // （`reaction` 按类别分派，见 guard.ts），只有狂奔的同类才会让它跟着逃。
+    // 钉住这个恐慌者，否则它几帧就走出视锥。
+    const pin = () => {
+      const g = live(guard);
+      setState(victim, {
+        x: g.x + 32,
+        y: g.y,
+        witnessed: true,
+        path: [],
+        goal: null,
+        idleLeft: 1e6,
+        moodLeft: 1e6,
+      });
+    };
 
     const seen = new Set<string>();
     // 记录状态迁移序列，用于断言「确实从 panic 回过 patrol」
@@ -273,6 +285,7 @@ describe("异质 NPC / 保镖（S1）", () => {
     // 40 秒（恐慌 30s + 余量）；全程压警报以免终局停住帧循环
     for (let i = 0; i < 2500; i += 1) {
       alarm.alarm(0);
+      pin();
       driver.tick();
       const now = live(guard).mood;
       if (now !== prev) transitions.push([prev, now]);
@@ -288,6 +301,50 @@ describe("异质 NPC / 保镖（S1）", () => {
     // 默认状态（patrol）。不能断言「结束时是 patrol」——恐慌会**传播**，
     // 保镖可能被另一个恐慌者再次传染。
     expect(transitions).toContainEqual(["panic", "patrol"]);
+
+    app.unmount();
+  });
+
+  /**
+   * 新增行为：保镖对**尸体**的反应不是逃跑，而是前去查看。
+   *
+   * 区分「异常类别」是这次改动的核心：客人对所有异常都逃，保镖对尸体
+   * 上前（职责）、对恐慌的人也跟着逃。若 `reaction` 不再收类别，这条会失败。
+   */
+  test("保镖看见尸体去查看，且查看结束后回岗（不变成 wander）", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const guard = byRole("guard")[0];
+    const corpse = byRole("guest")[0];
+
+    // 尸体放在墙外、看得到的地方——逐帧重钉，否则它会被其他系统移动
+    const pin = () => {
+      setState(corpse, { x: 5 * TILE + 6, y: 10 * TILE + 6, dead: true, path: [], goal: null });
+    };
+
+    const seen = new Set<string>();
+    const transitions: Array<[string, string]> = [];
+    let prev = live(guard).mood;
+
+    for (let i = 0; i < 2500; i += 1) {
+      alarm.alarm(0);
+      pin();
+      driver.tick();
+      const now = live(guard).mood;
+      if (now !== prev) transitions.push([prev, now]);
+      prev = now;
+      seen.add(now);
+    }
+
+    expect(seen.has("investigate")).toBe(true);
+    expect(seen.has("wander")).toBe(false);
+
+    // 只断言「进入过查看」与「从不 wander」——**不断言「查看后必回 patrol」**：
+    // 尸体会让同场的客人也恐慌，而保镖对「狂奔的人」的反应是跟着逃
+    // （`reaction` 按类别分派），于是查看常被传播链打断（实测：进入查看
+    // 后 43 帧就被传染）。那条转换本身是**对的**，只是不稳定，不能当契约。
+    // 「走完查看再回岗」由 `guard.ts` 的时长机制保证，不必靠动态模拟断言。
 
     app.unmount();
   });

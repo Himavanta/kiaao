@@ -1,13 +1,17 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 报警系统：目击 → 恐慌 → 传播 → 报警
+// 目击系统：察觉异常 → 交给行为系统反应 → 报警
 //
 // 整条链只依赖已有的两个事实源：
 // - `visibleIds`（M4 感知）：谁看得见谁
 // - `dead`（M5 交互）：尸体
 //
-// **恐慌不需要额外的传播机制**：恐慌者会逃跑，逃跑者被旁人看见时同样
-// 触发恐慌——传播链从感知系统自然长出来。这比维护一张「谁知道什么」的
-// 传播表简单，也不会出现两处状态不一致。
+// **本系统只负责「察觉」，不负责「怎么办」**：谁被吓到是个事实，
+// 被吓到之后逃还是去查看是**角色的个性**（`npcs/*.ts` 的 `reaction`）。
+// 分派交给 `behaviour.react`——这样新增一种反应不必改本系统。
+//
+// **传播不需要额外的机制**：逃跑者被旁人看见时同样触发反应——传播链
+// 从感知系统自然长出来。这比维护一张「谁知道什么」的传播表简单，
+// 也不会出现两处状态不一致。
 //
 // 状态不可逆：`witnessed` 一旦置位不再清除。若允许冷静，玩家就能靠等待
 // 消除暴露，题材的紧迫感会消失。
@@ -17,7 +21,8 @@ import { createPool, type EntityId, type Enter, type FrameManager } from "engine
 import { use, type Signal } from "kiaao";
 
 import { cellAt, type Cell } from "../../world";
-import type { ActorEntity, Role } from "../types";
+import type { ActorEntity, Role, ThreatKind } from "../types";
+import type { Witness } from "./behaviour";
 import { ACTOR_SIZE } from "./locomotion";
 
 /** 每发现一个异常，警报值的增量 */
@@ -37,9 +42,12 @@ export type AlarmSystem = {
   /**
    * 注册角色。
    *
-   * **只有客人入池**——玩家不会因看见自己的尸体而恐慌。这个分派必须
-   * 在注册侧完成（而不是在 update 里判 role）：入池即代表「此人参与
-   * 恐慌链」，判据是身份而非每帧数据。
+   * **玩家不入池**——玩家不会因看见尸体而恐慌，也不该变成传播源。
+   * 这个分派必须在注册侧完成（而不是在 update 里判 role）：入池即代表
+   * 「此人参与目击链」，判据是身份而非每帧数据。
+   *
+   * 客人**与保镖都入池**：两者都会被目击触发，只是反应不同
+   * （`behaviour.react` 按角色自己的 `reaction` 分派）。
    */
   enter: (props: { role: Role }) => Enter<Alarmable>;
   /** 初值（D2 方案 B）：目击记忆与逃离参照点 */
@@ -55,15 +63,15 @@ export type AlarmSystem = {
 
 export function createAlarmSystem(options: {
   /**
-   * 请求让某实体进入恐慌态。
+   * 请求让目击者对他看见的东西作出反应。
    *
    * 注入而非直接 import behaviour：alarm 只负责「谁看见了什么」，
    * 至于「看见之后行为怎么变」是行为系统的事。这样两个系统之间
-   * 没有编译期依赖，也符合「恐慌由目击触发」这一个事实的归属。
+   * 没有编译期依赖，也符合「反应由目击触发」这一个事实的归属。
    */
-  onPanic: (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => void;
+  onWitness: (witness: Witness) => void;
 }): AlarmSystem {
-  const { onPanic } = options;
+  const { onWitness } = options;
   const [pool, enterPool] = createPool<Alarmable>();
   const alarm = use(0);
   const witnessCount = use(0);
@@ -72,7 +80,7 @@ export function createAlarmSystem(options: {
   // 缺了这层去重，站着的目击者会每轮扫描都 +12，警报瞬间爆表。
   const accounted = new Map<EntityId, Set<EntityId>>();
 
-  // 只有客人入池：玩家不会恐慌，也不该计入目击者。
+  // 玩家不入池：不恐慌，也不该计入目击者。
   // 字段（witnessed / fleeFrom）玩家同样需要初值——由 spawn 提供。
   //
   // 返回值标注为 `Enter<Alarmable>`：幻影字段靠它传播，玩家的 `define`
@@ -91,26 +99,35 @@ export function createAlarmSystem(options: {
   /** 目标是否为「异常」：尸体，或已陷入恐慌的人 */
   const isAbnormal = (target: Readonly<ActorEntity>): boolean => target.dead || target.witnessed;
 
+  /** 异常源的类别——决定目击者的反应（客人逃、保镖对尸体查看） */
+  const kindOf = (target: Readonly<ActorEntity>): ThreatKind => (target.dead ? "corpse" : "panic");
+
+  /** 一条待反应的目击：异常源 id + 它当时所在的格 + 类别 */
+  type Sighting = { id: EntityId; cell: Cell; kind: ThreatKind };
+
   /**
    * 本轮新目击的异常源（已计入过的不重复返回）。
    *
    * 去重集按「观察者 → 它已反应过的异常源」而非「异常源 → 已反应者」：
    * 前者的查询在观察者一侧，与遍历方向一致。
    */
-  const findFreshSightings = (frame: FrameManager<ActorEntity>, id: EntityId): EntityId[] => {
+  const findFreshSightings = (frame: FrameManager<ActorEntity>, id: EntityId): Sighting[] => {
     const observer = frame(id);
     if (!observer || observer.dead) return [];
 
     const seen = accounted.get(id) ?? new Set<EntityId>();
-    const fresh: EntityId[] = [];
+    const fresh: Sighting[] = [];
 
     for (const targetId of observer.visibleIds) {
       if (seen.has(targetId)) continue;
       const target = frame(targetId);
       if (!target || !isAbnormal(target)) continue;
 
+      const cell = cellAt(target.x + ACTOR_SIZE / 2, target.y + ACTOR_SIZE / 2);
+      if (!cell) continue;
+
       seen.add(targetId);
-      fresh.push(targetId);
+      fresh.push({ id: targetId, cell, kind: kindOf(target) });
     }
 
     accounted.set(id, seen);
@@ -120,18 +137,18 @@ export function createAlarmSystem(options: {
   /**
    * 报告一次目击。
    *
-   * **本系统不写行为字段**——它只报告「谁被谁吓到了」这一事实，
-   * 由 `behaviour.panic()` 执行状态切换（含清路径、掷定时长）。
+   * **本系统不写行为字段**——它只报告「谁看见了什么」这一事实，
+   * 由 `behaviour.react()` 执行状态切换（含清路径、掷定时长）。
    * 这样 `mood` / `path` / `goal` / `idleLeft` / `followTime` 的
    * 写入者始终只有状态机一处。
    */
-  const report = (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => {
+  const report = (frame: FrameManager<ActorEntity>, id: EntityId, sighting: Sighting) => {
     const self = frame(id);
     if (self) {
       // witnessed 是记忆，永久保留——它属于本系统的语义
       self.witnessed = true;
     }
-    onPanic(frame, id, threat);
+    onWitness({ frame, observer: id, threat: sighting });
   };
 
   const update = (frame: FrameManager<ActorEntity>) => {
@@ -148,13 +165,7 @@ export function createAlarmSystem(options: {
       const [firstThreat] = fresh;
       if (firstThreat === undefined) continue;
 
-      const threat = frame(firstThreat);
-      if (!threat) continue;
-
-      const threatCell = cellAt(threat.x + ACTOR_SIZE / 2, threat.y + ACTOR_SIZE / 2);
-      if (!threatCell) continue;
-
-      report(frame, id, threatCell);
+      report(frame, id, firstThreat);
       freshTotal += fresh.length;
       witnesses += 1;
     }

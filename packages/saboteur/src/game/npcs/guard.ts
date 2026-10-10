@@ -4,11 +4,12 @@
 // 这是「户口本」的第二个样本（第一个是 `guest.ts`）。读这一个文件，
 // 应当能知道保镖是什么，而不必翻 7 个文件。
 //
-// 收进来的四处（原先散在别的文件）：
+// 收进来的五处（原先散在别的文件）：
 //   - 数值（速度、视距）——原 `views/actor.tsx` 的 `ACTOR_TRAITS` 表
-//   - 状态集 `{patrol, panic}`——原 `systems/states.ts` 的 `sets` 表
+//   - 状态集 `{patrol, investigate, panic}`——原 `systems/states.ts` 的 `sets` 表
 //   - 岗位（出生格）——原 `views/actor.tsx` 的 `postFor`
 //   - 私有记忆 `seen`——本文件原有
+//   - **对尸体的反应（去查看）**——原先根本没有（保镖与客人一样只会逃跑）
 //
 // **巡逻为什么是「保镖独有」**：客人的 `wander` 全图随机，`patrol` 的
 // 差别只有**目标范围**（限定在岗位周边）。机制相同、参数不同——这正是
@@ -18,8 +19,9 @@
 
 import type { ActorContext, EntityId } from "engine";
 
-import { TILE, type Cell } from "../../world";
+import { cellAt, TILE, type Cell } from "../../world";
 import type { Random } from "../../world/random";
+import { ACTOR_SIZE } from "../systems/locomotion";
 import type { ActorState, RoleStateSet } from "../systems/state-types";
 import type { ActorEntity } from "../types";
 import { panic } from "./panic";
@@ -31,6 +33,16 @@ const PATROL_RADIUS = 4;
 /** 巡逻到位后的停留时长（秒）：比客人短，体现「在岗」 */
 const PATROL_REST_MIN = 0.3;
 const PATROL_REST_MAX = 1.2;
+
+/**
+ * 查看的时长（秒）：有期限，不能因为一个念头站一天。
+ *
+ * 短于恐慌（30s）——查看是**任务**，不是情绪：看完就回岗。
+ * 若与恐慌等长，保镖会因一具远处的尸体长时间脱岗，开局就失控。
+ * 这段时长含**走过去 + 原地观察**两部分。
+ */
+const INVESTIGATE_MIN = 6;
+const INVESTIGATE_MAX = 10;
 
 /** 视距（格）：比客人远，体现「专业」 */
 const GUARD_SIGHT_TILES = 9;
@@ -77,11 +89,61 @@ function makePatrol(random: Random): ActorState {
   };
 }
 
-/** 保镖：巡逻 / 恐慌；默认巡逻。**没有** wander / linger——它在岗 */
+/**
+ * 查看：走向「记忆中最后一次见到异常的地方」，停一会再回岗。
+ *
+ * **这是与客人恐慌最本质的差别**：客人是「远离记忆」，保镖是「走向记忆」。
+ * 两者都靠记忆导航，都不用异常源的实时坐标——否则就是全知追踪，与项目
+ * 「NPC 只能知道自己看见的」一贯取向相赋。
+ *
+ * **时长固定、不靠「还在不在」早退**：与 `panic` 同一理由——行为要可预期。
+ * 若因为一瞬没看见就提前收工，保镖会走到半路又掉头，看起来像抽搐；
+ * 也不该因为看反了方向就白跑一趟。于是不管看到与否，走完这一段再说。
+ */
+function makeInvestigate(): ActorState {
+  return {
+    name: "investigate",
+    duration: { min: INVESTIGATE_MIN, max: INVESTIGATE_MAX },
+    enter: (ctx) => {
+      // 路线交给服务清（`path`/`goal`/`followTime` 归 navigation 写）
+      ctx.services.clearRoute(ctx.self);
+      ctx.self.idleLeft = 0;
+
+      // **_enter 里就把目标定下来**，不能等到 update 里再判「东西还在不在」：
+      // update 的 `hasArrived` 初始为 true（无路径无目标），若先检查可见性，
+      // 只要目标不在当前视锥里就会立即放弃——实际上等于根本没去过。
+      // （实测：旧写法下保镖进入了 investigate 却一步未动。）
+      const where = rememberedCell(ctx.self as GuardEntity);
+      if (where) ctx.services.setGoal(ctx.self, where);
+    },
+    update: (ctx, delta) => {
+      const { self, services } = ctx;
+      const left = self.moodLeft - delta;
+
+      if (left <= 0) {
+        self.investigateTarget = null;
+        ctx.transition(ctx.entryMood);
+        return;
+      }
+      self.moodLeft = left;
+
+      // 还没到：继续走。到了就地站一会（`hasArrived` 为真时不再调服务），
+      // 直到计时自然到期——不提前收工，行为才可预期
+      if (!services.hasArrived(self)) {
+        services.moveTowardGoal(self, delta);
+      }
+    },
+  };
+}
+
+/** 保镖：巡逻 / 查看 / 恐慌；默认巡逻。**没有** wander / linger——它在岗 */
 function makeGuardStates(random: Random): RoleStateSet {
   return {
     entry: "patrol",
-    states: { patrol: makePatrol(random), panic },
+    states: { patrol: makePatrol(random), investigate: makeInvestigate(), panic },
+    // 尸体→上前查看（这是职责）；恐慌的人→自己也跟着逃（「连同事都在跑」
+    // 本身就是信号）。两类异常应对不同，所以收一个 `kind` 参数
+    reaction: (kind) => (kind === "corpse" ? "investigate" : "panic"),
   };
 }
 
@@ -92,18 +154,48 @@ function makeGuardStates(random: Random): RoleStateSet {
  * 往里加只有保镖用的字段会让它重新膨胀（文档 §5.2 的教训）。
  */
 export type GuardEntity = ActorEntity & {
-  /** 【保镖私有】见过的实体 → 首次见到的累计帧数 */
-  seen: Map<EntityId, number>;
+  /**
+   * 【保镖私有】见过的实体 → 「首次见到的帧号 + 最后一次见到的位置」。
+   *
+   * **同时存两个时间尺度**：首次帧号是「我认得他多久了」（累计、不覆盖），
+   * 位置是「我最后一次在哪看见他」（会更新）。查看要用后者——拿首次的
+   * 位置会走向一个早就没人（或早被掳走）的地方。
+   *
+   * **为什么是个对象而不是两个 Map**：两者同一件事（对同一个人的观测
+   * 记录），分开放会出现「一个有、一个没」的不一致。
+   */
+  seen: Map<EntityId, Sighting>;
   /** 【保镖私有】见过某人吗 */
   hasSeen: (id: EntityId) => boolean;
   /**
    * 【保镖私有】每帧钩子：把「此刻可见」并入「曾经见过」。
    *
-   * 签名与引擎的 `HasFrameHook` 一致（收 `ActorContext`），但本方法**用不到**
-   * ——它只读自己已有的 `visibleIds`。少参函数可赋给多参签名，故引擎照常调用。
+   * 签名与引擎的 `HasFrameHook` 一致（收 `ActorContext`）——它需要
+   * `ctx.frame` 去读**被看见者**的位置（记的是「它当时在哪」）。
+   * 读别人的位置不违反边界：用途只是写自己的私有记忆，不是替别人决策。
    */
   onFrame: (ctx: ActorContext<ActorEntity>) => void;
 };
+
+/** 一条观测记录：什么时候第一次见到的，最后一次在哪见到的 */
+export type Sighting = {
+  /** 首次见到的累计帧号（不被后续覆盖） */
+  firstSeenAt: number;
+  /** 最后一次见到的格（每次看见都更新） */
+  lastSeenAt: Cell;
+};
+
+/**
+ * 从记忆里取「最后一次见到的格」。
+ *
+ * 找不到记录（还没看见过 / 记丢了）时返回 `null`——调用方据此收工回岗。
+ * 不在这里兜底为「当前位置」：那会让保镖原地站住不知所措，而不是结束任务。
+ */
+function rememberedCell(state: GuardEntity): Cell | null {
+  const target = state.investigateTarget;
+  if (target === null) return null;
+  return state.seen.get(target)?.lastSeenAt ?? null;
+}
 
 /**
  * 把一份基础 state 升格为保镖实体。
@@ -119,16 +211,31 @@ function createGuardState(base: ActorEntity): GuardEntity {
   const state = { ...base } as GuardEntity;
 
   let frameCount = 0;
-  state.seen = new Map<EntityId, number>();
+  state.seen = new Map<EntityId, Sighting>();
 
   state.hasSeen = (id) => state.seen.has(id);
 
-  state.onFrame = () => {
+  state.onFrame = (ctx) => {
     frameCount += 1;
+
     // 读**自己**的 visibleIds（perception 写的）——不看别人
     for (const id of state.visibleIds) {
-      if (state.seen.has(id)) continue;
-      state.seen.set(id, frameCount);
+      // 记的是**对方当时在哪**，不是「我在哪看见的」——「last seen at」
+      // 的语义是后者，而查看要走向的是「我当时看见它的地方」。
+      // 位置从帧管理器取（读别人的位置不违反边界：这只用于写自己的
+      // 私有记忆，不用于替别人决策）。
+      const target = ctx.frame(id);
+      if (!target) continue;
+      const at = cellAt(target.x + ACTOR_SIZE / 2, target.y + ACTOR_SIZE / 2);
+      if (!at) continue;
+
+      const record = state.seen.get(id);
+      if (record) {
+        // 已认识：只更新「最后一次在哪看见」
+        record.lastSeenAt = at;
+        continue;
+      }
+      state.seen.set(id, { firstSeenAt: frameCount, lastSeenAt: at });
     }
   };
 

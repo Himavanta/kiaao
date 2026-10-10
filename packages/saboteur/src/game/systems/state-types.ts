@@ -10,7 +10,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import type { Cell } from "../../world";
-import type { ActorEntity, Mood } from "../types";
+import type { ActorEntity, Mood, Reaction, ThreatKind } from "../types";
 import type { NavigationService } from "./navigation";
 
 /**
@@ -88,4 +88,19 @@ export type RoleStateSet = {
    */
   entry: Mood;
   states: Partial<Record<Mood, ActorState>>;
+  /**
+   * **目击异常时的反应**：被推入哪个状态。
+   *
+   * 「看见尸体 / 恐慌者然后怎么办」是**这只 NPC 的个性**，不是共享机制：
+   * 客人始终逃跑（`panic`），保镖对尸体去查看、对狂奔的人跟着逃。
+   * 它跟 `entry` 一样是「角色级的事实」，所以与 `states` 放在一起——
+   * `behaviour` 已经持有整份状态集，不必再为它开第二条注入通道。
+   *
+   * **收参数而非写死**：异常分两类（尸体、恐慌的人），两类的应对本就不
+   * 必相同。不给它预判的可能性——将来「对尸体去查看、对狂奔的人先躲」
+   * 只需多写一个分支，不必改契约。
+   *
+   * 省略表示该角色不被目击触发（玩家）。
+   */
+  reaction?: (threat: ThreatKind) => Reaction;
 };

@@ -33,6 +33,7 @@ export function makeActorState(overrides: Partial<ActorEntity> = {}): ActorEntit
     goal: null,
     idleLeft: 0,
     followTime: 0,
+    investigateTarget: null,
     // perception
     sightRange: 200,
     sightArc: Math.PI / 6,

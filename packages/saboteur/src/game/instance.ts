@@ -77,7 +77,7 @@ export const behaviour = createBehaviourSystem({
 });
 export const perception = createPerceptionSystem({ grid: level.grid });
 // alarm 只报告事实，恐慌切换由 behaviour 执行（注入回调，避免循环依赖）
-export const alarm = createAlarmSystem({ onPanic: behaviour.panic });
+export const alarm = createAlarmSystem({ onWitness: behaviour.react });
 
 // 交互：读玩家实体信号（同时需要位置 / 朝向与 id）
 export const interaction = createInteractionSystem({
@@ -107,7 +107,11 @@ locomotion.setIntent("npc", (entity) => pathIntent(entity));
 // interaction 先处理玩家意图（拾取 / 下药，含中毒倒计时）
 // → behaviour 决定状态 → navigation 规划路径 → locomotion 推进位置
 // → perception 判定谁看见了谁（放在移动之后，保证判定的是本帧位置）
-// → alarm 消费本轮的 visibleIds 产生恐慌（必须紧跟 perception）
+// → actor 让实体记「我看见了谁、在哪」（**必须在 perception 之后**：
+//   它读的是本帧刚写出的 `visibleIds`；若放到 perception 之前，
+//   记忆永远慢一轮，而 alarm 同帧就会据记忆去追查——那时记忆还是空的）
+// → alarm 消费本轮的 visibleIds 产生反应（必须紧跟 perception，
+//   且在 actor 之后，否则它触发的追查读不到刚刚看见的位置）
 // → frame 统计放最后（它只计数，无数据依赖）
 export const game = createGame<ActorEntity>(
   [
@@ -116,9 +120,9 @@ export const game = createGame<ActorEntity>(
     // 状态通过 navigation 服务算路径。因此 navigation 不在帧流水线里。
     behaviour.update,
     locomotion.update,
-    // 实体自己的每帧钩子：放在移动之后（它读的是本帧最终位置）
-    actor.update,
     perception.update,
+    // 实体自己的每帧钩子：读本帧最终位置与感知结果，写自己的记忆
+    actor.update,
     alarm.update,
     // rules 放最后：它读本轮结束时的击杀数与警报值判终局，
     // 放在前面会用上一帧的数据

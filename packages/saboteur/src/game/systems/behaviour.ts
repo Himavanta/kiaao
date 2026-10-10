@@ -15,7 +15,14 @@ import { createPool, type EntityId, type Enter, type FrameManager } from "engine
 
 import { cellAt, type Cell } from "../../world";
 import type { Random } from "../../world/random";
-import { isNpc, type ActorEntity, type Mood, type NpcRole, type Role } from "../types";
+import {
+  isNpc,
+  type ActorEntity,
+  type Mood,
+  type NpcRole,
+  type Role,
+  type ThreatKind,
+} from "../types";
 import { ACTOR_SIZE } from "./locomotion";
 import type { NavigationService } from "./navigation";
 import type { ActorState, RoleStateSet, StateContext } from "./state-types";
@@ -36,6 +43,8 @@ export type Behaving = Pick<
   | "post"
   | "witnessed"
   | "fleeFrom"
+  | "investigateTarget"
+  | "visibleIds"
   | "dead"
   | "x"
   | "y"
@@ -57,18 +66,36 @@ export type BehaviourSystem = {
     post?: Cell | null;
   }) => Pick<
     ActorEntity,
-    "mood" | "moodLeft" | "path" | "goal" | "idleLeft" | "followTime" | "post"
+    "mood" | "moodLeft" | "path" | "goal" | "idleLeft" | "followTime" | "investigateTarget" | "post"
   >;
   update: (frame: FrameManager<ActorEntity>, delta: number) => void;
   /**
-   * 让某实体进入恐慌态。
+   * **目击异常时的反应**：按角色自己的 `reaction` 分派到某个状态。
    *
-   * **这是状态之间唯一的对外入口**：其他系统（如 `alarm`）只报告
-   * 「他看见了」这一事实，由本系统执行状态切换——包括跑 `panic.enter()`。
-   * 这样 `mood` / `path` / `goal` / `idleLeft` / `followTime` 的写入者
-   * 始终只有状态机一处，外部不必知道这些字段的存在。
+   * `alarm` 只负责察觉（「看见了什么」），本方法负责「看见了怎么办」——
+   * 那是角色的个性（客人逃、保镖查看）。两者分开：察觉是机制，反应是性格。
    */
-  panic: (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => void;
+  react: (witness: Witness) => void;
+};
+
+/**
+ * 一次目击事件：**谁**看见了**什么**。
+ *
+ * 收一个对象而非四个散参数——参数超过三个就该收成对象（项目约定）。
+ * 它也把「被看见的异常」的三件事（id / 位置 / 类别）归为一组：三者
+ * 描述的是同一个东西，拆开传容易对不上（如 id 与坐标不是同一个实体）。
+ */
+export type Witness = {
+  frame: FrameManager<ActorEntity>;
+  /** 目击者 */
+  observer: EntityId;
+  /** 被看见的异常源 */
+  threat: {
+    id: EntityId;
+    /** 异常源当时所在的格 */
+    cell: Cell;
+    kind: ThreatKind;
+  };
 };
 
 export function createBehaviourSystem(options: {
@@ -123,6 +150,7 @@ export function createBehaviourSystem(options: {
       goal: null,
       idleLeft: 0,
       followTime: 0,
+      investigateTarget: null,
       post: props.post ?? null,
     };
   };
@@ -188,23 +216,38 @@ export function createBehaviourSystem(options: {
   };
 
   /**
-   * 外部（alarm）请求进入恐慌态。
+   * 外部（alarm）请求「让某实体对他看见的东西作出反应」。
    *
-   * 只置 `witnessed` 与 `fleeFrom`，其余交给状态机：`moodLeft` 由
-   * `rollDuration` 掷定、`path` / `goal` / `idleLeft` / `followTime`
-   * 由 `panic.enter()` 清理。
+   * 先按本角色的 `reaction` 决定进哪个状态，再走正规的 `transition` 路径
+   * （写 mood、掷定时长、跑 enter）。
+   *
+   * **两类反应的输入不同**：
+   * - `panic`：记下 `fleeFrom`（「我在哪看见的威胁」），逃跑时远离它
+   * - `investigate`：记下 `investigateTarget`（「我要查谁」），位置由
+   *   实体自己的记忆给出——**不递实时坐标**，否则就是全知追踪
+   *
+   * 已经死了、已经在做同类反应的实体直接忽略（后者避免一次目击把刚进入
+   * 的查看/恐慌重置，反复清路线）。
    */
-  const panic = (frame: FrameManager<ActorEntity>, id: EntityId, threat: Cell) => {
-    const self = frame(id);
-    if (!self || self.dead || self.mood === "panic") return;
+  const react = ({ frame, observer, threat }: Witness) => {
+    const self = frame(observer);
+    if (!self || self.dead) return;
 
-    // **不写 `witnessed`**：那是「记忆」，属于 alarm 的语义（它在
-    // `report` 里写）。本方法只被 alarm 调用，两边都写就是重复。
-    self.fleeFrom = threat;
+    const next = setOf(self.role).reaction?.(threat.kind);
+    if (!next) return;
+    // 已在 reacting：不重复触发（否则每次感知都会重新清路线/掷时长）
+    if (self.mood === next) return;
 
-    // 走正规切换路径：写 mood、掷定时长、跑 panic.enter()
-    makeContext(self).transition("panic");
+    if (next === "panic") {
+      self.fleeFrom = threat.cell;
+    } else {
+      // 查看：记住「要查的是谁」，位置由本实体记忆提供
+      self.investigateTarget = threat.id;
+    }
+
+    // 走正规切换路径：写 mood、掷定时长、跑 enter
+    makeContext(self).transition(next);
   };
 
-  return { enter, spawn, update, panic };
+  return { enter, spawn, update, react };
 }

@@ -79,6 +79,14 @@ export type ActorEntity = {
   /** 【behaviour 写】剩余停留时间（秒）；> 0 时不规划新目标 */
   idleLeft: number;
   /**
+   * 【behaviour 写】正在追查的异常源 id；null 表示无。
+   *
+   * 由 `behaviour.investigate()` 置位、`investigate` 状态到达后清空。
+   * **要去的格不在这里**——它来自追查者自己的记忆（`GuardEntity.seen`）。
+   * 「记得它在哪」与「它现在在哪」是两回事：用后者等于全知追踪。
+   */
+  investigateTarget: EntityId | null;
+  /**
    * 【behaviour 写，注册时定】巡逻岗位（格）。
    *
    * 只有保镖用：`patrol` 状态在它附近挑目标。客人该字段为 `null`。
@@ -154,11 +162,31 @@ export type ItemKind = "booze";
  * NPC 行为。
  *
  * **每种 NPC 只拥有其中一部分**（S2）：客人 `{wander, linger, panic}`、
- * 保镖 `{patrol, panic}`。`mood` 是**数据不是类型**——它只在
+ * 保镖 `{patrol, investigate, panic}`。`mood` 是**数据不是类型**——它只在
  * `set.states[mood]` 这一处被消费（查表），故写成所有状态的并集，
  * 不用判别联合把 `ActorEntity` 拆碎（文档 Q2）。
  *
  * 行为不直接指挥移动，而是影响 navigation 挑目的地——这样 locomotion
  * 与意图来源都不知道「状态机」存在，行为切换只改一处。
  */
-export type Mood = "wander" | "linger" | "panic" | "patrol";
+export type Mood = "wander" | "linger" | "panic" | "patrol" | "investigate";
+
+/**
+ * 目击异常（尸体或恐慌者）时的**反应方式**。
+ *
+ * 每个值都是一个 `Mood`——「反应」就是「被推入哪个状态」。抽成独立类型
+ * 是为了把「可被目击事件触发」的状态与其余状态分开：`wander` 也是状态，
+ * 但没人会「因目击而开始闲游」。
+ */
+export type Reaction = Extract<Mood, "panic" | "investigate">;
+
+/**
+ * 异常的类别——决定目击者怎么反应。
+ *
+ * - `corpse`：尸体。保镖会**过去查看**（它是安保，这是职责）
+ * - `panic`：惊慌失措的人。连保镖也会被带着逃——「连同事都在跑」本身就是信号
+ *
+ * 分开两类而非统一处理：对尸体应淡定处置，对狂奔的人应立刻警觉，
+ * 这是两种不同的处境，硬归一类会让行为失真。
+ */
+export type ThreatKind = "corpse" | "panic";
