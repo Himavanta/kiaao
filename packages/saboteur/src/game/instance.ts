@@ -156,8 +156,10 @@ export const runId = use(0);
 function restartRun(): void {
   // 先停帧循环：重建期间不该跑帧（否则会读到半旧的实体状态）
   stop();
-  // 警报与全局状态归零
+  // 警报、交互提示与全局状态归零
+  // （这三个都是**模块级信号**，不在实体上，声明式重建碰不到）
   alarm.reset();
+  interaction.reset();
   resetGameState(level.objective.timeLimit);
   // 递增局号：视图层的 Each 会同步重建全部角色与道具
   // （实测：这是同步完成的，重建后所有实体已入池）

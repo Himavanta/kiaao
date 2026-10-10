@@ -12,8 +12,9 @@ import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
 import { level, stop } from "../instance";
-import { playerEntity } from "../state";
+import { listActors, playerEntity } from "../state";
 import { createDriver } from "./helpers";
+import { setState } from "./live";
 
 function press(code: string) {
   window.dispatchEvent(new KeyboardEvent("keydown", { code }));
@@ -200,23 +201,74 @@ describe("M2 端到端 / 渲染", () => {
     app.unmount();
   });
 
-  test("朝西时 DOM 水平镜像（scale）", () => {
+  /**
+   * 朝向由一个**独立的旋转层**表达：四向写出四个不同角度。
+   *
+   * 背景：原先用 `scale: -1 1` 镜像表达朝西——但占位形体左右对称，
+   * 镜像等于没变，实玩反馈「看不到朝向」。
+   *
+   * **这条测试能测什么、不能测什么（如实说明）**：
+   *
+   * - 能测：存在一个专门的朝向标记元素、四个朝向写出四个互不相同的
+   *   `rotate` 值。（`scale` 方案下只会是 0/180 两种，且作用在对称体上。）
+   * - **不能测：「看起来是否可见」**。那取决于 CSS 形状是否不对称，而
+   *   happy-dom 没有布局引擎。实测反证：把箭头改成对称方块后，本用例
+   *   仍然通过——所以「可见性」只能靠人眼看（已由实玩确认）。
+   *
+   * 不假装测到没有的东西：把边界写清楚，比留一条虚假的安心更有用。
+   */
+  test("朝向由独立的旋转层表达：四向写出四个不同角度", () => {
     const app = createApp(App);
     app.mount("#app");
     const player = playerEntity()!;
 
-    press("KeyA");
-    driver.tick();
-    release("KeyA");
+    /**
+     * 当前朝向对应的角度。
+     *
+     * **必须只认箭头所在的旋转层**（带 `facing` 类名的 span）：身体本身
+     * 也有 `rotate`（尸体躺倒用，活人是 0deg），泛取第一个会永远读到 0。
+     */
+    const facingDeg = (): string | undefined => {
+      // 旋转层是 `facing`（含 rotate），内层箭头是 `facingArrow`（无 rotate）。
+      // 两个类名都含 "facing"，故取「有 rotate 的那个」而非第一个匹配。
+      for (const marker of document.querySelectorAll("#app span[class*='facing']")) {
+        const value = /rotate:\s*([\d.]+deg)/.exec(marker.getAttribute("style") ?? "")?.[1];
+        if (value !== undefined) return value;
+      }
+      return undefined;
+    };
 
-    expect(player().facing).toBe("west");
+    const seen = new Map<string, string>();
+    for (const [key, facing] of [
+      ["KeyW", "north"],
+      ["KeyD", "east"],
+      ["KeyS", "south"],
+      ["KeyA", "west"],
+    ] as const) {
+      press(key);
+      driver.tick();
+      release(key);
+      expect(player().facing).toBe(facing);
+      seen.set(facing, facingDeg() ?? "");
+    }
 
-    const { x, y } = player();
-    const mirrored = [...document.querySelectorAll("#app div[style]")].some((node) => {
-      const s = node.getAttribute("style") ?? "";
-      return s.includes(`translate: ${x}px ${y}px`) && s.includes("scale: -1 1");
-    });
-    expect(mirrored).toBe(true);
+    // 四个朝向 → 四个互不相同的角度（镜像方案下只会是 0/180 两种）
+    const values = [...seen.values()];
+    expect(values.every((v) => v !== "")).toBe(true);
+    expect(new Set(values).size).toBe(4);
+
+    // 标记元素**每个活着的角色一个**，且是专门的旋转层（不是身体本身）
+    const markers = () =>
+      [...document.querySelectorAll("#app span[class*='facing']")].filter((el) =>
+        el.getAttribute("style")?.includes("rotate"),
+      );
+    expect(markers().length).toBe(listActors().length);
+
+    // 尸体不带朝向箭头：它已被 rotate 90deg 放倒，箭头会落在错的位置
+    const guest = listActors().find((e) => e().role === "guest")!;
+    setState(guest, { dead: true });
+    driver.tickTimes(2);
+    expect(markers().length).toBe(listActors().length - 1);
 
     app.unmount();
   });

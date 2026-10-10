@@ -67,3 +67,29 @@
   box-shadow: 0 0 4px #e0653a;
   transform: translateX(-50%) translateX(6px);
 }
+
+// ── 朝向指示 ──────────────────────────────────────────
+//
+// 占位美术的形体是**左右对称**的（竖直渐变 + 对称圆角），所以原先的
+// `scale: -1 1`（朝西镜像）在屏幕上**完全看不出来**——镜面对称形状等于
+// 没变。实玩反馈「每个单位都不显示朝向」，根因就在这里。
+//
+// 改为一个真实的方位箭头：贴在身体**上前方**，转到朝向角度。
+// 箭头的形状本身不对称（三角），因此四个方向都能一眼分辨。
+//
+// `transform` 由 StyleMemo **整体写出**（`translateX(-50%) rotate(Ndeg)`），
+// 不拆成「CSS 里的 transform + 独立 rotate 属性」——那两者的复合顺序
+// 容易反直觉（独立属性先于 transform 应用）。
+.facing {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  // 向上的三角：底边在下、顶点在上
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid #fff;
+  border-left: 4px solid transparent;
+  // 只用 filter 描边；transform 由 StyleMemo 整体写（见下），此处不碰
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 70%));
+}

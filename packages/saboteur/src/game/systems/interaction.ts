@@ -1,12 +1,15 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 交互系统：拾取、下药、死亡判定
 //
-// 交互目标是**面朝方向的相邻格**（规划文档 4.7）——全键盘方案下目标
-// 是离散可枚举的，不需要像素级瞄准。判定链：
+// 交互目标是**两个格：自己脚下的格 + 面朝方向的相邻格**——全键盘方案
+// 下目标是离散可枚举的，不需要像素级瞄准。（最初只查面朝格，实玩反馈
+// 「必须正对着才能操作」很别扭；加上脚下格后，走近就能拾取。）
 //
-// 1. 按下交互键 → 算出手心格（玩家面朝的下一个格）
-// 2. 手心格上有酒瓶 → 拾取（入物品栏）
-// 3. 手心格上有活着的客人且玩家持有酒瓶 → 下药（消耗酒瓶，启动倒计时）
+// 判定链：
+//
+// 1. 按下交互键 → 取出候选格（脚下、面前，按此顺序）
+// 2. 任一格上有酒瓶 → 拾取（入物品栏）
+// 3. 任一格上有活着的客人且玩家持有酒瓶 → 下药（消耗酒瓶，启动倒计时）
 // 4. 中毒倒计时归零 → 客人死亡（尸体留在原地）
 //
 // **尸体是 M6 目击链的输入**：死亡本身不产生恐慌，「被看见」才产生。
@@ -66,6 +69,14 @@ export type InteractionSystem = {
   heldItem: Signal<ItemKind | null>;
   /** 最近一次交互的结果提示（HUD 展示） */
   hint: Signal<string>;
+  /**
+   * 重置模块级信号（重开一局时调用）。
+   *
+   * 这两个信号**不在实体上**，声明式重建（递增 `runId`）碰不到它们——
+   * 不显式归零就会残留：新玩家明明是空手，HUD 却还显示「持有酒瓶」。
+   * 同类的还有 `alarm` 的 `alarm` / `witnessCount`（它已有 `reset`）。
+   */
+  reset: () => void;
 };
 
 /** 本系统跨两个池读写：角色与道具。泛型由调用点收敛，id 不会混用。 */
@@ -125,6 +136,17 @@ export function createInteractionSystem(options: {
   const frontCell = (actor: Readonly<ActorEntity>): Vec2 =>
     cellInFront(centerOf(actor), actor.facing);
 
+  /**
+   * 交互的候选格，按**优先级**排列：脚下 → 面前。
+   *
+   * 顺序有意义：脚下的格子不用瞄准，是「我正站在上面」这个无争议的
+   * 事实；面前的格子需要朝向正确。两者都有东西时，取其下者。
+   *
+   * 两个格都试过之后，玩家手边一格之内就不必精确朝向了——这正是
+   * 要消除的别扭感。
+   */
+  const targetCells = (actor: Readonly<ActorEntity>): Vec2[] => [centerOf(actor), frontCell(actor)];
+
   const cellKey = (pos: Vec2): string => {
     const cell = cellAt(pos.x, pos.y);
     return cell ? `${cell.col},${cell.row}` : "";
@@ -183,6 +205,28 @@ export function createInteractionSystem(options: {
     hint("已下药");
   };
 
+  /** 候选格上第一个未被拾取的道具 */
+  const firstPropIn = (access: FrameAccess, cells: Vec2[]): EntityId | undefined => {
+    for (const cell of cells) {
+      const id = propAt(access, cell);
+      if (id !== undefined) return id;
+    }
+    return undefined;
+  };
+
+  /** 候选格上第一个活着的其他角色 */
+  const firstActorIn = (
+    access: FrameAccess,
+    cells: Vec2[],
+    selfId: EntityId,
+  ): EntityId | undefined => {
+    for (const cell of cells) {
+      const id = actorAt(access, cell, selfId);
+      if (id !== undefined) return id;
+    }
+    return undefined;
+  };
+
   const tryInteract = (access: FrameAccess) => {
     const entity = player();
     if (!entity) return;
@@ -195,28 +239,36 @@ export function createInteractionSystem(options: {
     const me = access.actors<ActorEntity>(entity.id);
     if (!me || me.dead) return;
 
-    const cell = frontCell(me);
+    const cells = targetCells(me);
+    const propId = firstPropIn(access, cells);
 
-    // 1. 拾取优先：脚下有东西先捡起来
-    const propId = propAt(access, cell);
+    // 拾取优先——但**只有它真的会做事时**才算数。
+    // 已持有同款时拾取是空操作（只报个提示），若仍让它抢先返回，
+    // 玩家站在酒瓶上就没法给面前的客人下药了（脚下格引入后的新情况）。
     if (propId !== undefined) {
-      pickUp(access, entity.id, me, propId);
+      const prop = access.props<PropEntity>(propId);
+      if (prop && me.held !== prop.kind) {
+        pickUp(access, entity.id, me, propId);
+        return;
+      }
+    }
+
+    // 下药：需要持有酒瓶，且候选格上有活人
+    if (me.held === "booze") {
+      const victimId = firstActorIn(access, cells, entity.id);
+      if (victimId !== undefined) {
+        poison(access, entity.id, victimId);
+        return;
+      }
+      hint("身旁没有可下药的对象");
       return;
     }
 
-    // 2. 下药：需要持有酒瓶
-    if (me.held !== "booze") {
-      hint("手中没有可用的道具");
+    if (propId !== undefined) {
+      hint("已持有酒瓶");
       return;
     }
-
-    const victimId = actorAt(access, cell, entity.id);
-    if (victimId === undefined) {
-      hint("面前没有可下药的对象");
-      return;
-    }
-
-    poison(access, entity.id, victimId);
+    hint("手中没有可用的道具");
   };
 
   // ── 帧逻辑 ────────────────────────────────────────────
@@ -263,7 +315,13 @@ export function createInteractionSystem(options: {
     tickPoison(frame, delta);
   };
 
-  return { enter, enterProp, spawn, spawnProp, update, heldItem, hint };
+  const reset = () => {
+    heldItem(null);
+    hint("");
+    lastInteract = interactTicks();
+  };
+
+  return { enter, enterProp, spawn, spawnProp, update, heldItem, hint, reset };
 }
 
 /** 道具的展示名（HUD 用） */

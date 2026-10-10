@@ -11,8 +11,8 @@ import { createApp } from "kiaao";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import App from "../../app";
-import { alarm, level, stop } from "../instance";
-import { gameState, listActors, resetGameState } from "../state";
+import { alarm, interaction as interactionSignals, level, rules, stop } from "../instance";
+import { gameState, listActors, playerEntity, resetGameState } from "../state";
 import { POISON_DELAY } from "../systems/interaction";
 import { createDriver } from "./helpers";
 import { setState } from "./live";
@@ -330,6 +330,176 @@ describe("M5 / 交互键的边沿语义", () => {
     release("Space");
     expect(player().held).toBe("booze");
 
+    app.unmount();
+  });
+});
+
+/**
+ * 交互的**候选格**：脚下 + 面前。
+ *
+ * 起初只查「面朝方向的下一格」，实玩反馈「必须正对着才能操作」很别扭。
+ * 这两条锁定新的契约：站在东西上面 / 站在人身上，都能操作。
+ */
+describe("交互 / 脚下与面前两格都可操作", () => {
+  let driver: ReturnType<typeof createDriver>;
+
+  beforeEach(() => {
+    driver = createDriver();
+    document.body.innerHTML = '<div id="app"></div>';
+    resetAll();
+  });
+
+  afterEach(() => {
+    stop();
+    driver.restore();
+  });
+
+  test("站在瓶子上（背对）也能拾取", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const player = playerOf();
+    const [prop] = level.propSpawns;
+    // 与酒瓶**同一格**，且朝向与它无关（背对）
+    setState(player, {
+      x: prop.col * 32 + 6,
+      y: prop.row * 32 + 6,
+      facing: "north",
+      held: null,
+    });
+
+    press("Space");
+    driver.tick();
+    release("Space");
+
+    expect(player().held).toBe("booze");
+    app.unmount();
+  });
+
+  test("与客人同格（背对）也能下药", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const player = playerOf();
+    const guest = guestsOf()[0];
+
+    // 与客人重叠，且背对——旧实现（只查面前格）会失败
+    setState(player, {
+      x: guest().x,
+      y: guest().y,
+      facing: "north",
+      held: "booze",
+    });
+
+    press("Space");
+    driver.tick();
+    release("Space");
+
+    expect(guest().poisonLeft).not.toBeNull();
+    expect(player().held).toBeNull();
+    app.unmount();
+  });
+
+  /**
+   * 脚下有瓶子 **且** 面前有客人：应优先下药，而不是被「已持有同款」
+   * 的空拾取抢先返回（脚下格引入后的新情况）。
+   */
+  test("脚踩空瓶、面前有客人时：下药优先，不被拾取抢走", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    const player = playerOf();
+    const guest = guestsOf()[0];
+    const [prop] = level.propSpawns;
+
+    // 把客人挪到酒瓶那一格的正东一格（玩家面前）
+    setState(guest, { x: prop.col * 32 + 32, y: prop.row * 32, path: [], goal: null });
+    // 玩家站在酒瓶上、朝东（面前是客人），且已持有酒瓶
+    setState(player, {
+      x: prop.col * 32 + 6,
+      y: prop.row * 32 + 6,
+      facing: "east",
+      held: "booze",
+    });
+
+    press("Space");
+    driver.tick();
+    release("Space");
+
+    // 客人中毒，且酒瓶被消耗——说明走的是下药而非「已持有」提示
+    expect(guest().poisonLeft).not.toBeNull();
+    expect(player().held).toBeNull();
+    app.unmount();
+  });
+});
+
+/**
+ * 重开一局后交互仍然可用。
+ *
+ * 回归：重开是「先挂载新的、后卸载旧的」。玩家注册表（`playerEntity`）
+ * 曾被旧玩家的 `onUnmount` 无条件清空，于是新局里交互系统拿不到玩家，
+ * 表现为「重开后捡不了瓶子」——不报错、只是没反应。
+ */
+describe("交互动 / 重开后仍可交互", () => {
+  let driver: ReturnType<typeof createDriver>;
+
+  beforeEach(() => {
+    driver = createDriver();
+    document.body.innerHTML = '<div id="app"></div>';
+    resetAll();
+  });
+
+  afterEach(() => {
+    stop();
+    driver.restore();
+  });
+
+  test("重开后玩家仍被注册，且能拾取", () => {
+    const app = createApp(App);
+    app.mount("#app");
+    const [prop] = level.propSpawns;
+
+    // 第一局：达成目标 → 终局
+    gameState.kills(level.objective.killGoal);
+    driver.tickTimes(3);
+
+    rules.restart();
+    driver.tickTimes(3);
+
+    // 重开后玩家注册表必须指向**新**玩家（旧的清空是个 bug）
+    const player = playerOf();
+    expect(playerEntity()?.id).toBe(player.id);
+
+    // 新局里拾取依然可用
+    setState(player, {
+      x: (prop.col - 1) * 32,
+      y: prop.row * 32,
+      facing: "east",
+      held: null,
+    });
+    press("Space");
+    driver.tick();
+    release("Space");
+
+    expect(player().held).toBe("booze");
+    app.unmount();
+  });
+
+  test("重开后 HUD 的持有与提示信号被复位", () => {
+    const app = createApp(App);
+    app.mount("#app");
+
+    // 先制造残留：直接写信号（模拟上一局的遗留）
+    interactionSignals.heldItem("booze");
+    interactionSignals.hint("拾取了酒瓶");
+
+    gameState.kills(level.objective.killGoal);
+    driver.tickTimes(3);
+    rules.restart();
+    driver.tickTimes(3);
+
+    expect(interactionSignals.heldItem()).toBeNull();
+    expect(interactionSignals.hint()).toBe("");
     app.unmount();
   });
 });

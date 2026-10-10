@@ -37,10 +37,19 @@ type ActorProps = {
   role: Role;
 };
 
-/** 朝向 → 是否水平镜像（图集只画朝右，其余靠翻转） */
-function isFlipped(facing: Facing): boolean {
-  return facing === "west";
-}
+/**
+ * 朝向 → 箭头旋转角度（deg）。
+ *
+ * 基准箭头朝上（0°），顺时针为正——与 CSS `rotate` 一致。
+ * 不用 `scale: -1 1` 镜像：占位形体是左右对称的，镜像等于没变
+ * （实玩反馈「看不到朝向」的根因）。
+ */
+const FACING_DEGREES: Record<Facing, number> = {
+  north: 0,
+  east: 90,
+  south: 180,
+  west: 270,
+};
 
 export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   const { use: useContext, onMount, onUnmount } = ctx;
@@ -95,7 +104,15 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 卸载时反注册，避免调试层指向已销毁的信号。
   if (role === "player") {
     onMount(() => playerEntity(entity));
-    onUnmount(() => playerEntity(undefined));
+    // **只在「我还是当前的玩家」时才清空**——不能无条件 `playerEntity(undefined)`。
+    //
+    // 重开一局是「先挂载新的、后卸载旧的」（实测），于是新玩家写入后，
+    // 旧玩家的卸载回调会把入口清空 ⇒ `playerEntity()` 变成 `undefined`，
+    // 交互系统拿不到玩家，表现为「重开后捡不了瓶子 / 下不了药」。
+    // 写成条件清空后，旧实体的卸载发现「现在的不是我」就跳过。
+    onUnmount(() => {
+      if (playerEntity()?.id === entity.id) playerEntity(undefined);
+    });
   }
   onMount(() => {
     const unregister = registerActor(entity);
@@ -108,8 +125,9 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   });
 
   // 朝向与潜行态：各自派生，互不影响。
-  // 镜像用 `scale`（真实 CSS 属性）而非自造的 `flip`——后者会被浏览器丢弃。
-  const scale = useContext(entity, () => (isFlipped(entity().facing) ? "-1 1" : "1 1"));
+  // 朝向用一个**不对称的箭头**表现（见 .facing 的说明）——镜像对称体
+  // 无法表达朝向，那是原先 `scale` 方案的失效原因。
+  const facingDeg = useContext(entity, () => `${FACING_DEGREES[entity().facing]}deg`);
   const opacity = useContext(entity, () => (entity().sneaking ? "0.55" : "1"));
 
   // 深度排序：按 y 量化到格子精度。量化后相邻帧多数取值相同，
@@ -132,6 +150,9 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
   // 恐慌标记：让「传播链在跑」可见。没有它，玩家只能看到 NPC 突然乱跑。
   const panicking = useContext(entity, () => entity().witnessed);
 
+  // 活着（朝向箭头的前置条件）
+  const alive = useContext(entity, () => !entity().dead);
+
   return (
     <StyleMemo
       value={{
@@ -140,7 +161,6 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
         height: `${ACTOR_SIZE}px`,
         zIndex,
         translate,
-        scale,
         rotate,
         opacity,
       }}
@@ -152,6 +172,19 @@ export function Actor({ col, row, facing, role }: ActorProps, ctx: Context) {
         标记 = 每帧刷屏）。
       */}
       <div class={bodyClass}>
+        {/*
+          朝向箭头：**死亡时隐藏**。尸体已被 `rotate: 90deg` 放倒，
+          再挂一个方位箭头会误导（它指的是躺倒后的「上」，不是朝向）。
+        */}
+        <Show value={alive}>
+          {() => (
+            <StyleMemo value={{ rotate: facingDeg }}>
+              <span class={style.facing}>
+                <span class={style.facingArrow} />
+              </span>
+            </StyleMemo>
+          )}
+        </Show>
         <Show value={poisoned}>{() => <span class={style.poisonMark} />}</Show>
         <Show value={panicking}>{() => <span class={style.panicMark} />}</Show>
       </div>
